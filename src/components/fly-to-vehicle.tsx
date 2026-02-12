@@ -97,6 +97,20 @@ export function FlyToVehicle({
     }
   }, [vehicles, selectedVehicleId, panToWithOffset]);
 
+  // When a vehicle is selected (e.g. tapped) and we're not already in
+  // following mode, immediately center the map on the vehicle (no offset)
+  // so it appears in the middle of the screen.
+  useEffect(() => {
+    if (!selectedVehicleId || followingRef.current) return;
+
+    const v = vehiclesRef.current.find((v) => v.id === selectedVehicleId);
+    if (v) {
+      const zoom = Math.max(map.getZoom(), 14);
+      // Center exactly on vehicle
+      map.flyTo([v.latitude, v.longitude], zoom, { duration: 0.6 });
+    }
+  }, [selectedVehicleId, map]);
+
   // Reset following state when vehicle is deselected
   useEffect(() => {
     if (!selectedVehicleId) {
