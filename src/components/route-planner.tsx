@@ -247,6 +247,7 @@ interface RoutePlannerProps {
   selectedDateTime: string;
   onDateTimeChange: (dt: string) => void;
   onSwap: () => void;
+  onClear?: () => void;
 }
 
 export function RoutePlanner({
@@ -268,6 +269,7 @@ export function RoutePlanner({
   selectedDateTime,
   onDateTimeChange,
   onSwap,
+  onClear,
 }: RoutePlannerProps) {
   const [expandedRoute, setExpandedRoute] = useState<number | null>(null);
 
@@ -458,10 +460,15 @@ export function RoutePlanner({
       {/* Desktop: side panel */}
       <div className="hidden md:flex w-80 border-r border-border bg-card flex-col shrink-0">
         <div className="flex items-center justify-between px-4 py-3">
-          <h2 className="font-semibold">Route Planner</h2>
-          <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onClose}>
-            &times;
-          </Button>
+            <h2 className="font-semibold">Route Planner</h2>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" className="h-7" onClick={() => onClear && onClear()}>
+                Clear
+              </Button>
+              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onClose}>
+                &times;
+              </Button>
+            </div>
         </div>
         <Separator />
         {desktopContent}
@@ -474,14 +481,19 @@ export function RoutePlanner({
           {/* Header */}
           <div className="flex items-center justify-between px-3 py-2 border-b border-border shrink-0">
             <h2 className="font-semibold text-sm">Route Planner</h2>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 w-7 p-0"
-              onClick={onClose}
-            >
-              &times;
-            </Button>
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="sm" className="h-7" onClick={() => onClear && onClear()}>
+                  Clear
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0"
+                  onClick={onClose}
+                >
+                  &times;
+                </Button>
+              </div>
           </div>
           <div className="flex flex-col flex-1 overflow-y-auto overflow-x-hidden">
             {mobileFullContent}

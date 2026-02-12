@@ -246,6 +246,20 @@ export default function Home() {
     },
     [selectedRouteIndex, legVehicleIds]
   );
+  const handleClearPlanner = useCallback(() => {
+    setOrigin(null);
+    setDestination(null);
+    setPickingPoint(null);
+    setRoutePlan(null);
+    setPlanLoading(false);
+    setSelectedRouteIndex(0);
+    setSelectedLine(null);
+    setLegVehicleIds({});
+    setSelectedVehicleId(null);
+    setFocusedVehicleId(null);
+    setTimeOption("now");
+    setSelectedDateTime(toLocalDateTimeString(new Date()));
+  }, []);
 
   return (
     <div className="h-dvh flex flex-col">
@@ -278,6 +292,7 @@ export default function Home() {
             selectedDateTime={selectedDateTime}
             onDateTimeChange={setSelectedDateTime}
             onSwap={handleSwap}
+            onClear={handleClearPlanner}
           />
         )}
         <div className="flex-1 relative">
