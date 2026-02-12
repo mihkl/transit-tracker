@@ -68,6 +68,9 @@ export default function Home() {
   // Pre-fetched vehicle IDs for each transit leg: "routeIdx_legIdx" → vehicleId
   const [legVehicleIds, setLegVehicleIds] = useState<Record<string, number>>({});
   const prefetchVersionRef = useRef(0);
+  // Track whether picking was initiated from the route planner so we can
+  // temporarily hide the planner (show the map) and restore it after picking.
+  const pickingFromPlannerRef = useRef(false);
 
   // Derive filter values for SSE stream
   const lineFilter = selectedLine?.lineNumber ?? "";
@@ -153,7 +156,13 @@ export default function Home() {
       } else if (pointType === "destination") {
         setDestination({ lat, lng });
       }
+      // clear picking state
       setPickingPoint(null);
+      // if we opened the map for picking from the planner, return to planner view
+      if (pickingFromPlannerRef.current) {
+        pickingFromPlannerRef.current = false;
+        setShowPlanner(true);
+      }
     },
     []
   );
@@ -173,8 +182,11 @@ export default function Home() {
         destinationLng: destination.lng,
       };
 
-      if (timeOption === "depart" && selectedDateTime) {
-        body.departureTime = new Date(selectedDateTime).toISOString();
+      if ((timeOption === "depart" && selectedDateTime) || timeOption === "now") {
+        // For 'now' treat as an explicit departure time so behavior matches 'Depart at'
+        // Use current time when 'now', otherwise use selectedDateTime.
+        const dt = timeOption === "now" ? new Date() : new Date(selectedDateTime);
+        body.departureTime = dt.toISOString();
       } else if (timeOption === "arrive" && selectedDateTime) {
         body.arrivalTime = new Date(selectedDateTime).toISOString();
       }
@@ -274,10 +286,21 @@ export default function Home() {
       <div className="flex-1 flex relative overflow-hidden">
         {showPlanner && (
           <RoutePlanner
-            origin={origin}
-            destination={destination}
-            pickingPoint={pickingPoint}
-            onStartPicking={setPickingPoint}
+              origin={origin}
+              destination={destination}
+              pickingPoint={pickingPoint}
+              onStartPicking={(pt) => {
+                // Only hide the planner on small screens (mobile). On desktop the
+                // planner sits next to the map so no need to hide it.
+                const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+                if (pt && isMobile) {
+                  pickingFromPlannerRef.current = true;
+                  setShowPlanner(false);
+                } else {
+                  pickingFromPlannerRef.current = false;
+                }
+                setPickingPoint(pt);
+              }}
             onSetOrigin={setOrigin}
             onSetDestination={setDestination}
             onPlanRoute={handlePlanRoute}

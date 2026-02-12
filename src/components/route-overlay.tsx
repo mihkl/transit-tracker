@@ -82,6 +82,7 @@ export function RouteOverlay({
             <Polyline
               key={i}
               positions={positions}
+              pane="overlayPane"
               pathOptions={{
                 color,
                 weight: isWalk ? 3 : 5,

@@ -23,7 +23,7 @@ function createChevronIcon(
   const half = size / 2;
   // Navigation arrow SVG pointing up, rotated by bearing
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" style="transform:rotate(${bearing}deg); transform-origin: 12px 12px;">
-    <path d="M12 2 L6 20 L12 15 L18 20 Z" fill="${color}" stroke="#000" stroke-width="1.5" stroke-linejoin="round"/>
+    <path d="M12 2 L6 20 L12 15 L18 20 Z" fill="${color}" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/>
   </svg>`;
 
   return L.divIcon({
@@ -73,7 +73,8 @@ export function VehicleMarkers({
         vehicle: v,
         icon,
         opacity: isDimmed ? 0.4 : 1,
-        zIndex: isHighlighted ? 1000 : 100,
+        // Ensure markers are always rendered above route polylines by using a high z-index offset
+        zIndex: isHighlighted ? 10000 : 5000,
       };
     });
   }, [vehicles, focusedVehicleId, selectedVehicleId, shapes]);
@@ -87,6 +88,7 @@ export function VehicleMarkers({
           icon={icon}
           opacity={opacity}
           zIndexOffset={zIndex}
+          pane="markerPane"
           eventHandlers={{
             click: (e) => {
               L.DomEvent.stopPropagation(e.originalEvent);
