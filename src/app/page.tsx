@@ -333,6 +333,7 @@ export default function Home() {
             shapes={shapes}
             onVehicleClick={handleVehicleClick}
             onDeselectVehicle={handleDeselectVehicle}
+            showPlanner={showPlanner}
           />
         </div>
       </div>
