@@ -25,10 +25,9 @@ function getOffsetCenter(
   const isMobile = map.getSize().x < 768;
 
   if (!isMobile) return [lat, lng];
-
-  // Shift the center down by ~30% of the viewport so the vehicle
-  // appears in the upper third (above the bottom sheet)
-  const offsetPx = containerHeight * 0.25;
+  // Shift the center down by ~35% of the viewport so the vehicle
+  // appears in the upper portion (above the bottom sheet)
+  const offsetPx = containerHeight * 0.50;
   const point = map.project([lat, lng], zoom);
   point.y -= offsetPx;
   const offset = map.unproject(point, zoom);
@@ -106,8 +105,15 @@ export function FlyToVehicle({
     const v = vehiclesRef.current.find((v) => v.id === selectedVehicleId);
     if (v) {
       const zoom = Math.max(map.getZoom(), 14);
-      // Center exactly on vehicle
-      map.flyTo([v.latitude, v.longitude], zoom, { duration: 0.6 });
+      // On mobile we want the vehicle to appear above the route/planner overlay,
+      // so use the same offset centering as following. On desktop center normally.
+      const isMobile = map.getSize().x < 768;
+      if (isMobile) {
+        const center = getOffsetCenter(map, v.latitude, v.longitude, zoom);
+        map.flyTo(center, zoom, { duration: 0.6 });
+      } else {
+        map.flyTo([v.latitude, v.longitude], zoom, { duration: 0.6 });
+      }
     }
   }, [selectedVehicleId, map]);
 

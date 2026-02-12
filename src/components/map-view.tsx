@@ -28,7 +28,6 @@ interface MapViewProps {
   shapes: Record<string, number[][]> | null;
   onVehicleClick: (id: number) => void;
   onDeselectVehicle: () => void;
-  showPlanner: boolean;
 }
 
 export function MapView(props: MapViewProps) {
