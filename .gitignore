@@ -44,3 +44,4 @@ public/gtfs-preprocessed/
 *.tsbuildinfo
 next-env.d.ts
 
+.kilocode/mcp.json

@@ -13,14 +13,64 @@ import type { RoutePlanResponse, PlannedRoute, RouteLeg } from "@/lib/types";
 
 export type TimeOption = "now" | "depart" | "arrive";
 
-function getRouteTimeRange(route: PlannedRoute): { dep: string; arr: string } {
-  let dep = "";
-  let arr = "";
-  for (const leg of route.legs) {
-    if (leg.scheduledDeparture && !dep) dep = formatTime(leg.scheduledDeparture);
-    if (leg.scheduledArrival) arr = formatTime(leg.scheduledArrival);
+function getRouteTimeRange(route: PlannedRoute): {
+  dep: string;
+  arr: string;
+  firstTransitDep: string;
+  walkBefore: number;
+} {
+  let firstTransitDep = "";
+  let firstTransitDepTime: Date | null = null;
+  let arrTime: Date | null = null;
+  let walkBeforeSeconds = 0;
+  let walkAfterSeconds = 0;
+  let foundFirstTransit = false;
+
+  for (let i = 0; i < route.legs.length; i++) {
+    const leg = route.legs[i];
+
+    if (leg.mode === "WALK") {
+      const durStr =
+        typeof leg.duration === "string" ? leg.duration : String(leg.duration);
+      const match = durStr.match(/(\d+)s/);
+      if (match) {
+        if (!foundFirstTransit) {
+          walkBeforeSeconds += parseInt(match[1], 10);
+        } else {
+          walkAfterSeconds += parseInt(match[1], 10);
+        }
+      }
+    } else {
+      if (!foundFirstTransit) {
+        foundFirstTransit = true;
+        if (leg.scheduledDeparture) {
+          firstTransitDep = formatTime(leg.scheduledDeparture);
+          firstTransitDepTime = new Date(leg.scheduledDeparture);
+        }
+      }
+      if (leg.scheduledArrival) {
+        arrTime = new Date(leg.scheduledArrival);
+      }
+    }
   }
-  return { dep, arr };
+
+  let dep = firstTransitDep;
+  let arr = arrTime ? formatTime(arrTime.toISOString()) : "";
+
+  if (firstTransitDepTime && walkBeforeSeconds > 0) {
+    const leaveTime = new Date(
+      firstTransitDepTime.getTime() - walkBeforeSeconds * 1000,
+    );
+    dep = formatTime(leaveTime.toISOString());
+  }
+
+  if (arrTime && walkAfterSeconds > 0) {
+    const finalArrTime = new Date(arrTime.getTime() + walkAfterSeconds * 1000);
+    arr = formatTime(finalArrTime.toISOString());
+  }
+
+  const walkBefore = Math.round(walkBeforeSeconds / 60);
+  return { dep, arr, firstTransitDep, walkBefore };
 }
 
 function getFirstTransitDeparture(route: PlannedRoute): string | null {
@@ -37,7 +87,7 @@ function getFirstTransitDeparture(route: PlannedRoute): string | null {
 
 function LegChain({ legs }: { legs: RouteLeg[] }) {
   const visibleLegs = legs.filter(
-    (leg) => !(leg.mode === "WALK" && formatDuration(leg.duration) === "0 min")
+    (leg) => !(leg.mode === "WALK" && formatDuration(leg.duration) === "0 min"),
   );
 
   return (
@@ -45,18 +95,36 @@ function LegChain({ legs }: { legs: RouteLeg[] }) {
       {visibleLegs.map((leg, i) => (
         <div key={i} className="flex items-center gap-0.5">
           {i > 0 && (
-            <svg width="8" height="8" viewBox="0 0 8 8" className="text-muted-foreground mx-0.5 shrink-0">
-              <path d="M2 0l4 4-4 4" fill="none" stroke="currentColor" strokeWidth="1.5" />
+            <svg
+              width="8"
+              height="8"
+              viewBox="0 0 8 8"
+              className="text-gray-400 mx-0.5 shrink-0"
+            >
+              <path
+                d="M2 0l4 4-4 4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+              />
             </svg>
           )}
           {leg.mode === "WALK" ? (
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-muted-foreground shrink-0">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              className="text-gray-500 shrink-0"
+            >
               <circle cx="12" cy="5" r="2" />
               <path d="M10 22l2-7 3 3v6M10.5 11l2.5-3 3.5 2" />
             </svg>
           ) : (
             <Badge
-              className="text-white text-[10px] px-1.5 py-0 h-5 font-semibold shrink-0"
+              className="text-white text-[10px] px-1.5 py-0 h-5 font-semibold shrink-0 rounded"
               style={{ backgroundColor: MODE_COLORS[leg.mode] || "#999" }}
             >
               {leg.lineNumber || leg.mode}
@@ -67,8 +135,6 @@ function LegChain({ legs }: { legs: RouteLeg[] }) {
     </div>
   );
 }
-
-/* ── Shared sub-components for route list & detail ── */
 
 function RouteInputs({
   origin,
@@ -90,13 +156,13 @@ function RouteInputs({
 >) {
   return (
     <div className="p-3 sm:p-4">
-      <div className="flex items-stretch gap-1">
-        <div className="flex flex-col items-center py-2 w-5 shrink-0">
-          <div className="w-2.5 h-2.5 rounded-full bg-green-500 shrink-0" />
-          <div className="flex-1 w-px bg-muted-foreground/30 my-1" />
-          <div className="w-2.5 h-2.5 rounded-full bg-red-500 shrink-0" />
+      <div className="flex items-stretch gap-2">
+        <div className="flex flex-col items-center py-2.5 w-5 shrink-0">
+          <div className="w-2.5 h-2.5 rounded-full bg-blue-500 ring-2 ring-blue-100 shrink-0" />
+          <div className="flex-1 w-0.5 bg-gray-200 my-1" />
+          <div className="w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-red-100 shrink-0" />
         </div>
-        <div className="flex-1 space-y-1.5 min-w-0">
+        <div className="flex-1 space-y-2 min-w-0">
           <PlaceSearchInput
             label="origin"
             dotColor="transparent"
@@ -118,10 +184,19 @@ function RouteInputs({
         </div>
         <button
           onClick={onSwap}
-          className="self-center ml-1 p-1.5 rounded-full hover:bg-accent transition-colors shrink-0"
+          className="self-center ml-1 p-2 rounded-full hover:bg-gray-100 transition-colors shrink-0 text-gray-500 hover:text-gray-700"
           title="Swap origin and destination"
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <path d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4" />
           </svg>
         </button>
@@ -135,13 +210,16 @@ function TimeSelector({
   onTimeOptionChange,
   selectedDateTime,
   onDateTimeChange,
-}: Pick<RoutePlannerProps, "timeOption" | "onTimeOptionChange" | "selectedDateTime" | "onDateTimeChange">) {
+}: Pick<
+  RoutePlannerProps,
+  "timeOption" | "onTimeOptionChange" | "selectedDateTime" | "onDateTimeChange"
+>) {
   return (
     <div className="px-3 py-2 sm:px-4 flex items-center gap-2 flex-wrap">
       <select
         value={timeOption}
         onChange={(e) => onTimeOptionChange(e.target.value as TimeOption)}
-        className="h-8 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+        className="h-8 rounded-md border border-gray-200 bg-white px-2.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
       >
         <option value="now">Leave now</option>
         <option value="depart">Depart at</option>
@@ -152,7 +230,7 @@ function TimeSelector({
           type="datetime-local"
           value={selectedDateTime}
           onChange={(e) => onDateTimeChange(e.target.value)}
-          className="h-8 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+          className="h-8 rounded-md border border-gray-200 bg-white px-2.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
         />
       )}
     </div>
@@ -170,31 +248,31 @@ function RouteSummaryRow({
   isSelected: boolean;
   onClick: () => void;
 }) {
-  const { dep, arr } = getRouteTimeRange(route);
+  const { dep, arr, firstTransitDep } = getRouteTimeRange(route);
   const firstTransit = getFirstTransitDeparture(route);
 
   return (
     <button
       onClick={onClick}
-      className={`w-full text-left px-3 py-2.5 sm:px-4 transition-colors hover:bg-accent/50 ${
-        isSelected ? "bg-green-500/15" : ""
+      className={`w-full text-left px-3 py-3 sm:px-4 transition-colors hover:bg-gray-50 ${
+        isSelected ? "bg-blue-50 border-l-2 border-blue-500" : ""
       }`}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <div className="font-semibold text-sm">
-            {dep && arr ? `${dep} — ${arr}` : dep || arr || "Route " + (index + 1)}
+          <div className="font-medium text-sm text-gray-800">
+            {dep && arr
+              ? `${dep} — ${arr}`
+              : dep || arr || "Route " + (index + 1)}
           </div>
-          <div className="mt-1">
+          <div className="mt-1.5">
             <LegChain legs={route.legs} />
           </div>
           {firstTransit && (
-            <div className="text-xs text-muted-foreground mt-1">
-              {firstTransit}
-            </div>
+            <div className="text-xs text-gray-500 mt-1.5">{firstTransit}</div>
           )}
         </div>
-        <div className="text-sm text-muted-foreground font-medium shrink-0">
+        <div className="text-sm text-gray-600 font-medium shrink-0 tabular-nums">
           {formatDuration(route.duration)}
         </div>
       </div>
@@ -207,26 +285,21 @@ function ExpandedLegDetails({
   onLocateVehicle,
 }: {
   route: PlannedRoute;
-  onLocateVehicle: (leg: RouteLeg, legIndex: number) => void;
+  onLocateVehicle: (leg: RouteLeg) => void;
 }) {
   return (
-    <div className="px-3 pb-3 sm:px-4 space-y-2 bg-accent/10">
+    <div className="px-3 pb-3 sm:px-4 space-y-2 bg-gray-50">
       {route.legs
-        .map((leg, originalIndex) => ({ leg, originalIndex }))
-        .filter(({ leg }) => !(leg.mode === "WALK" && formatDuration(leg.duration) === "0 min"))
-        .map(({ leg, originalIndex }) => (
-          <RouteLegCard
-            key={originalIndex}
-            leg={leg}
-            legIndex={originalIndex}
-            onLocateVehicle={onLocateVehicle}
-          />
+        .filter(
+          (leg) =>
+            !(leg.mode === "WALK" && formatDuration(leg.duration) === "0 min"),
+        )
+        .map((leg, i) => (
+          <RouteLegCard key={i} leg={leg} onLocateVehicle={onLocateVehicle} />
         ))}
     </div>
   );
 }
-
-/* ── Main component ── */
 
 interface RoutePlannerProps {
   origin: { lat: number; lng: number; name?: string } | null;
@@ -241,7 +314,7 @@ interface RoutePlannerProps {
   selectedRouteIndex: number;
   onSelectRoute: (index: number) => void;
   onClose: () => void;
-  onLocateVehicle: (leg: RouteLeg, legIndex: number) => void;
+  onLocateVehicle: (leg: RouteLeg) => void;
   timeOption: TimeOption;
   onTimeOptionChange: (opt: TimeOption) => void;
   selectedDateTime: string;
@@ -273,9 +346,9 @@ export function RoutePlanner({
 }: RoutePlannerProps) {
   const [expandedRoute, setExpandedRoute] = useState<number | null>(null);
 
-  const hasRoutes = routePlan && routePlan.routes && routePlan.routes.length > 0;
+  const hasRoutes =
+    routePlan && routePlan.routes && routePlan.routes.length > 0;
 
-  // On mobile: route picked = folded mode (expandedRoute !== null)
   const mobileFollded = expandedRoute !== null;
 
   const handleRouteClick = (index: number) => {
@@ -287,7 +360,6 @@ export function RoutePlanner({
     setExpandedRoute(null);
   };
 
-  /* ── Desktop content (unchanged — always shows everything in side panel) ── */
   const desktopContent = (
     <>
       <RouteInputs
@@ -306,16 +378,20 @@ export function RoutePlanner({
         selectedDateTime={selectedDateTime}
         onDateTimeChange={onDateTimeChange}
       />
-      <Separator />
+      <Separator className="bg-gray-100" />
       <div className="px-3 py-2 sm:px-4">
-        <Button className="w-full" disabled={!origin || !destination || planLoading} onClick={onPlanRoute}>
+        <Button
+          className="w-full bg-blue-500 hover:bg-blue-600 text-white"
+          disabled={!origin || !destination || planLoading}
+          onClick={onPlanRoute}
+        >
           {planLoading ? (
             <span className="flex items-center gap-2">
-              <span className="w-3 h-3 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
+              <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
               Planning...
             </span>
           ) : (
-            "Plan Route"
+            "Get directions"
           )}
         </Button>
       </div>
@@ -333,7 +409,10 @@ export function RoutePlanner({
                     onClick={() => handleRouteClick(i)}
                   />
                   {isExpanded && (
-                    <ExpandedLegDetails route={route} onLocateVehicle={onLocateVehicle} />
+                    <ExpandedLegDetails
+                      route={route}
+                      onLocateVehicle={onLocateVehicle}
+                    />
                   )}
                 </div>
               );
@@ -341,15 +420,17 @@ export function RoutePlanner({
           </div>
         </ScrollArea>
       )}
-      {routePlan && routePlan.routes && routePlan.routes.length === 0 && !planLoading && (
-        <div className="px-4 py-6 text-center text-sm text-muted-foreground">
-          No transit routes found.
-        </div>
-      )}
+      {routePlan &&
+        routePlan.routes &&
+        routePlan.routes.length === 0 &&
+        !planLoading && (
+          <div className="px-4 py-6 text-center text-sm text-gray-400">
+            No transit routes found.
+          </div>
+        )}
     </>
   );
 
-  /* ── Mobile: full-screen content (inputs + results list) ── */
   const mobileFullContent = (
     <>
       <RouteInputs
@@ -361,29 +442,33 @@ export function RoutePlanner({
         onStartPicking={onStartPicking}
         onSwap={onSwap}
       />
-      <Separator />
+      <Separator className="bg-gray-100" />
       <TimeSelector
         timeOption={timeOption}
         onTimeOptionChange={onTimeOptionChange}
         selectedDateTime={selectedDateTime}
         onDateTimeChange={onDateTimeChange}
       />
-      <Separator />
+      <Separator className="bg-gray-100" />
       <div className="px-3 py-2">
-        <Button className="w-full" disabled={!origin || !destination || planLoading} onClick={onPlanRoute}>
+        <Button
+          className="w-full bg-blue-500 hover:bg-blue-600 text-white"
+          disabled={!origin || !destination || planLoading}
+          onClick={onPlanRoute}
+        >
           {planLoading ? (
             <span className="flex items-center gap-2">
-              <span className="w-3 h-3 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
+              <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
               Planning...
             </span>
           ) : (
-            "Plan Route"
+            "Get directions"
           )}
         </Button>
       </div>
       {hasRoutes && (
         <div className="flex-1 min-h-0 overflow-y-auto">
-          <div className="divide-y divide-border">
+          <div className="divide-y divide-gray-100">
             {routePlan.routes.map((route, i) => (
               <RouteSummaryRow
                 key={i}
@@ -396,25 +481,35 @@ export function RoutePlanner({
           </div>
         </div>
       )}
-      {routePlan && routePlan.routes && routePlan.routes.length === 0 && !planLoading && (
-        <div className="px-4 py-6 text-center text-sm text-muted-foreground">
-          No transit routes found.
-        </div>
-      )}
+      {routePlan &&
+        routePlan.routes &&
+        routePlan.routes.length === 0 &&
+        !planLoading && (
+          <div className="px-4 py-6 text-center text-sm text-gray-400">
+            No transit routes found.
+          </div>
+        )}
     </>
   );
 
-  /* ── Mobile: folded content (selected route detail) ── */
   const selectedRoute = hasRoutes ? routePlan.routes[expandedRoute ?? 0] : null;
   const mobileFoldedContent = selectedRoute ? (
     <>
-      {/* Back button + route summary header */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
+      <div className="flex items-center gap-2 px-3 py-2.5 border-b border-gray-100">
         <button
           onClick={handleBackToList}
-          className="p-1 rounded-full hover:bg-accent transition-colors shrink-0"
+          className="p-1.5 rounded-full hover:bg-gray-100 transition-colors shrink-0 text-gray-500"
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <path d="M15 18l-6-6 6-6" />
           </svg>
         </button>
@@ -423,10 +518,10 @@ export function RoutePlanner({
             const { dep, arr } = getRouteTimeRange(selectedRoute);
             return (
               <div className="flex items-center justify-between gap-2">
-                <span className="font-semibold text-sm truncate">
+                <span className="font-medium text-sm text-gray-800 truncate">
                   {dep && arr ? `${dep} — ${arr}` : "Route details"}
                 </span>
-                <span className="text-sm text-muted-foreground font-medium shrink-0">
+                <span className="text-sm text-gray-500 font-medium shrink-0 tabular-nums">
                   {formatDuration(selectedRoute.duration)}
                 </span>
               </div>
@@ -439,7 +534,7 @@ export function RoutePlanner({
         <Button
           variant="ghost"
           size="sm"
-          className="h-7 w-7 p-0 shrink-0"
+          className="h-7 w-7 p-0 shrink-0 text-gray-400 hover:text-gray-600 hover:bg-gray-100"
           onClick={(e) => {
             e.stopPropagation();
             onClose();
@@ -448,60 +543,72 @@ export function RoutePlanner({
           &times;
         </Button>
       </div>
-      {/* Leg details */}
       <div className="overflow-y-auto max-h-[40vh]">
-        <ExpandedLegDetails route={selectedRoute} onLocateVehicle={onLocateVehicle} />
+        <ExpandedLegDetails
+          route={selectedRoute}
+          onLocateVehicle={onLocateVehicle}
+        />
       </div>
     </>
   ) : null;
 
   return (
     <>
-      {/* Desktop: side panel */}
-      <div className="hidden md:flex w-80 border-r border-border bg-card flex-col shrink-0">
-        <div className="flex items-center justify-between px-4 py-3">
-            <h2 className="font-semibold">Route Planner</h2>
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="sm" className="h-7" onClick={() => onClear && onClear()}>
-                Clear
-              </Button>
-              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onClose}>
-                &times;
-              </Button>
-            </div>
+      <div className="hidden md:flex w-80 border-r border-gray-200 bg-white flex-col shrink-0 shadow-[0_0_8px_rgba(0,0,0,0.08)]">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+          <h2 className="font-medium text-gray-800">Directions</h2>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+              onClick={() => onClear && onClear()}
+            >
+              Clear
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0 text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+              onClick={onClose}
+            >
+              &times;
+            </Button>
+          </div>
         </div>
-        <Separator />
+        <Separator className="bg-gray-100" />
         {desktopContent}
       </div>
 
-      {/* Mobile: full-screen or folded bottom sheet */}
       {!mobileFollded ? (
-        /* Full-screen: covers entire map area */
-        <div className="md:hidden absolute inset-0 z-[1000] flex flex-col bg-card">
-          {/* Header */}
-          <div className="flex items-center justify-between px-3 py-2 border-b border-border shrink-0">
-            <h2 className="font-semibold text-sm">Route Planner</h2>
-              <div className="flex items-center gap-2">
-                <Button variant="ghost" size="sm" className="h-7" onClick={() => onClear && onClear()}>
-                  Clear
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 w-7 p-0"
-                  onClick={onClose}
-                >
-                  &times;
-                </Button>
-              </div>
+        <div className="md:hidden absolute inset-0 z-[1000] flex flex-col bg-white">
+          <div className="flex items-center justify-between px-3 py-2.5 border-b border-gray-100 shrink-0">
+            <h2 className="font-medium text-gray-800 text-sm">Directions</h2>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs text-gray-500 hover:text-gray-700"
+                onClick={() => onClear && onClear()}
+              >
+                Clear
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 p-0 text-gray-400 hover:text-gray-600"
+                onClick={onClose}
+              >
+                &times;
+              </Button>
+            </div>
           </div>
           <div className="flex flex-col flex-1 overflow-y-auto overflow-x-hidden">
             {mobileFullContent}
           </div>
         </div>
       ) : (
-        /* Folded: bottom sheet showing selected route details */
-        <div className="md:hidden absolute bottom-0 left-0 right-0 z-[1000] flex flex-col bg-card border-t border-border rounded-t-xl shadow-2xl">
+        <div className="md:hidden absolute bottom-0 left-0 right-0 z-[1000] flex flex-col bg-white border-t border-gray-200 rounded-t-xl shadow-[0_-4px_16px_rgba(0,0,0,0.1)]">
           {mobileFoldedContent}
         </div>
       )}

@@ -13,16 +13,13 @@ export async function GET(request: NextRequest) {
   if (!vehicleId) {
     return NextResponse.json(
       { error: "vehicleId parameter is required" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
   const vehicle = transitState.getVehicleById(parseInt(vehicleId, 10));
   if (!vehicle) {
-    return NextResponse.json(
-      { error: "Vehicle not found" },
-      { status: 404 }
-    );
+    return NextResponse.json({ error: "Vehicle not found" }, { status: 404 });
   }
 
   if (!vehicle.matchedRouteId || vehicle.matchedDirectionId === null) {
@@ -35,12 +32,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json([]);
   }
 
-  // Get upcoming stops (next ~5 from current position)
   const currentStopIdx = Math.max(0, vehicle.lastStopIndex);
-  const upcomingStops = patternStops.slice(
-    currentStopIdx,
-    currentStopIdx + 6
-  );
+  const upcomingStops = patternStops.slice(currentStopIdx, currentStopIdx + 6);
 
   const etas: VehicleStopEta[] = [];
 
@@ -54,11 +47,10 @@ export async function GET(request: NextRequest) {
     if (!isPassed) {
       try {
         const departures = await fetchStopDepartures(stop.stopId);
-        // Find matching departure: same route number AND same destination
         const match = departures.find(
           (d) =>
             d.route === vehicle.lineNumber &&
-            d.destination === vehicle.destination
+            d.destination === vehicle.destination,
         );
         if (match) {
           expectedArrivalSeconds = match.secondsUntilArrival;
@@ -67,7 +59,7 @@ export async function GET(request: NextRequest) {
           delaySeconds = match.delaySeconds;
         }
       } catch {
-        // SIRI fetch failed, leave as null
+        continue;
       }
     }
 

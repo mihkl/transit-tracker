@@ -6,7 +6,7 @@ interface GeoJsonFeature {
   type: "Feature";
   geometry: {
     type: "Point";
-    coordinates: [number, number]; // [lng, lat]
+    coordinates: [number, number];
   };
   properties: {
     id: number;
@@ -53,7 +53,7 @@ export async function pollGps(): Promise<GpsReading[]> {
 
         readings.push(reading);
       } catch {
-        // Skip malformed features
+        continue;
       }
     }
   } finally {
@@ -76,7 +76,6 @@ export class GpsPollerService {
   start(): void {
     if (this.intervalId) return;
 
-    // First poll immediately
     this.poll();
 
     this.intervalId = setInterval(() => this.poll(), this.intervalMs);
@@ -98,7 +97,7 @@ export class GpsPollerService {
     } catch (err) {
       console.error(
         "GPS poll error:",
-        err instanceof Error ? err.message : err
+        err instanceof Error ? err.message : err,
       );
     }
   }

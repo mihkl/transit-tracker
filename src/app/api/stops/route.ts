@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
   if (!routeKey) {
     return NextResponse.json(
       { error: "routeKey parameter is required" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 

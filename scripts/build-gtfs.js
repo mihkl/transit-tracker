@@ -56,13 +56,15 @@ async function build(gtfsDir, outDir) {
   }));
   console.log(`  ${routes.length} routes`);
 
-  console.log("Loading GTFS stops...");
+console.log("Loading GTFS stops...");
   const stopsRows = await parseCsvRows(path.join(gtfsDir, "stops.txt"));
   const stops = stopsRows.map((s) => ({
     stopId: s.stop_id,
     stopName: s.stop_name,
     latitude: parseFloat(s.stop_lat),
     longitude: parseFloat(s.stop_lon),
+    stopDesc: s.stop_desc || undefined,
+    stopArea: s.stop_area || undefined,
   }));
   console.log(`  ${stops.length} stops`);
 

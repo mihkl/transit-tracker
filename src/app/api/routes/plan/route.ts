@@ -21,6 +21,19 @@ function parseDurationSeconds(duration?: string): number {
   return match ? parseInt(match[1], 10) : 0;
 }
 
+function normalizeVehicleType(type: string): string {
+  switch (type) {
+    case "HEAVY_RAIL":
+    case "RAIL":
+    case "HIGH_SPEED_TRAIN":
+    case "INTERCITY_TRAIN":
+    case "COMMUTER_TRAIN":
+      return "TRAIN";
+    default:
+      return type;
+  }
+}
+
 export async function POST(request: NextRequest) {
   await transitState.initialize();
 
@@ -28,7 +41,7 @@ export async function POST(request: NextRequest) {
     if (!isConfigured()) {
       return NextResponse.json(
         { error: "Google Routes API key is not configured." },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -40,7 +53,7 @@ export async function POST(request: NextRequest) {
       req.destinationLat,
       req.destinationLng,
       req.departureTime,
-      req.arrivalTime
+      req.arrivalTime,
     );
 
     if (!googleResponse || googleResponse.routes.length === 0) {
@@ -61,7 +74,7 @@ export async function POST(request: NextRequest) {
 
       if (gRoute.polyline?.encodedPolyline) {
         route.overviewPolyline = decodePolyline(
-          gRoute.polyline.encodedPolyline
+          gRoute.polyline.encodedPolyline,
         );
       }
 
@@ -80,7 +93,8 @@ export async function POST(request: NextRequest) {
 
           if (step.travelMode === "TRANSIT" && step.transitDetails) {
             const td = step.transitDetails;
-            const vehicleType = td.transitLine?.vehicle?.type ?? "BUS";
+            const rawVehicleType = td.transitLine?.vehicle?.type ?? "BUS";
+            const vehicleType = normalizeVehicleType(rawVehicleType);
             leg.mode = vehicleType;
             leg.lineNumber = td.transitLine?.nameShort || td.transitLine?.name;
             leg.lineName = td.transitLine?.name;
@@ -107,17 +121,18 @@ export async function POST(request: NextRequest) {
             leg.arrivalStopLat = arrLat;
             leg.arrivalStopLng = arrLng;
 
-            leg.delay = (await matchTransitLeg(
-              leg.lineNumber,
-              vehicleType,
-              leg.departureStop,
-              depLat,
-              depLng,
-              leg.scheduledDeparture,
-              leg.arrivalStop,
-              arrLat,
-              arrLng
-            )) ?? undefined;
+            leg.delay =
+              (await matchTransitLeg(
+                leg.lineNumber,
+                vehicleType,
+                leg.departureStop,
+                depLat,
+                depLng,
+                leg.scheduledDeparture,
+                leg.arrivalStop,
+                arrLat,
+                arrLng,
+              )) ?? undefined;
           } else {
             leg.mode = "WALK";
             if (
@@ -132,7 +147,6 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // Merge consecutive WALK legs
       const merged: RouteLeg[] = [];
       for (const leg of route.legs) {
         if (
@@ -163,8 +177,10 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     console.error("Route plan error:", err);
     return NextResponse.json(
-      { error: `Route planning failed: ${err instanceof Error ? err.message : err}` },
-      { status: 500 }
+      {
+        error: `Route planning failed: ${err instanceof Error ? err.message : err}`,
+      },
+      { status: 500 },
     );
   }
 }

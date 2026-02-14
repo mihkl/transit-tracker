@@ -14,7 +14,7 @@ export function haversineDistance(
   lat1: number,
   lon1: number,
   lat2: number,
-  lon2: number
+  lon2: number,
 ): number {
   const dLat = toRad(lat2 - lat1);
   const dLon = toRad(lon2 - lon1);
@@ -32,7 +32,7 @@ export function bearing(
   lat1: number,
   lon1: number,
   lat2: number,
-  lon2: number
+  lon2: number,
 ): number {
   const dLon = toRad(lon2 - lon1);
   const y = Math.sin(dLon) * Math.cos(toRad(lat2));
@@ -49,7 +49,7 @@ export function projectPointOnSegment(
   aLat: number,
   aLon: number,
   bLat: number,
-  bLon: number
+  bLon: number,
 ): { lat: number; lon: number; fraction: number } {
   const cosLat = Math.cos(toRad((aLat + bLat) / 2));
   const bx = (bLon - aLon) * cosLat;
@@ -75,7 +75,7 @@ export function projectPointOnSegment(
 export function findPositionOnRoute(
   lat: number,
   lon: number,
-  shapePoints: ShapePoint[]
+  shapePoints: ShapePoint[],
 ): { distAlong: number; perpDist: number } {
   if (shapePoints.length === 0) return { distAlong: 0, perpDist: Infinity };
 
@@ -86,13 +86,17 @@ export function findPositionOnRoute(
     const a = shapePoints[i];
     const b = shapePoints[i + 1];
 
-    const { lat: projLat, lon: projLon, fraction } = projectPointOnSegment(
+    const {
+      lat: projLat,
+      lon: projLon,
+      fraction,
+    } = projectPointOnSegment(
       lat,
       lon,
       a.latitude,
       a.longitude,
       b.latitude,
-      b.longitude
+      b.longitude,
     );
 
     const perpDist = haversineDistance(lat, lon, projLat, projLon);

@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
   if (!stopId) {
     return NextResponse.json(
       { error: "stopId parameter is required" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 

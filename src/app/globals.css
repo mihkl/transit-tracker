@@ -48,38 +48,38 @@
 }
 
 :root {
-  --radius: 0.625rem;
-  --background: oklch(0.985 0 0);
-  --foreground: oklch(0.145 0 0);
+  --radius: 0.5rem;
+  --background: oklch(0.99 0 0);
+  --foreground: oklch(0.2 0 0);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.2 0 0);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.94 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.94 0 0);
-  --muted-foreground: oklch(0.45 0 0);
-  --accent: oklch(0.94 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0 0 0 / 12%);
-  --input: oklch(0 0 0 / 12%);
-  --ring: oklch(0.708 0 0);
+  --popover-foreground: oklch(0.2 0 0);
+  --primary: oklch(0.55 0.2 250);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.96 0 0);
+  --secondary-foreground: oklch(0.3 0 0);
+  --muted: oklch(0.96 0 0);
+  --muted-foreground: oklch(0.5 0 0);
+  --accent: oklch(0.96 0 0);
+  --accent-foreground: oklch(0.3 0 0);
+  --destructive: oklch(0.55 0.22 25);
+  --border: oklch(0 0 0 / 8%);
+  --input: oklch(0 0 0 / 8%);
+  --ring: oklch(0.55 0.2 250);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.714);
   --chart-3: oklch(0.398 0.07 227.392);
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.97 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.94 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0 0 0 / 12%);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar: oklch(1 0 0);
+  --sidebar-foreground: oklch(0.2 0 0);
+  --sidebar-primary: oklch(0.55 0.2 250);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.96 0 0);
+  --sidebar-accent-foreground: oklch(0.3 0 0);
+  --sidebar-border: oklch(0 0 0 / 8%);
+  --sidebar-ring: oklch(0.55 0.2 250);
 }
 
 @layer base {
@@ -104,27 +104,32 @@
 
 .leaflet-popup-content-wrapper {
   background: oklch(1 0 0);
-  color: oklch(0.145 0 0);
+  color: oklch(0.2 0 0);
   border-radius: 0.5rem;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.15),
+    0 0 1px rgba(0, 0, 0, 0.1);
+  border: 1px solid oklch(0 0 0 / 8%);
 }
 
 .leaflet-popup-tip {
   background: oklch(1 0 0);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .leaflet-popup-content {
-  margin: 0.75rem;
+  margin: 0.625rem;
 }
 
 .leaflet-control-zoom a {
   background: oklch(1 0 0) !important;
-  color: oklch(0.145 0 0) !important;
-  border-color: oklch(0 0 0 / 12%) !important;
+  color: oklch(0.35 0 0) !important;
+  border-color: oklch(0 0 0 / 10%) !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1) !important;
 }
 
 .leaflet-control-zoom a:hover {
-  background: oklch(0.94 0 0) !important;
+  background: oklch(0.96 0 0) !important;
 }
 
 .leaflet-control-attribution {

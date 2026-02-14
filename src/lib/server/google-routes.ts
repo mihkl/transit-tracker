@@ -4,8 +4,7 @@ import type {
   NominatimResult,
 } from "@/lib/types";
 
-const ROUTES_URL =
-  "https://routes.googleapis.com/directions/v2:computeRoutes";
+const ROUTES_URL = "https://routes.googleapis.com/directions/v2:computeRoutes";
 
 function getApiKey(): string {
   return process.env.GOOGLE_ROUTES_API_KEY || "";
@@ -22,7 +21,7 @@ export async function computeRoutes(
   destLat: number,
   destLng: number,
   departureTime?: string,
-  arrivalTime?: string
+  arrivalTime?: string,
 ): Promise<GoogleRoutesResponse | null> {
   const apiKey = getApiKey();
 
@@ -90,7 +89,6 @@ function buildPlaceName(r: NominatimResult): string {
     if (road && houseNumber) return `${road} ${houseNumber}`;
     if (road) return road;
   }
-  // Fallback: use first two comma-separated parts of display_name
   if (r.display_name) {
     const parts = r.display_name.split(",").map((s) => s.trim());
     if (parts.length >= 2) return `${parts[1]} ${parts[0]}`;
@@ -100,7 +98,7 @@ function buildPlaceName(r: NominatimResult): string {
 }
 
 export async function searchPlaces(
-  query: string
+  query: string,
 ): Promise<PlaceSearchResult[]> {
   const url =
     `https://nominatim.openstreetmap.org/search` +

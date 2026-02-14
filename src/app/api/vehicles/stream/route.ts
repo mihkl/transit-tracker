@@ -6,17 +6,28 @@ export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   await transitState.initialize();
 
-  const { searchParams } = request.nextUrl;
-  const line = searchParams.get("line") || undefined;
-  const type = searchParams.get("type") || undefined;
-
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream({
     start(controller) {
+      let lastHash = "";
+
       const send = () => {
         try {
-          const vehicles = transitState.getVehicles(line, type);
+          const vehicles = transitState.getVehicles();
+
+          const hash = vehicles
+            .map(
+              (v) =>
+                `${v.id}:${v.latitude.toFixed(5)}:${v.longitude.toFixed(5)}:${v.bearing.toFixed(0)}`,
+            )
+            .join("|");
+
+          if (hash === lastHash) {
+            return;
+          }
+          lastHash = hash;
+
           const data = JSON.stringify({
             vehicles,
             count: vehicles.length,
@@ -28,19 +39,25 @@ export async function GET(request: NextRequest) {
         }
       };
 
-      // Send immediately
       send();
 
-      // Then every 5 seconds
-      const interval = setInterval(send, 5000);
+      const unsubscribe = transitState.onUpdate(send);
 
-      // Clean up when client disconnects
+      const keepAliveInterval = setInterval(() => {
+        try {
+          controller.enqueue(encoder.encode(": keepalive\n\n"));
+        } catch {
+          clearInterval(keepAliveInterval);
+        }
+      }, 30000);
+
       request.signal.addEventListener("abort", () => {
-        clearInterval(interval);
+        unsubscribe();
+        clearInterval(keepAliveInterval);
         try {
           controller.close();
         } catch {
-          // already closed
+          return;
         }
       });
     },

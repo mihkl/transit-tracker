@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import type { VehicleDto, RoutePlanResponse } from "@/lib/types";
+import type { StopDto } from "@/app/api/all-stops/route";
 
 const MapViewInner = dynamic(
   () => import("./map-view-inner").then((mod) => mod.MapViewInner),
@@ -12,7 +13,7 @@ const MapViewInner = dynamic(
         <div className="text-muted-foreground">Loading map...</div>
       </div>
     ),
-  }
+  },
 );
 
 interface MapViewProps {
@@ -24,10 +25,10 @@ interface MapViewProps {
   pickingPoint: "origin" | "destination" | null;
   onMapClick: (pointType: string, lat: number, lng: number) => void;
   focusedVehicleId: number | null;
-  selectedVehicleId: number | null;
   shapes: Record<string, number[][]> | null;
   onVehicleClick: (id: number) => void;
   onDeselectVehicle: () => void;
+  selectedStop: StopDto | null;
 }
 
 export function MapView(props: MapViewProps) {

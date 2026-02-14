@@ -1,8 +1,3 @@
-/**
- * Client-side geo utilities for bearing computation from route shapes.
- * Shape arrays use format: [lat, lng, distTraveled]
- */
-
 function toRad(deg: number): number {
   return (deg * Math.PI) / 180;
 }
@@ -15,7 +10,7 @@ export function computeBearing(
   lat1: number,
   lng1: number,
   lat2: number,
-  lng2: number
+  lng2: number,
 ): number {
   const dLon = toRad(lng2 - lng1);
   const y = Math.sin(dLon) * Math.cos(toRad(lat2));
@@ -26,22 +21,15 @@ export function computeBearing(
   return (toDeg(b) + 360) % 360;
 }
 
-/**
- * Given a shape (array of [lat, lng, distTraveled]) and a distance along that shape,
- * compute the bearing of the segment at that distance.
- * Uses binary search to find the bracketing segment.
- */
 export function getBearingFromShape(
   shape: number[][],
-  dist: number
+  dist: number,
 ): number | null {
   if (!shape || shape.length < 2) return null;
 
-  // Binary search for the segment bracketing dist
   let lo = 0;
   let hi = shape.length - 1;
 
-  // Clamp to shape bounds
   if (dist <= shape[0][2]) {
     return computeBearing(shape[0][0], shape[0][1], shape[1][0], shape[1][1]);
   }
@@ -50,7 +38,7 @@ export function getBearingFromShape(
       shape[hi - 1][0],
       shape[hi - 1][1],
       shape[hi][0],
-      shape[hi][1]
+      shape[hi][1],
     );
   }
 
@@ -63,21 +51,12 @@ export function getBearingFromShape(
     }
   }
 
-  return computeBearing(
-    shape[lo][0],
-    shape[lo][1],
-    shape[hi][0],
-    shape[hi][1]
-  );
+  return computeBearing(shape[lo][0], shape[lo][1], shape[hi][0], shape[hi][1]);
 }
 
-/**
- * Interpolate a position along the shape at the given distance.
- * Returns [lat, lng].
- */
 export function interpolatePosition(
   shape: number[][],
-  dist: number
+  dist: number,
 ): [number, number] | null {
   if (!shape || shape.length < 2) return null;
 

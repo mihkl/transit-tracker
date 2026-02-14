@@ -4,11 +4,6 @@ import { matchTransitLeg } from "@/lib/server/delay-matcher";
 
 export const dynamic = "force-dynamic";
 
-/**
- * Debug endpoint to inspect delay matching logic.
- *
- * GET /api/debug/match?line=45&type=BUS&depStop=Virve&depLat=X&depLng=Y&scheduled=2026-02-09T17:56:00Z&arrStop=Tehnikaülikool&arrLat=X&arrLng=Y
- */
 export async function GET(request: NextRequest) {
   await transitState.initialize();
 

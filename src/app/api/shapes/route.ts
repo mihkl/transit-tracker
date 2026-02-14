@@ -3,8 +3,15 @@ import { transitState } from "@/lib/server/transit-state";
 
 export const dynamic = "force-dynamic";
 
+let cachedResponse: Record<string, number[][]> | null = null;
+
 export async function GET() {
+  if (cachedResponse) {
+    return NextResponse.json(cachedResponse);
+  }
+
   await transitState.initialize();
   const shapes = transitState.getShapes();
-  return NextResponse.json(shapes ?? {});
+  cachedResponse = shapes ?? {};
+  return NextResponse.json(cachedResponse);
 }

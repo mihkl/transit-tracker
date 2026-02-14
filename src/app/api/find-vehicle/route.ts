@@ -1,20 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { transitState } from "@/lib/server/transit-state";
 import { haversineDistance, findPositionOnRoute } from "@/lib/server/geo-utils";
-import type { VehicleDto, ShapePoint, PatternStop } from "@/lib/types";
+import type {
+  VehicleDto,
+  ShapePoint,
+  VehicleMatchDebugInfo,
+  DirectionPatternInfo,
+  VehicleCandidateInfo,
+} from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-// Average transit speed for ETA estimation (~20 km/h including stops)
 const AVG_SPEED_MS = 5.5;
 
-/**
- * Find the best matching live vehicle for a planned transit leg.
- *
- * Uses the arrival stop to determine the correct travel direction,
- * and the scheduled departure time to pick the right bus from the
- * "queue" of vehicles on the line.
- */
 export async function GET(request: NextRequest) {
   await transitState.initialize();
 
@@ -30,7 +28,7 @@ export async function GET(request: NextRequest) {
   if (!lineNumber || depLat == null || depLng == null) {
     return NextResponse.json(
       { error: "line, depLat, depLng are required" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -51,35 +49,36 @@ export async function GET(request: NextRequest) {
   if (vehicles.length === 0) {
     vehicles = transitState.getVehicles(lineNumber);
   }
-  if (vehicles.length === 0) {
-    return NextResponse.json({ vehicleId: null });
-  }
 
-  // Get both direction patterns, including arrival stop info
-  const bothDirs = getBothDirections(lineNumber, typeFilter, depLat, depLng, arrLat, arrLng);
-
-  // Determine the correct travel direction using dep+arr stop positions
+  const bothDirs = getBothDirections(
+    lineNumber,
+    typeFilter,
+    depLat,
+    depLng,
+    arrLat,
+    arrLng,
+  );
   const correctDir = bothDirs ? getCorrectDirection(bothDirs) : null;
-
-  // Parse scheduled departure for time-based matching
   const targetSeconds = scheduledDep ? getTargetSeconds(scheduledDep) : null;
 
-  // Score every vehicle: forward distance + ETA
   const scored = vehicles.map((v) => {
     const fwd = getForwardDistance(v, depLat, depLng, bothDirs, correctDir);
     const etaSeconds = fwd.fwdDist / AVG_SPEED_MS;
-    // How far off (in seconds) this vehicle's ETA is from the scheduled departure
-    const timeDiffSeconds = targetSeconds !== null
-      ? etaSeconds - targetSeconds
-      : null;
+    const timeDiffSeconds =
+      targetSeconds !== null ? etaSeconds - targetSeconds : null;
     return { vehicle: v, ...fwd, etaSeconds, timeDiffSeconds };
   });
 
-  // Log
-  console.log(`[find-vehicle] line=${lineNumber} mode=${mode} correctDir=${correctDir} targetSec=${targetSeconds !== null ? Math.round(targetSeconds) : "N/A"}`);
+  console.log(
+    `[find-vehicle] line=${lineNumber} mode=${mode} correctDir=${correctDir} targetSec=${targetSeconds !== null ? Math.round(targetSeconds) : "N/A"}`,
+  );
   if (bothDirs) {
-    console.log(`  dir0: key=${bothDirs.dir0.patternKey} terminal="${bothDirs.dir0.terminal}" depDist=${fmtDist(bothDirs.dir0.depStopDistAlong)} arrDist=${fmtDist(bothDirs.dir0.arrStopDistAlong)} len=${Math.round(bothDirs.dir0.totalLength)}m`);
-    console.log(`  dir1: key=${bothDirs.dir1.patternKey} terminal="${bothDirs.dir1.terminal}" depDist=${fmtDist(bothDirs.dir1.depStopDistAlong)} arrDist=${fmtDist(bothDirs.dir1.arrStopDistAlong)} len=${Math.round(bothDirs.dir1.totalLength)}m`);
+    console.log(
+      `  dir0: key=${bothDirs.dir0.patternKey} terminal="${bothDirs.dir0.terminal}" depDist=${fmtDist(bothDirs.dir0.depStopDistAlong)} arrDist=${fmtDist(bothDirs.dir0.arrStopDistAlong)} len=${Math.round(bothDirs.dir0.totalLength)}m`,
+    );
+    console.log(
+      `  dir1: key=${bothDirs.dir1.patternKey} terminal="${bothDirs.dir1.terminal}" depDist=${fmtDist(bothDirs.dir1.depStopDistAlong)} arrDist=${fmtDist(bothDirs.dir1.arrStopDistAlong)} len=${Math.round(bothDirs.dir1.totalLength)}m`,
+    );
   } else {
     console.log(`  no GTFS route found`);
   }
@@ -87,15 +86,34 @@ export async function GET(request: NextRequest) {
   for (const s of scored) {
     const v = s.vehicle;
     const etaMin = (s.etaSeconds / 60).toFixed(1);
-    const diffMin = s.timeDiffSeconds !== null ? (s.timeDiffSeconds / 60).toFixed(1) : "?";
-    console.log(`    id=${v.id} dest="${v.destination}" | realDir=${s.matchedDir ?? "?"} ${s.reason} fwd=${Math.round(s.fwdDist)}m eta=${etaMin}min diff=${diffMin}min`);
+    const diffMin =
+      s.timeDiffSeconds !== null ? (s.timeDiffSeconds / 60).toFixed(1) : "?";
+    console.log(
+      `    id=${v.id} dest="${v.destination}" | realDir=${s.matchedDir ?? "?"} ${s.reason} fwd=${Math.round(s.fwdDist)}m eta=${etaMin}min diff=${diffMin}min`,
+    );
   }
 
-  // Sort: if we have a scheduled departure, sort by how close ETA matches it.
-  // Otherwise fall back to shortest forward distance.
+  if (scored.length === 0) {
+    const debugInfo: VehicleMatchDebugInfo = buildDebugInfo(
+      lineNumber,
+      mode,
+      depLat,
+      depLng,
+      arrLat,
+      arrLng,
+      scheduledDep,
+      targetSeconds,
+      correctDir,
+      bothDirs,
+      [],
+      null,
+      "no-vehicles",
+    );
+    return NextResponse.json({ vehicleId: null, debugInfo });
+  }
+
   if (targetSeconds !== null) {
     scored.sort((a, b) => {
-      // Absolute time difference from the scheduled departure
       const aDiff = Math.abs(a.timeDiffSeconds!);
       const bDiff = Math.abs(b.timeDiffSeconds!);
       return aDiff - bDiff;
@@ -108,13 +126,94 @@ export async function GET(request: NextRequest) {
   const etaMin = (best.etaSeconds / 60).toFixed(1);
   console.log(`  → picked id=${best.vehicle.id} (eta=${etaMin}min)`);
 
-  return NextResponse.json({ vehicleId: best.vehicle.id });
+  const candidates: VehicleCandidateInfo[] = scored.map((s) => ({
+    vehicleId: s.vehicle.id,
+    destination: s.vehicle.destination,
+    latitude: s.vehicle.latitude,
+    longitude: s.vehicle.longitude,
+    matchedDirection: s.matchedDir,
+    reason: s.reason,
+    forwardDistanceMeters: Math.round(s.fwdDist),
+    etaSeconds: Math.round(s.etaSeconds),
+    timeDiffSeconds:
+      s.timeDiffSeconds !== null ? Math.round(s.timeDiffSeconds) : null,
+    isSelected: s.vehicle.id === best.vehicle.id,
+  }));
+
+  const debugInfo: VehicleMatchDebugInfo = buildDebugInfo(
+    lineNumber,
+    mode,
+    depLat,
+    depLng,
+    arrLat,
+    arrLng,
+    scheduledDep,
+    targetSeconds,
+    correctDir,
+    bothDirs,
+    candidates,
+    best.vehicle.id,
+    best.reason,
+  );
+
+  return NextResponse.json({ vehicleId: best.vehicle.id, debugInfo });
 }
 
-/**
- * Calculate seconds from now until the scheduled departure.
- * Returns negative if the scheduled time is in the past.
- */
+function buildDebugInfo(
+  lineNumber: string,
+  mode: string | null,
+  depLat: number | null,
+  depLng: number | null,
+  arrLat: number | null,
+  arrLng: number | null,
+  scheduledDep: string | null,
+  targetSeconds: number | null,
+  correctDir: number | null,
+  bothDirs: BothDirections | null,
+  candidates: VehicleCandidateInfo[],
+  selectedVehicleId: number | null,
+  selectionReason: string,
+): VehicleMatchDebugInfo {
+  let dir0: DirectionPatternInfo | null = null;
+  let dir1: DirectionPatternInfo | null = null;
+
+  if (bothDirs) {
+    dir0 = {
+      patternKey: bothDirs.dir0.patternKey,
+      terminal: bothDirs.dir0.terminal,
+      depStopDistAlong: bothDirs.dir0.depStopDistAlong,
+      arrStopDistAlong: bothDirs.dir0.arrStopDistAlong,
+      totalLength: bothDirs.dir0.totalLength,
+    };
+    dir1 = {
+      patternKey: bothDirs.dir1.patternKey,
+      terminal: bothDirs.dir1.terminal,
+      depStopDistAlong: bothDirs.dir1.depStopDistAlong,
+      arrStopDistAlong: bothDirs.dir1.arrStopDistAlong,
+      totalLength: bothDirs.dir1.totalLength,
+    };
+  }
+
+  return {
+    lineNumber,
+    mode,
+    departureStopLat: depLat,
+    departureStopLng: depLng,
+    arrivalStopLat: arrLat,
+    arrivalStopLng: arrLng,
+    scheduledDeparture: scheduledDep,
+    targetSeconds: targetSeconds !== null ? Math.round(targetSeconds) : null,
+    correctDirection: correctDir,
+    routeId: bothDirs?.routeId ?? null,
+    dir0,
+    dir1,
+    candidates,
+    selectedVehicleId,
+    selectionReason,
+    timestamp: new Date().toISOString(),
+  };
+}
+
 function getTargetSeconds(scheduledDep: string): number | null {
   try {
     const depTime = new Date(scheduledDep).getTime();
@@ -128,8 +227,6 @@ function getTargetSeconds(scheduledDep: string): number | null {
 function fmtDist(d: number | null): string {
   return d !== null ? Math.round(d) + "m" : "N/A";
 }
-
-// ── Types ──
 
 interface DirPattern {
   patternKey: string;
@@ -152,15 +249,13 @@ interface ForwardResult {
   matchedDir: number | null;
 }
 
-// ── Get both directions ──
-
 function getBothDirections(
   lineNumber: string,
   typeFilter: string | undefined,
   depLat: number,
   depLng: number,
   arrLat: number | null,
-  arrLng: number | null
+  arrLng: number | null,
 ): BothDirections | null {
   const routeId = transitState.getRouteIdForLine(lineNumber, typeFilter);
   if (!routeId) return null;
@@ -191,13 +286,10 @@ function getBothDirections(
     const lastShape = pattern.shapePoints[pattern.shapePoints.length - 1];
     const totalLength = lastShape?.distTraveled ?? 0;
 
-    // Find departure stop on this direction
     const dep = findClosestStop(stops, depLat, depLng);
-    const depStopDistAlong = (dep.idx >= 0 && dep.dist < 500)
-      ? stops[dep.idx].distAlongRoute
-      : null;
+    const depStopDistAlong =
+      dep.idx >= 0 && dep.dist < 500 ? stops[dep.idx].distAlongRoute : null;
 
-    // Find arrival stop on this direction
     let arrStopDistAlong: number | null = null;
     if (arrLat != null && arrLng != null) {
       const arr = findClosestStop(stops, arrLat, arrLng);
@@ -223,21 +315,18 @@ function getBothDirections(
   };
 }
 
-// ── Determine correct travel direction ──
-
-/**
- * The correct direction is the one where the departure stop comes
- * BEFORE the arrival stop along the route (depDist < arrDist).
- * Returns 0, 1, or null if indeterminate.
- */
 function getCorrectDirection(bothDirs: BothDirections): number | null {
   const d0 = bothDirs.dir0;
   const d1 = bothDirs.dir1;
 
-  const valid0 = d0.depStopDistAlong !== null && d0.arrStopDistAlong !== null
-    && d0.depStopDistAlong < d0.arrStopDistAlong;
-  const valid1 = d1.depStopDistAlong !== null && d1.arrStopDistAlong !== null
-    && d1.depStopDistAlong < d1.arrStopDistAlong;
+  const valid0 =
+    d0.depStopDistAlong !== null &&
+    d0.arrStopDistAlong !== null &&
+    d0.depStopDistAlong < d0.arrStopDistAlong;
+  const valid1 =
+    d1.depStopDistAlong !== null &&
+    d1.arrStopDistAlong !== null &&
+    d1.depStopDistAlong < d1.arrStopDistAlong;
 
   if (valid0 && !valid1) return 0;
   if (valid1 && !valid0) return 1;
@@ -251,21 +340,12 @@ function getCorrectDirection(bothDirs: BothDirections): number | null {
   return null;
 }
 
-// ── Forward distance ──
-
-/**
- * Calculate forward distance from a vehicle to the departure stop.
- *
- * Uses correctDir to ensure we only count vehicles going the right way
- * as "approaching". Vehicles going the wrong direction must complete
- * their current trip and come back.
- */
 function getForwardDistance(
   v: VehicleDto,
   depLat: number,
   depLng: number,
   bothDirs: BothDirections | null,
-  correctDir: number | null
+  correctDir: number | null,
 ): ForwardResult {
   if (!bothDirs) {
     return {
@@ -275,56 +355,67 @@ function getForwardDistance(
     };
   }
 
-  // Determine vehicle's real direction from its destination
   const realDir = matchDestinationToDir(v.destination, bothDirs);
 
   if (realDir !== null) {
     const myDir = realDir === 0 ? bothDirs.dir0 : bothDirs.dir1;
     const otherDir = realDir === 0 ? bothDirs.dir1 : bothDirs.dir0;
 
-    // Snap vehicle to its real direction's shape
     const vehicleDist = snapToShape(v, myDir);
 
     if (vehicleDist !== null) {
-      const correctDirPattern = correctDir === 0 ? bothDirs.dir0
-        : correctDir === 1 ? bothDirs.dir1
-        : null;
+      const correctDirPattern =
+        correctDir === 0
+          ? bothDirs.dir0
+          : correctDir === 1
+            ? bothDirs.dir1
+            : null;
       const correctDepDist = correctDirPattern?.depStopDistAlong ?? null;
 
       if (correctDir !== null && realDir === correctDir) {
         if (correctDepDist !== null) {
           const diff = correctDepDist - vehicleDist;
           if (diff >= 0) {
-            return { fwdDist: diff, reason: "approaching", matchedDir: realDir };
+            return {
+              fwdDist: diff,
+              reason: "approaching",
+              matchedDir: realDir,
+            };
           }
-          const fwd = (myDir.totalLength - vehicleDist)
-            + otherDir.totalLength
-            + correctDepDist;
+          const fwd =
+            myDir.totalLength -
+            vehicleDist +
+            otherDir.totalLength +
+            correctDepDist;
           return { fwdDist: fwd, reason: "passed", matchedDir: realDir };
         }
       } else if (correctDir !== null && realDir !== correctDir) {
         if (correctDepDist !== null) {
-          const fwd = (myDir.totalLength - vehicleDist) + correctDepDist;
+          const fwd = myDir.totalLength - vehicleDist + correctDepDist;
           return { fwdDist: fwd, reason: "wrong-dir", matchedDir: realDir };
         }
       }
 
-      // Fallback: correctDir unknown
       if (myDir.depStopDistAlong !== null) {
         const diff = myDir.depStopDistAlong - vehicleDist;
         if (diff >= 0) {
           return { fwdDist: diff, reason: "approaching", matchedDir: realDir };
         }
-        const fwd = (myDir.totalLength - vehicleDist)
-          + otherDir.totalLength
-          + myDir.depStopDistAlong;
+        const fwd =
+          myDir.totalLength -
+          vehicleDist +
+          otherDir.totalLength +
+          myDir.depStopDistAlong;
         return { fwdDist: fwd, reason: "passed", matchedDir: realDir };
       }
 
       if (otherDir.depStopDistAlong !== null) {
-        const fwd = (myDir.totalLength - vehicleDist)
-          + otherDir.depStopDistAlong;
-        return { fwdDist: fwd, reason: "other-dir-to-stop", matchedDir: realDir };
+        const fwd = myDir.totalLength - vehicleDist + otherDir.depStopDistAlong;
+        return {
+          fwdDist: fwd,
+          reason: "other-dir-to-stop",
+          matchedDir: realDir,
+        };
       }
     }
   }
@@ -336,15 +427,10 @@ function getForwardDistance(
   };
 }
 
-/**
- * Snap vehicle to a direction's shape. Returns distance along route.
- */
 function snapToShape(v: VehicleDto, dir: DirPattern): number | null {
   if (dir.shapePoints.length === 0) return null;
 
-  const snap = findPositionOnRoute(
-    v.latitude, v.longitude, dir.shapePoints
-  );
+  const snap = findPositionOnRoute(v.latitude, v.longitude, dir.shapePoints);
 
   if (snap.perpDist < 500) {
     return snap.distAlong;
@@ -353,13 +439,9 @@ function snapToShape(v: VehicleDto, dir: DirPattern): number | null {
   return null;
 }
 
-/**
- * Match a vehicle's destination to a direction's terminal.
- * Returns 0 or 1, or null if no match.
- */
 function matchDestinationToDir(
   destination: string,
-  bothDirs: BothDirections
+  bothDirs: BothDirections,
 ): number | null {
   if (!destination) return null;
 
@@ -395,12 +477,17 @@ function normalize(s: string): string {
 function findClosestStop(
   stops: { latitude: number; longitude: number }[],
   lat: number,
-  lng: number
+  lng: number,
 ): { idx: number; dist: number } {
   let bestIdx = -1;
   let bestDist = Infinity;
   for (let i = 0; i < stops.length; i++) {
-    const d = haversineDistance(lat, lng, stops[i].latitude, stops[i].longitude);
+    const d = haversineDistance(
+      lat,
+      lng,
+      stops[i].latitude,
+      stops[i].longitude,
+    );
     if (d < bestDist) {
       bestDist = d;
       bestIdx = i;

@@ -2,7 +2,6 @@ import * as path from "path";
 import type {
   GpsReading,
   VehicleDto,
-  NextStopDto,
   LineDto,
   GtfsData,
   PatternStop,
@@ -22,6 +21,22 @@ class TransitState {
   private lastUpdate = new Date(0);
   private initialized = false;
   private initializing = false;
+  private updateCallbacks: Set<() => void> = new Set();
+
+  onUpdate(callback: () => void): () => void {
+    this.updateCallbacks.add(callback);
+    return () => this.updateCallbacks.delete(callback);
+  }
+
+  private notifyUpdate(): void {
+    for (const cb of this.updateCallbacks) {
+      try {
+        cb();
+      } catch (err) {
+        console.error("Update callback error:", err);
+      }
+    }
+  }
 
   async initialize(): Promise<void> {
     if (this.initialized || this.initializing) return;
@@ -29,7 +44,8 @@ class TransitState {
 
     try {
       const gtfsDir =
-        process.env.GTFS_DATA_DIR || path.join(process.cwd(), "data", "tallinn");
+        process.env.GTFS_DATA_DIR ||
+        path.join(process.cwd(), "data", "tallinn");
       console.log(`Loading GTFS from ${path.resolve(gtfsDir)}...`);
 
       this.gtfs = await loadGtfs(gtfsDir);
@@ -57,6 +73,7 @@ class TransitState {
     if (!this.tracker) return;
     this.tracker.processReadings(readings);
     this.lastUpdate = new Date();
+    this.notifyUpdate();
   }
 
   getVehicles(lineFilter?: string, typeFilter?: string): VehicleDto[] {
@@ -64,13 +81,11 @@ class TransitState {
 
     let vehicles = Array.from(this.tracker.getVehicles().values());
 
-    // Filter by transport type
     if (typeFilter && typeFilter !== "all") {
       const types = getTransportTypes(typeFilter);
       vehicles = vehicles.filter((v) => types.has(v.transportType));
     }
 
-    // Filter by line number
     if (lineFilter) {
       vehicles = vehicles.filter((v) => v.lineNumber === lineFilter);
     }
@@ -149,11 +164,16 @@ class TransitState {
 
   getRouteIdForLine(lineNumber: string, typeFilter?: string): string | null {
     if (!this.gtfs) return null;
-    const typeNums = typeFilter === "tram" ? [3] :
-                     typeFilter === "trolleybus" ? [1] :
-                     typeFilter === "bus" ? [2, 7] :
-                     typeFilter === "train" ? [10] :
-                     [1, 2, 3, 7, 10];
+    const typeNums =
+      typeFilter === "tram"
+        ? [3]
+        : typeFilter === "trolleybus"
+          ? [1]
+          : typeFilter === "bus"
+            ? [2, 7]
+            : typeFilter === "train"
+              ? [10]
+              : [1, 2, 3, 7, 10];
     for (const t of typeNums) {
       const routeId = this.gtfs.gpsToRouteMap.get(`${t}_${lineNumber}`);
       if (routeId) return routeId;
@@ -170,6 +190,7 @@ class TransitState {
       longitude: v.longitude,
       speed: v.speed,
       heading: v.heading,
+      bearing: v.heading,
       destination: v.destination,
       directionId: v.matchedDirectionId ?? 0,
       stopIndex: v.lastStopIndex,
@@ -222,8 +243,7 @@ function computeSpeedMs(v: VehicleState): number {
   if (v.positionHistory.length >= 2) {
     const prev = v.positionHistory[v.positionHistory.length - 2];
     const curr = v.positionHistory[v.positionHistory.length - 1];
-    const dt =
-      (curr.timestamp.getTime() - prev.timestamp.getTime()) / 1000;
+    const dt = (curr.timestamp.getTime() - prev.timestamp.getTime()) / 1000;
     if (dt > 0.5) {
       const dd = curr.distanceAlongRoute - prev.distanceAlongRoute;
       if (dd > 0) return Math.min(dd / dt, 25);
@@ -272,13 +292,11 @@ function getTypeName(routeId: string): string {
   return "bus";
 }
 
-// Singleton via globalThis pattern for Next.js
 const globalForTransit = globalThis as unknown as {
   transitState: TransitState | undefined;
 };
 
-export const transitState =
-  globalForTransit.transitState ?? new TransitState();
+export const transitState = globalForTransit.transitState ?? new TransitState();
 
 if (process.env.NODE_ENV !== "production") {
   globalForTransit.transitState = transitState;

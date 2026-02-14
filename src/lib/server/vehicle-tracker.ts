@@ -1,9 +1,4 @@
-import type {
-  GpsReading,
-  VehicleState,
-  GtfsData,
-  PositionSnapshot,
-} from "@/lib/types";
+import type { GpsReading, VehicleState, GtfsData } from "@/lib/types";
 import { MAX_HISTORY_SIZE } from "@/lib/types";
 import { findPositionOnRoute } from "./geo-utils";
 
@@ -54,7 +49,6 @@ export class VehicleTracker {
       updated.push(state);
     }
 
-    // Remove stale vehicles (no update for 2 minutes)
     const cutoff = new Date(Date.now() - 2 * 60 * 1000);
     for (const [key, v] of this.vehicles) {
       if (v.lastUpdateTime < cutoff) {
@@ -130,7 +124,7 @@ export class VehicleTracker {
       const { distAlong, perpDist } = findPositionOnRoute(
         state.latitude,
         state.longitude,
-        pattern.shapePoints
+        pattern.shapePoints,
       );
 
       if (perpDist < bestPerpDist) {
@@ -142,10 +136,55 @@ export class VehicleTracker {
 
     if (bestDirection < 0) return;
 
-    // Only switch direction if confident (within 200m) or not matched yet
-    if (bestPerpDist > 200 && state.matchedDirectionId !== null) return;
+    if (
+      state.matchedDirectionId !== null &&
+      state.matchedDirectionId !== bestDirection
+    ) {
+      if (bestPerpDist > 200) return;
+
+      const currentKey = `${state.matchedRouteId}_${state.matchedDirectionId}`;
+      const currentPattern = this.gtfs.patterns.get(currentKey);
+      if (currentPattern && currentPattern.shapePoints.length > 0) {
+        const { perpDist: currentPerpDist } = findPositionOnRoute(
+          state.latitude,
+          state.longitude,
+          currentPattern.shapePoints,
+        );
+        if (currentPerpDist - bestPerpDist < 100) {
+          const { distAlong } = findPositionOnRoute(
+            state.latitude,
+            state.longitude,
+            currentPattern.shapePoints,
+          );
+          state.distanceAlongRoute = distAlong;
+          return;
+        }
+      }
+    }
 
     state.matchedDirectionId = bestDirection;
     state.distanceAlongRoute = bestDistAlong;
+
+    const pattern = this.gtfs.patterns.get(
+      `${state.matchedRouteId}_${bestDirection}`,
+    );
+    if (pattern) {
+      state.lastStopIndex = this.findLastStopIndex(
+        pattern.orderedStops,
+        bestDistAlong,
+      );
+    }
+  }
+
+  private findLastStopIndex(
+    stops: { distAlongRoute: number }[],
+    distAlong: number,
+  ): number {
+    for (let i = stops.length - 1; i >= 0; i--) {
+      if (stops[i].distAlongRoute <= distAlong) {
+        return i;
+      }
+    }
+    return -1;
   }
 }

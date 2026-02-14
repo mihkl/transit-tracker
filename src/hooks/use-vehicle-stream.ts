@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import type { VehicleDto } from "@/lib/types";
 
 interface StreamData {
@@ -10,29 +10,19 @@ interface StreamData {
 }
 
 export function useVehicleStream(lineFilter: string, typeFilter: string) {
-  const [vehicles, setVehicles] = useState<VehicleDto[]>([]);
+  const [allVehicles, setAllVehicles] = useState<VehicleDto[]>([]);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [loading, setLoading] = useState(true);
   const eventSourceRef = useRef<EventSource | null>(null);
 
-  const connect = useCallback(() => {
-    // Close existing connection
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-    }
-
-    const params = new URLSearchParams();
-    if (lineFilter) params.set("line", lineFilter);
-    if (typeFilter && typeFilter !== "all") params.set("type", typeFilter);
-
-    const url = `/api/vehicles/stream?${params}`;
-    const es = new EventSource(url);
+  useEffect(() => {
+    const es = new EventSource("/api/vehicles/stream");
     eventSourceRef.current = es;
 
     es.onmessage = (event) => {
       try {
         const data: StreamData = JSON.parse(event.data);
-        setVehicles(data.vehicles);
+        setAllVehicles(data.vehicles);
         setLastUpdate(new Date(data.timestamp));
         setLoading(false);
       } catch (err) {
@@ -41,21 +31,32 @@ export function useVehicleStream(lineFilter: string, typeFilter: string) {
     };
 
     es.onerror = () => {
-      // EventSource auto-reconnects, just log
       console.warn("SSE connection error, reconnecting...");
     };
-  }, [lineFilter, typeFilter]);
-
-  useEffect(() => {
-    connect();
 
     return () => {
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-        eventSourceRef.current = null;
-      }
+      es.close();
+      eventSourceRef.current = null;
     };
-  }, [connect]);
+  }, []);
+
+  const vehicles = useMemo(() => {
+    if (!lineFilter && (!typeFilter || typeFilter === "all")) {
+      return allVehicles;
+    }
+
+    return allVehicles.filter((v) => {
+      if (lineFilter && v.lineNumber !== lineFilter) return false;
+      if (typeFilter && typeFilter !== "all") {
+        if (typeFilter === "bus" && v.transportType !== "bus") return false;
+        if (typeFilter === "tram" && v.transportType !== "tram") return false;
+        if (typeFilter === "trolleybus" && v.transportType !== "trolleybus")
+          return false;
+        if (typeFilter === "train" && v.transportType !== "train") return false;
+      }
+      return true;
+    });
+  }, [allVehicles, lineFilter, typeFilter]);
 
   return { vehicles, lastUpdate, loading };
 }

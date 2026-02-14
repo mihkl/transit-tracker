@@ -13,7 +13,6 @@ export async function GET(request: NextRequest) {
   try {
     const raw = await searchPlaces(q);
 
-    // Deduplicate results with the same name+address (keep first)
     const seen = new Set<string>();
     const results = raw.filter((r) => {
       const key = `${r.name}|${r.address}`;
@@ -27,7 +26,7 @@ export async function GET(request: NextRequest) {
     console.error("Places search error:", err);
     return NextResponse.json(
       { error: `Search failed: ${err instanceof Error ? err.message : err}` },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

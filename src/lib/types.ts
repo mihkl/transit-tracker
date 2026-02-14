@@ -1,5 +1,3 @@
-// ── GTFS raw data ──
-
 export interface GtfsRoute {
   routeId: string;
   shortName: string;
@@ -18,6 +16,8 @@ export interface GtfsStop {
   stopName: string;
   latitude: number;
   longitude: number;
+  stopDesc?: string;
+  stopArea?: string;
 }
 
 export interface GtfsStopTime {
@@ -25,7 +25,7 @@ export interface GtfsStopTime {
   stopId: string;
   stopSequence: number;
   shapeDistTraveled: number;
-  departureTime: string; // "HH:MM:SS" from GTFS
+  departureTime: string;
 }
 
 export interface GtfsShapePoint {
@@ -35,8 +35,6 @@ export interface GtfsShapePoint {
   sequence: number;
   distTraveled: number;
 }
-
-// ── Route patterns ──
 
 export interface RoutePattern {
   routeId: string;
@@ -59,8 +57,6 @@ export interface ShapePoint {
   distTraveled: number;
 }
 
-// ── GPS reading ──
-
 export interface GpsReading {
   transportType: number;
   lineNumber: string;
@@ -72,8 +68,6 @@ export interface GpsReading {
   destination: string;
   timestamp: Date;
 }
-
-// ── Vehicle state ──
 
 export interface PositionSnapshot {
   latitude: number;
@@ -103,8 +97,6 @@ export interface VehicleState {
 
 export const MAX_HISTORY_SIZE = 60;
 
-// ── DTOs ──
-
 export interface VehicleDto {
   id: number;
   lineNumber: string;
@@ -113,6 +105,7 @@ export interface VehicleDto {
   longitude: number;
   speed: number | null;
   heading: number;
+  bearing: number;
   destination: string;
   directionId: number;
   stopIndex: number;
@@ -137,15 +130,13 @@ export interface LineDto {
   routeId: string;
 }
 
-// ── Route planning ──
-
 export interface RoutePlanRequest {
   originLat: number;
   originLng: number;
   destinationLat: number;
   destinationLng: number;
-  departureTime?: string;  // ISO 8601
-  arrivalTime?: string;    // ISO 8601
+  departureTime?: string;
+  arrivalTime?: string;
 }
 
 export interface RoutePlanResponse {
@@ -191,8 +182,6 @@ export interface PlaceSearchResult {
   lat: number;
   lng: number;
 }
-
-// ── Google Routes API response ──
 
 export interface GoogleRoutesResponse {
   routes: GoogleRoute[];
@@ -271,12 +260,10 @@ export interface NominatimResult {
   };
 }
 
-// ── GTFS loader data ──
-
 export interface ScheduleEntry {
   tripId: string;
   directionId: number;
-  departureTime: string; // "HH:MM:SS"
+  departureTime: string;
 }
 
 export interface GtfsData {
@@ -285,12 +272,10 @@ export interface GtfsData {
   trips: Map<string, GtfsTrip>;
   stopTimesByTrip: Map<string, GtfsStopTime[]>;
   shapesByShapeId: Map<string, GtfsShapePoint[]>;
-  patterns: Map<string, RoutePattern>; // key: "routeId_directionId"
-  gpsToRouteMap: Map<string, string>; // key: "transportType_lineNumber"
-  scheduleByRouteStop: Map<string, ScheduleEntry[]>; // key: "routeId_stopId" → sorted by time
+  patterns: Map<string, RoutePattern>;
+  gpsToRouteMap: Map<string, string>;
+  scheduleByRouteStop: Map<string, ScheduleEntry[]>;
 }
-
-// ── SIRI data ──
 
 export interface StopDeparture {
   transportType: string;
@@ -311,4 +296,44 @@ export interface VehicleStopEta {
   scheduledArrivalSeconds: number | null;
   delaySeconds: number | null;
   isPassed: boolean;
+}
+
+export interface VehicleMatchDebugInfo {
+  lineNumber: string;
+  mode: string | null;
+  departureStopLat: number | null;
+  departureStopLng: number | null;
+  arrivalStopLat: number | null;
+  arrivalStopLng: number | null;
+  scheduledDeparture: string | null;
+  targetSeconds: number | null;
+  correctDirection: number | null;
+  routeId: string | null;
+  dir0: DirectionPatternInfo | null;
+  dir1: DirectionPatternInfo | null;
+  candidates: VehicleCandidateInfo[];
+  selectedVehicleId: number | null;
+  selectionReason: string;
+  timestamp: string;
+}
+
+export interface DirectionPatternInfo {
+  patternKey: string;
+  terminal: string;
+  depStopDistAlong: number | null;
+  arrStopDistAlong: number | null;
+  totalLength: number;
+}
+
+export interface VehicleCandidateInfo {
+  vehicleId: number;
+  destination: string;
+  latitude: number;
+  longitude: number;
+  matchedDirection: number | null;
+  reason: string;
+  forwardDistanceMeters: number;
+  etaSeconds: number;
+  timeDiffSeconds: number | null;
+  isSelected: boolean;
 }

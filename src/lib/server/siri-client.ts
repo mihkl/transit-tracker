@@ -11,9 +11,8 @@ interface CacheEntry {
 const cache = new Map<string, CacheEntry>();
 
 export async function fetchStopDepartures(
-  stopId: string
+  stopId: string,
 ): Promise<StopDeparture[]> {
-  // Check cache
   const cached = cache.get(stopId);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
     return cached.data;
@@ -34,9 +33,8 @@ export async function fetchStopDepartures(
   } catch (err) {
     console.error(
       `SIRI fetch error for stop ${stopId}:`,
-      err instanceof Error ? err.message : err
+      err instanceof Error ? err.message : err,
     );
-    // Return stale cache if available
     if (cached) return cached.data;
     return [];
   } finally {
@@ -48,7 +46,6 @@ function parseSiriResponse(text: string): StopDeparture[] {
   const lines = text.split("\n");
   const departures: StopDeparture[] = [];
 
-  // Skip header line and stop info line (first 2 lines)
   for (let i = 2; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line) continue;
@@ -70,7 +67,7 @@ function parseSiriResponse(text: string): StopDeparture[] {
         delaySeconds: expectedTime - scheduleTime,
       });
     } catch {
-      // Skip malformed lines
+      continue;
     }
   }
 

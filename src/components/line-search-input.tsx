@@ -45,17 +45,11 @@ function displayLabel(line: { lineNumber: string; type: string }) {
 export { TypeIcon };
 
 export function LineSearchInput({ value, onSelect }: LineSearchInputProps) {
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(() => (value ? displayLabel(value) : ""));
   const [lines, setLines] = useState<LineDto[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
-  // Sync input text with external value
-  useEffect(() => {
-    setQuery(value ? displayLabel(value) : "");
-  }, [value]);
-
-  // Fetch all lines once on mount
   useEffect(() => {
     fetch("/api/lines")
       .then((r) => r.json())
@@ -63,7 +57,6 @@ export function LineSearchInput({ value, onSelect }: LineSearchInputProps) {
       .catch((err) => console.error("Failed to load lines:", err));
   }, []);
 
-  // Deduplicate lines by lineNumber+type (ignore different routeIds)
   const uniqueLines = useMemo(() => {
     const seen = new Set<string>();
     return lines.filter((l) => {
@@ -74,25 +67,22 @@ export function LineSearchInput({ value, onSelect }: LineSearchInputProps) {
     });
   }, [lines]);
 
-  // Filter client-side based on query
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return uniqueLines;
     return uniqueLines.filter(
       (l) =>
         l.lineNumber.toLowerCase().includes(q) ||
-        (TYPE_LABELS[l.type] ?? l.type).toLowerCase().includes(q)
+        (TYPE_LABELS[l.type] ?? l.type).toLowerCase().includes(q),
     );
   }, [uniqueLines, query]);
 
-  // Group by type in defined order
   const grouped = useMemo(() => {
     const groups: Record<string, LineDto[]> = {};
     for (const line of filtered) {
       if (!groups[line.type]) groups[line.type] = [];
       groups[line.type].push(line);
     }
-    // Sort lines within each group numerically
     for (const type of Object.keys(groups)) {
       groups[type].sort((a, b) => {
         const na = parseInt(a.lineNumber, 10);
@@ -126,13 +116,11 @@ export function LineSearchInput({ value, onSelect }: LineSearchInputProps) {
     onSelect(val);
   };
 
-  // Show "All Trains" when query is empty or matches "train"
   const showAllTrains = useMemo(() => {
     const q = query.trim().toLowerCase();
     return !q || "all trains".includes(q) || "train".includes(q);
   }, [query]);
 
-  // Close dropdown on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (
@@ -154,11 +142,21 @@ export function LineSearchInput({ value, onSelect }: LineSearchInputProps) {
 
   return (
     <div className="relative" ref={wrapperRef}>
-      <div className="relative">
+      <div className="relative flex items-center">
+        <svg
+          className="absolute left-2.5 w-3.5 h-3.5 text-gray-400 pointer-events-none"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 6v6l4 2" />
+        </svg>
         <Input
-          className="w-28 h-8 text-sm sm:w-32 pr-6"
+          className="w-28 h-9 pl-8 pr-7 text-sm bg-gray-50 border-0 focus:bg-white focus:ring-1 focus:ring-gray-200 sm:w-32"
           type="text"
-          placeholder="Line..."
+          placeholder="Line"
           value={query}
           onChange={handleInput}
           onFocus={() => setShowDropdown(true)}
@@ -166,43 +164,51 @@ export function LineSearchInput({ value, onSelect }: LineSearchInputProps) {
         {value && (
           <button
             onClick={handleClear}
-            className="absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 rounded-full hover:bg-accent text-muted-foreground"
+            className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded-full hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition-colors"
           >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            >
               <path d="M18 6L6 18M6 6l12 12" />
             </svg>
           </button>
         )}
       </div>
       {showDropdown && (
-        <div className="absolute z-[1100] top-full left-0 mt-1 w-48">
-          <Command className="border border-border rounded-md shadow-lg" shouldFilter={false}>
+        <div className="absolute z-[1100] top-full left-0 mt-1.5 w-44">
+          <Command
+            className="bg-white border border-gray-100 rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.1)]"
+            shouldFilter={false}
+          >
             <CommandList>
               <CommandEmpty>No matching lines.</CommandEmpty>
-              {TYPE_ORDER.filter((type) => type !== "train" && grouped[type]?.length).map(
-                (type) => (
-                  <CommandGroup
-                    key={type}
-                    heading={TYPE_LABELS[type] ?? type}
-                  >
-                    {grouped[type].map((line) => (
-                      <CommandItem
-                        key={`${line.type}_${line.lineNumber}`}
-                        onSelect={() => handleSelect(line)}
-                        className="cursor-pointer"
-                      >
-                        <TypeIcon type={line.type} className="shrink-0" />
-                        <span className="text-sm">{line.lineNumber}</span>
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
-                )
-              )}
+              {TYPE_ORDER.filter(
+                (type) => type !== "train" && grouped[type]?.length,
+              ).map((type) => (
+                <CommandGroup key={type} heading={TYPE_LABELS[type] ?? type}>
+                  {grouped[type].map((line) => (
+                    <CommandItem
+                      key={`${line.type}_${line.lineNumber}`}
+                      onSelect={() => handleSelect(line)}
+                      className="cursor-pointer px-3 py-1.5 hover:bg-gray-50 rounded-md mx-1"
+                    >
+                      <TypeIcon type={line.type} className="shrink-0" />
+                      <span className="text-sm">{line.lineNumber}</span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              ))}
               {showAllTrains && (
                 <CommandGroup heading="Train">
                   <CommandItem
                     onSelect={handleSelectAllTrains}
-                    className="cursor-pointer"
+                    className="cursor-pointer px-3 py-1.5 hover:bg-gray-50 rounded-md mx-1"
                   >
                     <TypeIcon type="train" className="shrink-0" />
                     <span className="text-sm">All Trains</span>

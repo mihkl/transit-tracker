@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import type { VehicleDto } from "@/lib/types";
 
-const TRANSITION_MS = 1000; // smooth move duration
-const FRAME_INTERVAL = 50; // ~20fps
+const TRANSITION_MS = 1000;
+const FRAME_INTERVAL = 50;
 
 type ShapesMap = Record<string, number[][]>;
 
@@ -14,57 +14,35 @@ interface VehicleTransition {
   toLat: number;
   toLng: number;
   startTime: number;
+  fromBearing: number;
+  toBearing: number;
 }
 
 export function useAnimatedVehicles(
   rawVehicles: VehicleDto[],
-  _shapes: ShapesMap | null
+  _shapes: ShapesMap | null,
 ): VehicleDto[] {
   const transitionsRef = useRef<Map<number, VehicleTransition>>(new Map());
-  const prevPositionsRef = useRef<Map<number, { lat: number; lng: number }>>(
-    new Map()
-  );
+  const prevPositionsRef = useRef<
+    Map<number, { lat: number; lng: number; bearing: number }>
+  >(new Map());
   const rawRef = useRef<VehicleDto[]>(rawVehicles);
+  const frameIdRef = useRef<number | null>(null);
   const [animated, setAnimated] = useState<VehicleDto[]>([]);
+  const isAnimatingRef = useRef(false);
 
-  // When new data arrives, set up transitions from previous to new positions
-  useEffect(() => {
-    const now = Date.now();
-    const prev = prevPositionsRef.current;
-    const transitions = transitionsRef.current;
+  void _shapes;
 
-    for (const v of rawVehicles) {
-      const old = prev.get(v.id);
-      if (old && (old.lat !== v.latitude || old.lng !== v.longitude)) {
-        transitions.set(v.id, {
-          fromLat: old.lat,
-          fromLng: old.lng,
-          toLat: v.latitude,
-          toLng: v.longitude,
-          startTime: now,
-        });
-      } else if (!old) {
-        // First time seeing this vehicle, no transition needed
-        prev.set(v.id, { lat: v.latitude, lng: v.longitude });
-      }
-    }
-
-    rawRef.current = rawVehicles;
-  }, [rawVehicles]);
-
-  // Animation loop: lerp positions during transitions
-  useEffect(() => {
-    let frameId: number;
+  const startAnimationLoop = useCallback(() => {
     let lastRender = 0;
 
     function animate(now: number) {
-      frameId = requestAnimationFrame(animate);
-
-      if (now - lastRender < FRAME_INTERVAL) return;
-      lastRender = now;
-
       const vehicles = rawRef.current;
-      if (vehicles.length === 0) return;
+      if (vehicles.length === 0) {
+        frameIdRef.current = null;
+        isAnimatingRef.current = false;
+        return;
+      }
 
       const transitions = transitionsRef.current;
       const prev = prevPositionsRef.current;
@@ -77,36 +55,99 @@ export function useAnimatedVehicles(
 
         const elapsed = currentTime - t.startTime;
         if (elapsed >= TRANSITION_MS) {
-          // Transition complete
-          prev.set(v.id, { lat: t.toLat, lng: t.toLng });
+          prev.set(v.id, { lat: t.toLat, lng: t.toLng, bearing: t.toBearing });
           transitions.delete(v.id);
           return v;
         }
 
         anyActive = true;
-        // Ease-out cubic for smooth deceleration
         const progress = elapsed / TRANSITION_MS;
         const eased = 1 - Math.pow(1 - progress, 3);
+
+        let interpolatedBearing = t.toBearing;
+        if (t.fromBearing !== t.toBearing) {
+          let bearingDiff = t.toBearing - t.fromBearing;
+          if (bearingDiff > 180) bearingDiff -= 360;
+          if (bearingDiff < -180) bearingDiff += 360;
+          interpolatedBearing =
+            (t.fromBearing + bearingDiff * eased + 360) % 360;
+        }
 
         return {
           ...v,
           latitude: t.fromLat + (t.toLat - t.fromLat) * eased,
           longitude: t.fromLng + (t.toLng - t.fromLng) * eased,
+          bearing: interpolatedBearing,
         };
       });
 
       setAnimated(result);
 
-      // Clean up finished transitions and update prev positions
       if (!anyActive) {
         for (const v of vehicles) {
-          prev.set(v.id, { lat: v.latitude, lng: v.longitude });
+          prev.set(v.id, {
+            lat: v.latitude,
+            lng: v.longitude,
+            bearing: v.bearing,
+          });
         }
+        frameIdRef.current = null;
+        isAnimatingRef.current = false;
+        return;
+      }
+
+      if (now - lastRender >= FRAME_INTERVAL) {
+        lastRender = now;
+      }
+
+      frameIdRef.current = requestAnimationFrame(animate);
+    }
+
+    frameIdRef.current = requestAnimationFrame(animate);
+  }, []);
+
+  useEffect(() => {
+    const now = Date.now();
+    const prev = prevPositionsRef.current;
+    const transitions = transitionsRef.current;
+    let hasNewTransitions = false;
+
+    for (const v of rawVehicles) {
+      const old = prev.get(v.id);
+      if (old && (old.lat !== v.latitude || old.lng !== v.longitude)) {
+        transitions.set(v.id, {
+          fromLat: old.lat,
+          fromLng: old.lng,
+          toLat: v.latitude,
+          toLng: v.longitude,
+          startTime: now,
+          fromBearing: old.bearing,
+          toBearing: v.bearing,
+        });
+        hasNewTransitions = true;
+      } else if (!old) {
+        prev.set(v.id, {
+          lat: v.latitude,
+          lng: v.longitude,
+          bearing: v.bearing,
+        });
       }
     }
 
-    frameId = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(frameId);
+    rawRef.current = rawVehicles;
+
+    if (hasNewTransitions && !isAnimatingRef.current) {
+      isAnimatingRef.current = true;
+      startAnimationLoop();
+    }
+  }, [rawVehicles, startAnimationLoop]);
+
+  useEffect(() => {
+    return () => {
+      if (frameIdRef.current) {
+        cancelAnimationFrame(frameIdRef.current);
+      }
+    };
   }, []);
 
   return animated.length > 0 ? animated : rawVehicles;
