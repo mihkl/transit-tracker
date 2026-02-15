@@ -116,7 +116,7 @@ export function RouteLegCard({ leg, onLocateVehicle }: RouteLegCardProps) {
 
       {isTransit && (
         <div className="mt-1.5 text-[11px] text-gray-400">
-          Tap to follow vehicle
+          Tap to see vehicles on line
         </div>
       )}
     </div>
