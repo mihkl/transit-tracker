@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import type { VehicleDto } from "@/lib/types";
 
 const TRANSITION_MS = 1000;
@@ -150,5 +150,12 @@ export function useAnimatedVehicles(
     };
   }, []);
 
-  return animated.length > 0 ? animated : rawVehicles;
+  return useMemo(() => {
+    if (animated.length === 0) return rawVehicles;
+    const animatedById = new Map<number, VehicleDto>();
+    for (const v of animated) {
+      animatedById.set(v.id, v);
+    }
+    return rawVehicles.map((v) => animatedById.get(v.id) ?? v);
+  }, [rawVehicles, animated]);
 }
