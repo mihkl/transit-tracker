@@ -1,8 +1,15 @@
 "use client";
 
 import { useMemo, useCallback, useRef, useState, useEffect } from "react";
-import Map, { Marker, Source, Layer, Popup } from "react-map-gl/maplibre";
+import Map, {
+  Marker,
+  Source,
+  Layer,
+  Popup,
+  type MapRef,
+} from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
+import type { LngLatBoundsLike } from "maplibre-gl";
 import type { VehicleDto, RoutePlanResponse, StopDeparture } from "@/lib/types";
 import {
   TALLINN_CENTER,
@@ -97,6 +104,7 @@ export function MapViewInner({
   onDeselectVehicle,
   selectedStop,
 }: MapViewInnerProps) {
+  const mapRef = useRef<MapRef>(null);
   const [viewState, setViewState] = useState(INITIAL_VIEW_STATE);
   const [popupVehicle, setPopupVehicle] = useState<VehicleDto | null>(null);
   const [popupStop, setPopupStop] = useState<StopDto | null>(null);
@@ -113,13 +121,18 @@ export function MapViewInner({
   if (focusedVehicleId !== lastFocusedIdRef.current) {
     lastFocusedIdRef.current = focusedVehicleId;
     if (focusedVehicle) {
-      setViewState((prev) => ({
-        ...prev,
-        longitude: focusedVehicle.longitude,
-        latitude: focusedVehicle.latitude,
-        zoom: Math.max(prev.zoom, 14),
-      }));
-      followingRef.current = true;
+      // Only center on vehicle if it has no route shape (fitBounds handles that case)
+      const hasRouteShape =
+        shapes && focusedVehicle.routeKey && shapes[focusedVehicle.routeKey];
+      if (!hasRouteShape) {
+        setViewState((prev) => ({
+          ...prev,
+          longitude: focusedVehicle.longitude,
+          latitude: focusedVehicle.latitude,
+          zoom: Math.max(prev.zoom, 14),
+        }));
+      }
+      followingRef.current = !hasRouteShape;
       setPopupVehicle(focusedVehicle);
     } else {
       setPopupVehicle(null);
@@ -179,6 +192,67 @@ export function MapViewInner({
       setStopDepartures([]);
     }
   }, [selectedStop, handleStopClick]);
+
+  // Fit map bounds to planned route when route selection changes
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !routePlan || !routePlan.routes[selectedRouteIndex]) return;
+
+    const route = routePlan.routes[selectedRouteIndex];
+    let minLat = Infinity,
+      maxLat = -Infinity,
+      minLng = Infinity,
+      maxLng = -Infinity;
+
+    for (const leg of route.legs) {
+      for (const [lat, lng] of leg.polyline) {
+        if (lat < minLat) minLat = lat;
+        if (lat > maxLat) maxLat = lat;
+        if (lng < minLng) minLng = lng;
+        if (lng > maxLng) maxLng = lng;
+      }
+    }
+
+    if (minLat !== Infinity) {
+      map.fitBounds(
+        [
+          [minLng, minLat],
+          [maxLng, maxLat],
+        ] as LngLatBoundsLike,
+        { padding: 60, duration: 500 },
+      );
+    }
+  }, [routePlan, selectedRouteIndex]);
+
+  // Fit map bounds to vehicle route shape when a vehicle is focused
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !focusedVehicle || !shapes || !focusedVehicle.routeKey) return;
+    const shape = shapes[focusedVehicle.routeKey];
+    if (!shape || shape.length === 0) return;
+
+    let minLat = Infinity,
+      maxLat = -Infinity,
+      minLng = Infinity,
+      maxLng = -Infinity;
+
+    for (const [lat, lng] of shape) {
+      if (lat < minLat) minLat = lat;
+      if (lat > maxLat) maxLat = lat;
+      if (lng < minLng) minLng = lng;
+      if (lng > maxLng) maxLng = lng;
+    }
+
+    if (minLat !== Infinity) {
+      map.fitBounds(
+        [
+          [minLng, minLat],
+          [maxLng, maxLat],
+        ] as LngLatBoundsLike,
+        { padding: 60, duration: 500 },
+      );
+    }
+  }, [focusedVehicle?.id, focusedVehicle?.routeKey, shapes]);
 
   const handleMoveEnd = useCallback(() => {
     followingRef.current = false;
@@ -246,6 +320,7 @@ export function MapViewInner({
 
   return (
     <Map
+      ref={mapRef}
       {...viewState}
       onMove={(evt) => {
         setViewState(evt.viewState);
