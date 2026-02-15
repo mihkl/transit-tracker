@@ -69,12 +69,20 @@ export default function Home() {
 
   const vehicles = useAnimatedVehicles(rawVehicles, shapes);
 
-  const handleVehicleClick = useCallback((vehicleId: number) => {
-    setFocusedVehicleId((prev) => (prev === vehicleId ? null : vehicleId));
-  }, []);
+  const handleVehicleClick = useCallback(
+    (vehicleId: number) => {
+      setFocusedVehicleId((prev) => (prev === vehicleId ? null : vehicleId));
+      const v = vehicles.find((v) => v.id === vehicleId);
+      if (v) {
+        setSelectedLine({ lineNumber: v.lineNumber, type: v.transportType });
+      }
+    },
+    [vehicles],
+  );
 
   const handleDeselectVehicle = useCallback(() => {
     setFocusedVehicleId(null);
+    setSelectedLine(null);
   }, []);
 
   const handleMapClick = useCallback(

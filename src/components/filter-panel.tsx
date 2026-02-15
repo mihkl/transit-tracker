@@ -28,9 +28,11 @@ export function FilterPanel({
   return (
     <>
       <div className="absolute top-3 left-3 right-3 z-[1000] md:hidden">
-        <div className="flex items-center gap-2 px-3 py-2.5 bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.12),0_0_1px_rgba(0,0,0,0.08)]">
-          <LineSearchInput value={selectedLine} onSelect={onLineSelect} />
-          <StopSearchInput value={selectedStop} onSelect={onStopSelect} />
+        <div className="flex items-center gap-1.5 px-2 py-2.5 bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.12),0_0_1px_rgba(0,0,0,0.08)] overflow-hidden">
+          <div className="flex-1 min-w-0 flex items-center gap-1.5">
+            <LineSearchInput value={selectedLine} onSelect={onLineSelect} />
+            <StopSearchInput value={selectedStop} onSelect={onStopSelect} />
+          </div>
 
           <Button
             variant="ghost"
@@ -45,17 +47,15 @@ export function FilterPanel({
               stroke="currentColor"
               strokeWidth="2"
             >
-              <path d="M12 2L12 22M2 12L22 12" strokeLinecap="round" />
+              <path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
             <span className="hidden sm:inline">Directions</span>
           </Button>
 
-          <div className="flex items-center gap-2 ml-auto">
-            <div className="flex items-center gap-1.5 px-2 py-1 bg-gray-50 rounded-full">
-              <span className="text-xs font-medium text-gray-600">
-                {vehicleCount}
-              </span>
-            </div>
+          <div className="shrink-0 flex items-center gap-1.5 px-2 py-1 bg-gray-50 rounded-full">
+            <span className="text-xs font-medium text-gray-600 tabular-nums">
+              {vehicleCount}
+            </span>
           </div>
         </div>
       </div>
@@ -79,7 +79,7 @@ export function FilterPanel({
             stroke="currentColor"
             strokeWidth="2"
           >
-            <path d="M12 2L12 22M2 12L22 12" strokeLinecap="round" />
+            <path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
           Directions
         </Button>

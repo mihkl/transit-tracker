@@ -99,7 +99,7 @@ export function StopSearchInput({ value, onSelect }: StopSearchInputProps) {
           size={14}
         />
         <Input
-          className="w-28 h-9 pl-8 pr-7 text-sm bg-gray-50 border-0 focus:bg-white focus:ring-1 focus:ring-gray-200 sm:w-36"
+          className="w-full h-9 pl-8 pr-7 text-sm bg-gray-50 border-0 focus:bg-white focus:ring-1 focus:ring-gray-200 min-w-0"
           type="text"
           placeholder="Stop"
           value={query}
@@ -126,7 +126,7 @@ export function StopSearchInput({ value, onSelect }: StopSearchInputProps) {
         )}
       </div>
       {showDropdown && (
-        <div className="absolute z-[1100] top-full left-0 mt-1.5 w-72">
+        <div className="fixed left-3 right-3 top-16 z-[1100] md:absolute md:top-full md:left-0 md:right-auto md:mt-1.5 md:w-72">
           <Command
             className="bg-white border border-gray-100 rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.1)]"
             shouldFilter={false}
