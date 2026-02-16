@@ -1,4 +1,5 @@
 import type { StopDeparture } from "@/lib/types";
+import { fetchWithTimeout } from "./fetch-with-timeout";
 
 const SIRI_URL = "https://transport.tallinn.ee/siri-stop-departures.php";
 const CACHE_TTL_MS = 30_000;
@@ -18,13 +19,8 @@ export async function fetchStopDepartures(
     return cached.data;
   }
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10_000);
-
   try {
-    const res = await fetch(`${SIRI_URL}?stopid=${stopId}`, {
-      signal: controller.signal,
-    });
+    const res = await fetchWithTimeout(`${SIRI_URL}?stopid=${stopId}`);
     const text = await res.text();
     const departures = parseSiriResponse(text);
 
@@ -37,8 +33,6 @@ export async function fetchStopDepartures(
     );
     if (cached) return cached.data;
     return [];
-  } finally {
-    clearTimeout(timeout);
   }
 }
 

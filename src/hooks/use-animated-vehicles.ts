@@ -4,9 +4,6 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import type { VehicleDto } from "@/lib/types";
 
 const TRANSITION_MS = 1000;
-const FRAME_INTERVAL = 50;
-
-type ShapesMap = Record<string, number[][]>;
 
 interface VehicleTransition {
   fromLat: number;
@@ -20,7 +17,6 @@ interface VehicleTransition {
 
 export function useAnimatedVehicles(
   rawVehicles: VehicleDto[],
-  _shapes: ShapesMap | null,
 ): VehicleDto[] {
   const transitionsRef = useRef<Map<number, VehicleTransition>>(new Map());
   const prevPositionsRef = useRef<
@@ -31,12 +27,8 @@ export function useAnimatedVehicles(
   const [animated, setAnimated] = useState<VehicleDto[]>([]);
   const isAnimatingRef = useRef(false);
 
-  void _shapes;
-
   const startAnimationLoop = useCallback(() => {
-    let lastRender = 0;
-
-    function animate(now: number) {
+    function animate() {
       const vehicles = rawRef.current;
       if (vehicles.length === 0) {
         frameIdRef.current = null;
@@ -94,10 +86,6 @@ export function useAnimatedVehicles(
         frameIdRef.current = null;
         isAnimatingRef.current = false;
         return;
-      }
-
-      if (now - lastRender >= FRAME_INTERVAL) {
-        lastRender = now;
       }
 
       frameIdRef.current = requestAnimationFrame(animate);

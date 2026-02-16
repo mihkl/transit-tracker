@@ -12,7 +12,6 @@ interface FilterPanelProps {
   onStopSelect: (stop: StopDto | null) => void;
   vehicleCount: number;
   lastUpdate: Date | null;
-  showPlanner: boolean;
   onTogglePlanner: () => void;
 }
 

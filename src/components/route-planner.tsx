@@ -360,137 +360,95 @@ export function RoutePlanner({
     setExpandedRoute(null);
   };
 
-  const desktopContent = (
-    <>
-      <RouteInputs
-        origin={origin}
-        destination={destination}
-        onSetOrigin={onSetOrigin}
-        onSetDestination={onSetDestination}
-        pickingPoint={pickingPoint}
-        onStartPicking={onStartPicking}
-        onSwap={onSwap}
-      />
-      <Separator />
-      <TimeSelector
-        timeOption={timeOption}
-        onTimeOptionChange={onTimeOptionChange}
-        selectedDateTime={selectedDateTime}
-        onDateTimeChange={onDateTimeChange}
-      />
-      <Separator className="bg-gray-100" />
-      <div className="px-3 py-2 sm:px-4">
-        <Button
-          className="w-full bg-blue-500 hover:bg-blue-600 text-white"
-          disabled={!origin || !destination || planLoading}
-          onClick={onPlanRoute}
-        >
-          {planLoading ? (
-            <span className="flex items-center gap-2">
-              <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              Planning...
-            </span>
+  const plannerContent = (variant: "desktop" | "mobile") => {
+    const isDesktop = variant === "desktop";
+    return (
+      <>
+        <RouteInputs
+          origin={origin}
+          destination={destination}
+          onSetOrigin={onSetOrigin}
+          onSetDestination={onSetDestination}
+          pickingPoint={pickingPoint}
+          onStartPicking={onStartPicking}
+          onSwap={onSwap}
+        />
+        <Separator className={isDesktop ? undefined : "bg-gray-100"} />
+        <TimeSelector
+          timeOption={timeOption}
+          onTimeOptionChange={onTimeOptionChange}
+          selectedDateTime={selectedDateTime}
+          onDateTimeChange={onDateTimeChange}
+        />
+        <Separator className="bg-gray-100" />
+        <div className="px-3 py-2 sm:px-4">
+          <Button
+            className="w-full bg-blue-500 hover:bg-blue-600 text-white"
+            disabled={!origin || !destination || planLoading}
+            onClick={onPlanRoute}
+          >
+            {planLoading ? (
+              <span className="flex items-center gap-2">
+                <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Planning...
+              </span>
+            ) : (
+              "Get directions"
+            )}
+          </Button>
+        </div>
+        {hasRoutes && (
+          isDesktop ? (
+            <ScrollArea className="flex-1 min-h-0">
+              <div className="divide-y divide-border">
+                {routePlan.routes.map((route, i) => {
+                  const isExpanded = expandedRoute === i;
+                  return (
+                    <div key={i}>
+                      <RouteSummaryRow
+                        route={route}
+                        index={i}
+                        isSelected={i === selectedRouteIndex}
+                        onClick={() => handleRouteClick(i)}
+                      />
+                      {isExpanded && (
+                        <ExpandedLegDetails
+                          route={route}
+                          onLocateVehicle={onLocateVehicle}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </ScrollArea>
           ) : (
-            "Get directions"
-          )}
-        </Button>
-      </div>
-      {hasRoutes && (
-        <ScrollArea className="flex-1 min-h-0">
-          <div className="divide-y divide-border">
-            {routePlan.routes.map((route, i) => {
-              const isExpanded = expandedRoute === i;
-              return (
-                <div key={i}>
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              <div className="divide-y divide-gray-100">
+                {routePlan.routes.map((route, i) => (
                   <RouteSummaryRow
+                    key={i}
                     route={route}
                     index={i}
                     isSelected={i === selectedRouteIndex}
                     onClick={() => handleRouteClick(i)}
                   />
-                  {isExpanded && (
-                    <ExpandedLegDetails
-                      route={route}
-                      onLocateVehicle={onLocateVehicle}
-                    />
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </ScrollArea>
-      )}
-      {routePlan &&
-        routePlan.routes &&
-        routePlan.routes.length === 0 &&
-        !planLoading && (
-          <div className="px-4 py-6 text-center text-sm text-gray-400">
-            No transit routes found.
-          </div>
+                ))}
+              </div>
+            </div>
+          )
         )}
-    </>
-  );
-
-  const mobileFullContent = (
-    <>
-      <RouteInputs
-        origin={origin}
-        destination={destination}
-        onSetOrigin={onSetOrigin}
-        onSetDestination={onSetDestination}
-        pickingPoint={pickingPoint}
-        onStartPicking={onStartPicking}
-        onSwap={onSwap}
-      />
-      <Separator className="bg-gray-100" />
-      <TimeSelector
-        timeOption={timeOption}
-        onTimeOptionChange={onTimeOptionChange}
-        selectedDateTime={selectedDateTime}
-        onDateTimeChange={onDateTimeChange}
-      />
-      <Separator className="bg-gray-100" />
-      <div className="px-3 py-2">
-        <Button
-          className="w-full bg-blue-500 hover:bg-blue-600 text-white"
-          disabled={!origin || !destination || planLoading}
-          onClick={onPlanRoute}
-        >
-          {planLoading ? (
-            <span className="flex items-center gap-2">
-              <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              Planning...
-            </span>
-          ) : (
-            "Get directions"
+        {routePlan &&
+          routePlan.routes &&
+          routePlan.routes.length === 0 &&
+          !planLoading && (
+            <div className="px-4 py-6 text-center text-sm text-gray-400">
+              No transit routes found.
+            </div>
           )}
-        </Button>
-      </div>
-      {hasRoutes && (
-        <div className="flex-1 min-h-0 overflow-y-auto">
-          <div className="divide-y divide-gray-100">
-            {routePlan.routes.map((route, i) => (
-              <RouteSummaryRow
-                key={i}
-                route={route}
-                index={i}
-                isSelected={i === selectedRouteIndex}
-                onClick={() => handleRouteClick(i)}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-      {routePlan &&
-        routePlan.routes &&
-        routePlan.routes.length === 0 &&
-        !planLoading && (
-          <div className="px-4 py-6 text-center text-sm text-gray-400">
-            No transit routes found.
-          </div>
-        )}
-    </>
-  );
+      </>
+    );
+  };
 
   const selectedRoute = hasRoutes ? routePlan.routes[expandedRoute ?? 0] : null;
   const mobileFoldedContent = selectedRoute ? (
@@ -577,7 +535,7 @@ export function RoutePlanner({
           </div>
         </div>
         <Separator className="bg-gray-100" />
-        {desktopContent}
+        {plannerContent("desktop")}
       </div>
 
       {!mobileFollded ? (
@@ -604,7 +562,7 @@ export function RoutePlanner({
             </div>
           </div>
           <div className="flex flex-col flex-1 overflow-y-auto overflow-x-hidden">
-            {mobileFullContent}
+            {plannerContent("mobile")}
           </div>
         </div>
       ) : (

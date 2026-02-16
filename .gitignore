@@ -45,3 +45,6 @@ public/gtfs-preprocessed/
 next-env.d.ts
 
 .kilocode/mcp.json
+.serena/project.yml
+.serena/.gitignore
+package-lock.json

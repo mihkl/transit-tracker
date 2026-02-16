@@ -47,11 +47,3 @@ export const TYPE_LABELS: Record<string, string> = {
   train: "Train",
   unknown: "Unknown",
 };
-
-export const TRANSPORT_TYPES = [
-  { key: "all", label: "All" },
-  { key: "bus", label: "Bus" },
-  { key: "tram", label: "Tram" },
-  { key: "trolleybus", label: "Trolleybus" },
-  { key: "train", label: "Train" },
-] as const;

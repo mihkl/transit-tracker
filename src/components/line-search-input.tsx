@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { useClickOutside } from "@/hooks/use-click-outside";
 import { Bus, TramFront, TrainFront, Zap } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
@@ -121,18 +122,8 @@ export function LineSearchInput({ value, onSelect }: LineSearchInputProps) {
     return !q || "all trains".includes(q) || "train".includes(q);
   }, [query]);
 
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (
-        wrapperRef.current &&
-        !wrapperRef.current.contains(e.target as Node)
-      ) {
-        setShowDropdown(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
+  const closeDropdown = useCallback(() => setShowDropdown(false), []);
+  useClickOutside(wrapperRef, closeDropdown);
 
   const handleClear = () => {
     setQuery("");

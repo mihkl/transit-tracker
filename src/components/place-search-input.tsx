@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
+import { useClickOutside } from "@/hooks/use-click-outside";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -115,18 +116,8 @@ export function PlaceSearchInput({
     );
   }, [onSelect]);
 
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (
-        wrapperRef.current &&
-        !wrapperRef.current.contains(e.target as Node)
-      ) {
-        setShowDropdown(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
+  const closeDropdown = useCallback(() => setShowDropdown(false), []);
+  useClickOutside(wrapperRef, closeDropdown);
 
   const isPicking = pickingPoint === pointType;
   const isOrigin = pointType === "origin";

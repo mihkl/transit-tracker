@@ -1,4 +1,5 @@
 import type { GpsReading } from "@/lib/types";
+import { fetchWithTimeout } from "./fetch-with-timeout";
 
 const GPS_URL = "https://gis.ee/tallinn/gps.php";
 
@@ -26,38 +27,31 @@ export async function pollGps(): Promise<GpsReading[]> {
   const readings: GpsReading[] = [];
   const now = new Date();
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10_000);
+  const url = `${GPS_URL}?ver=${Date.now()}`;
+  const res = await fetchWithTimeout(url);
+  const data: GeoJsonResponse = await res.json();
 
-  try {
-    const url = `${GPS_URL}?ver=${Date.now()}`;
-    const res = await fetch(url, { signal: controller.signal });
-    const data: GeoJsonResponse = await res.json();
+  for (const feature of data.features) {
+    try {
+      const { properties, geometry } = feature;
+      const [lng, lat] = geometry.coordinates;
 
-    for (const feature of data.features) {
-      try {
-        const { properties, geometry } = feature;
-        const [lng, lat] = geometry.coordinates;
+      const reading: GpsReading = {
+        transportType: properties.type,
+        lineNumber: String(properties.line),
+        longitude: lng,
+        latitude: lat,
+        speed: null,
+        heading: properties.direction,
+        id: properties.id,
+        destination: properties.destination || "",
+        timestamp: now,
+      };
 
-        const reading: GpsReading = {
-          transportType: properties.type,
-          lineNumber: String(properties.line),
-          longitude: lng,
-          latitude: lat,
-          speed: null,
-          heading: properties.direction,
-          id: properties.id,
-          destination: properties.destination || "",
-          timestamp: now,
-        };
-
-        readings.push(reading);
-      } catch {
-        continue;
-      }
+      readings.push(reading);
+    } catch {
+      continue;
     }
-  } finally {
-    clearTimeout(timeout);
   }
 
   return readings;

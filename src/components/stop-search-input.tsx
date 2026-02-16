@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { useClickOutside } from "@/hooks/use-click-outside";
 import { MapPin } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
@@ -17,10 +18,6 @@ interface StopSearchInputProps {
   onSelect: (stop: StopDto | null) => void;
 }
 
-function formatStopLabel(stop: StopDto): string {
-  return stop.stopName;
-}
-
 const TYPE_COLORS: Record<string, string> = {
   B: "#2196F3",
   T: "#F44336",
@@ -30,7 +27,7 @@ const TYPE_COLORS: Record<string, string> = {
 
 export function StopSearchInput({ value, onSelect }: StopSearchInputProps) {
   const [query, setQuery] = useState(() =>
-    value ? formatStopLabel(value) : "",
+    value ? value.stopName : "",
   );
   const [stops, setStops] = useState<StopDto[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -67,7 +64,7 @@ export function StopSearchInput({ value, onSelect }: StopSearchInputProps) {
   };
 
   const handleSelect = (stop: StopDto) => {
-    setQuery(formatStopLabel(stop));
+    setQuery(stop.stopName);
     setShowDropdown(false);
     onSelect(stop);
   };
@@ -78,18 +75,8 @@ export function StopSearchInput({ value, onSelect }: StopSearchInputProps) {
     onSelect(null);
   };
 
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (
-        wrapperRef.current &&
-        !wrapperRef.current.contains(e.target as Node)
-      ) {
-        setShowDropdown(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
+  const closeDropdown = useCallback(() => setShowDropdown(false), []);
+  useClickOutside(wrapperRef, closeDropdown);
 
   return (
     <div className="relative" ref={wrapperRef}>

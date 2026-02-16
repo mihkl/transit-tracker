@@ -67,7 +67,7 @@ export default function Home() {
       .catch((err) => console.error("Failed to load shapes:", err));
   }, []);
 
-  const vehicles = useAnimatedVehicles(rawVehicles, shapes);
+  const vehicles = useAnimatedVehicles(rawVehicles);
 
   const handleVehicleClick = useCallback(
     (vehicleId: number) => {
@@ -197,7 +197,6 @@ export default function Home() {
         onStopSelect={handleStopSelect}
         vehicleCount={vehicles.length}
         lastUpdate={lastUpdate}
-        showPlanner={showPlanner}
         onTogglePlanner={() => setShowPlanner((p) => !p)}
       />
       <div className="flex-1 flex relative overflow-hidden">

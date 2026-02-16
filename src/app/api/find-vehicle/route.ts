@@ -69,30 +69,6 @@ export async function GET(request: NextRequest) {
     return { vehicle: v, ...fwd, etaSeconds, timeDiffSeconds };
   });
 
-  console.log(
-    `[find-vehicle] line=${lineNumber} mode=${mode} correctDir=${correctDir} targetSec=${targetSeconds !== null ? Math.round(targetSeconds) : "N/A"}`,
-  );
-  if (bothDirs) {
-    console.log(
-      `  dir0: key=${bothDirs.dir0.patternKey} terminal="${bothDirs.dir0.terminal}" depDist=${fmtDist(bothDirs.dir0.depStopDistAlong)} arrDist=${fmtDist(bothDirs.dir0.arrStopDistAlong)} len=${Math.round(bothDirs.dir0.totalLength)}m`,
-    );
-    console.log(
-      `  dir1: key=${bothDirs.dir1.patternKey} terminal="${bothDirs.dir1.terminal}" depDist=${fmtDist(bothDirs.dir1.depStopDistAlong)} arrDist=${fmtDist(bothDirs.dir1.arrStopDistAlong)} len=${Math.round(bothDirs.dir1.totalLength)}m`,
-    );
-  } else {
-    console.log(`  no GTFS route found`);
-  }
-  console.log(`  vehicles (${vehicles.length}):`);
-  for (const s of scored) {
-    const v = s.vehicle;
-    const etaMin = (s.etaSeconds / 60).toFixed(1);
-    const diffMin =
-      s.timeDiffSeconds !== null ? (s.timeDiffSeconds / 60).toFixed(1) : "?";
-    console.log(
-      `    id=${v.id} dest="${v.destination}" | realDir=${s.matchedDir ?? "?"} ${s.reason} fwd=${Math.round(s.fwdDist)}m eta=${etaMin}min diff=${diffMin}min`,
-    );
-  }
-
   if (scored.length === 0) {
     const debugInfo: VehicleMatchDebugInfo = buildDebugInfo(
       lineNumber,
@@ -123,8 +99,6 @@ export async function GET(request: NextRequest) {
   }
 
   const best = scored[0];
-  const etaMin = (best.etaSeconds / 60).toFixed(1);
-  console.log(`  → picked id=${best.vehicle.id} (eta=${etaMin}min)`);
 
   const candidates: VehicleCandidateInfo[] = scored.map((s) => ({
     vehicleId: s.vehicle.id,
@@ -222,10 +196,6 @@ function getTargetSeconds(scheduledDep: string): number | null {
   } catch {
     return null;
   }
-}
-
-function fmtDist(d: number | null): string {
-  return d !== null ? Math.round(d) + "m" : "N/A";
 }
 
 interface DirPattern {
