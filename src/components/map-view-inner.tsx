@@ -127,6 +127,30 @@ export function MapViewInner({
   const followingRef = useRef(false);
   const lastFocusedIdRef = useRef<number | null>(null);
   const isDesktop = useIsDesktop();
+  const [webglLost, setWebglLost] = useState(false);
+  const webglCleanupRef = useRef<(() => void) | null>(null);
+
+  const handleMapLoad = useCallback(() => {
+    const canvas = mapRef.current?.getMap()?.getCanvas();
+    if (!canvas) return;
+
+    const handleLost = (e: Event) => {
+      e.preventDefault();
+      setWebglLost(true);
+    };
+    const handleRestored = () => setWebglLost(false);
+
+    canvas.addEventListener("webglcontextlost", handleLost);
+    canvas.addEventListener("webglcontextrestored", handleRestored);
+    webglCleanupRef.current = () => {
+      canvas.removeEventListener("webglcontextlost", handleLost);
+      canvas.removeEventListener("webglcontextrestored", handleRestored);
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => webglCleanupRef.current?.();
+  }, []);
 
   const focusedVehicle = useMemo(() => {
     if (focusedVehicleId == null) return null;
@@ -466,11 +490,12 @@ export function MapViewInner({
         }}
         onMoveEnd={handleMoveEnd}
         onClick={handleMapClick}
+        onLoad={handleMapLoad}
         style={{ width: "100%", height: "100%" }}
         mapStyle="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
         attributionControl={false}
       >
-        {vehicleRouteGeoJson && !routePlan && (
+        {!webglLost && vehicleRouteGeoJson && !routePlan && (
           <Source id="vehicle-route" type="geojson" data={vehicleRouteGeoJson}>
             <Layer
               id="vehicle-route-line"
@@ -484,7 +509,7 @@ export function MapViewInner({
           </Source>
         )}
 
-        {routeLegsGeoJson && (
+        {!webglLost && routeLegsGeoJson && (
           <Source
             id="route-legs"
             type="geojson"
@@ -588,7 +613,7 @@ export function MapViewInner({
           </Marker>
         )}
 
-        {vehicles.map((v) => {
+        {!webglLost && vehicles.map((v) => {
           const baseColor = TYPE_COLORS[v.transportType] || TYPE_COLORS.unknown;
           const isFocused = focusedVehicleId === v.id;
           const color = isFocused ? "#FF9800" : baseColor;
@@ -619,7 +644,7 @@ export function MapViewInner({
         })}
 
         {/* Desktop-only popups */}
-        {isDesktop && popupVehicle && (
+        {!webglLost && isDesktop && popupVehicle && (
           <Popup
             longitude={popupVehicle.longitude}
             latitude={popupVehicle.latitude}
@@ -633,7 +658,7 @@ export function MapViewInner({
           </Popup>
         )}
 
-        {isDesktop && popupStop && (
+        {!webglLost && isDesktop && popupStop && (
           <Popup
             longitude={popupStop.longitude}
             latitude={popupStop.latitude}
