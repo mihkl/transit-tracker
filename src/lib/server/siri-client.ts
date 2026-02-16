@@ -2,7 +2,7 @@ import type { StopDeparture } from "@/lib/types";
 import { fetchWithTimeout } from "./fetch-with-timeout";
 
 const SIRI_URL = "https://transport.tallinn.ee/siri-stop-departures.php";
-const CACHE_TTL_MS = 30_000;
+const CACHE_TTL_MS = 5_000;
 
 interface CacheEntry {
   data: StopDeparture[];

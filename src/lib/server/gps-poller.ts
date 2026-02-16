@@ -62,7 +62,7 @@ export class GpsPollerService {
   private onData: (readings: GpsReading[]) => void;
   private intervalMs: number;
 
-  constructor(onData: (readings: GpsReading[]) => void, intervalMs = 10_000) {
+  constructor(onData: (readings: GpsReading[]) => void, intervalMs = 6_000) {
     this.onData = onData;
     this.intervalMs = intervalMs;
   }

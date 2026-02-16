@@ -232,7 +232,22 @@ export function MapViewInner({
     }
   }, [selectedStop, handleStopClick]);
 
-  // Fit map bounds to planned route when route selection changes
+  useEffect(() => {
+    if (!popupStop) return;
+
+    const intervalId = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/departures?stopId=${popupStop.stopId}`);
+        const data = await res.json();
+        setStopDepartures(data.slice(0, 5));
+      } catch (err) {
+        console.error("Failed to refresh departures:", err);
+      }
+    }, 5_000);
+
+    return () => clearInterval(intervalId);
+  }, [popupStop]);
+
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !routePlan || !routePlan.routes[selectedRouteIndex]) return;
