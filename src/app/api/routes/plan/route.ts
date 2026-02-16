@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
       req.arrivalTime,
     );
 
-    if (!googleResponse || googleResponse.routes.length === 0) {
+    if (!googleResponse || !googleResponse.routes?.length) {
       return NextResponse.json({ routes: [] } as RoutePlanResponse);
     }
 
