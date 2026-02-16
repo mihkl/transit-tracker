@@ -133,7 +133,12 @@ export default function Home() {
         body: JSON.stringify(body),
       });
       const data = await res.json();
-      setRoutePlan(data);
+      if (!res.ok || data.error) {
+        console.error("Route plan API error:", data.error || res.statusText);
+        setRoutePlan({ routes: [] });
+      } else {
+        setRoutePlan(data);
+      }
     } catch (err) {
       console.error("Failed to plan route:", err);
     } finally {
