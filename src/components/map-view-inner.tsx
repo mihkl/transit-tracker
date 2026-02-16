@@ -233,6 +233,15 @@ export function MapViewInner({
   }, [selectedStop, handleStopClick]);
 
   useEffect(() => {
+    if (!popupVehicle) return;
+    const updated = vehicles.find((v) => v.id === popupVehicle.id);
+    if (updated) {
+      setPopupVehicle(updated);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vehicles, popupVehicle?.id]);
+
+  useEffect(() => {
     if (!popupStop) return;
 
     const intervalId = setInterval(async () => {
