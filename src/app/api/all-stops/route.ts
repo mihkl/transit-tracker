@@ -1,17 +1,8 @@
 import { NextResponse } from "next/server";
 import { transitState } from "@/lib/server/transit-state";
+import type { StopDto } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
-
-export interface StopDto {
-  stopId: string;
-  stopName: string;
-  latitude: number;
-  longitude: number;
-  stopDesc?: string;
-  stopArea?: string;
-  lines?: string[];
-}
 
 const TALLINN_MIN_LAT = 59.35;
 const TALLINN_MAX_LAT = 59.55;

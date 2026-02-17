@@ -11,6 +11,7 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import { Icon } from "@/components/icon";
 import { formatCoord } from "@/lib/format-utils";
 import type { PlaceSearchResult } from "@/lib/types";
 
@@ -116,6 +117,12 @@ export function PlaceSearchInput({
     );
   }, [onSelect]);
 
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+
   const closeDropdown = useCallback(() => setShowDropdown(false), []);
   useClickOutside(wrapperRef, closeDropdown);
 
@@ -156,16 +163,10 @@ export function PlaceSearchInput({
                       onSelect={handleUseMyLocation}
                       className="cursor-pointer px-3 py-2 hover:bg-gray-50 rounded-md mx-1"
                     >
-                      <svg
+                      <Icon
+                        name="crosshair"
                         className="w-4 h-4 mr-2 text-blue-500"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                      >
-                        <circle cx="12" cy="12" r="3" />
-                        <path d="M12 2v4m0 12v4M2 12h4m12 0h4" />
-                      </svg>
+                      />
                       <span className="text-sm font-medium text-blue-600">
                         Your location
                       </span>
@@ -180,16 +181,10 @@ export function PlaceSearchInput({
                         onSelect={() => handleSelect(place)}
                         className="cursor-pointer px-3 py-2 hover:bg-gray-50 rounded-md mx-1"
                       >
-                        <svg
+                        <Icon
+                          name="map-pin"
                           className="w-4 h-4 mr-2 text-gray-400 shrink-0"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                        >
-                          <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
-                          <circle cx="12" cy="9" r="2.5" />
-                        </svg>
+                        />
                         <div className="min-w-0">
                           <div className="text-sm font-medium text-gray-800 truncate">
                             {place.name}

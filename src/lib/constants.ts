@@ -17,13 +17,10 @@ export const MODE_LABELS: Record<string, string> = {
   TRAIN: "Train",
 };
 
-export const MODE_COLORS: Record<string, string> = {
-  WALK: "#999",
-  BUS: "#2196F3",
-  TRAM: "#F44336",
-  TROLLEYBUS: "#4CAF50",
-  TRAIN: "#FF9800",
-};
+/** Resolves a transport type color from either lowercase ("bus") or uppercase ("BUS") keys. */
+export function getTransportColor(type: string): string {
+  return TYPE_COLORS[type] || TYPE_COLORS[type.toLowerCase()] || "#999";
+}
 
 export const DELAY_COLORS: Record<string, string> = {
   on_time: "#4CAF50",

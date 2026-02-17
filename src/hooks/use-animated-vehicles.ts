@@ -15,9 +15,7 @@ interface VehicleTransition {
   toBearing: number;
 }
 
-export function useAnimatedVehicles(
-  rawVehicles: VehicleDto[],
-): VehicleDto[] {
+export function useAnimatedVehicles(rawVehicles: VehicleDto[]): VehicleDto[] {
   const transitionsRef = useRef<Map<number, VehicleTransition>>(new Map());
   const prevPositionsRef = useRef<
     Map<number, { lat: number; lng: number; bearing: number }>

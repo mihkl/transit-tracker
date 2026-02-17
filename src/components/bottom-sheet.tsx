@@ -13,7 +13,7 @@ export function BottomSheet({ open, onClose, children }: BottomSheetProps) {
     <div className="md:hidden">
       {/* Sheet */}
       <div
-        className={`fixed bottom-0 left-0 right-0 z-[1000] bg-background rounded-t-2xl shadow-lg transition-transform duration-300 ease-out ${
+        className={`fixed bottom-0 left-0 right-0 z-1000 bg-background rounded-t-2xl shadow-lg transition-transform duration-300 ease-out ${
           open ? "translate-y-0" : "translate-y-full"
         }`}
       >

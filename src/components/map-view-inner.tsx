@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useCallback, useRef, useState, useEffect, useSyncExternalStore } from "react";
+import { useMemo, useCallback, useRef, useState, useEffect } from "react";
 import Map, {
   Marker,
   Source,
@@ -10,18 +10,61 @@ import Map, {
 } from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { LngLatBoundsLike } from "maplibre-gl";
-import type { VehicleDto, RoutePlanResponse, StopDeparture } from "@/lib/types";
+import type {
+  VehicleDto,
+  RoutePlanResponse,
+  StopDeparture,
+  StopDto,
+} from "@/lib/types";
 import {
   TALLINN_CENTER,
   DEFAULT_ZOOM,
   TYPE_COLORS,
   LEG_COLORS,
 } from "@/lib/constants";
-import { formatEta, formatDistance } from "@/lib/format-utils";
-import { Badge } from "@/components/ui/badge";
 import { BottomSheet } from "@/components/bottom-sheet";
 import type { MapLayerMouseEvent } from "maplibre-gl";
-import type { StopDto } from "@/app/api/all-stops/route";
+import {
+  IncidentIcon,
+  PinIcon,
+  VehicleIcon,
+  StopIcon,
+  BoardingStopIcon,
+} from "@/components/map-icons";
+import { VehiclePopup } from "@/components/vehicle-popup";
+import { StopPopup } from "@/components/stop-popup";
+import { useIsDesktop } from "@/hooks/use-is-desktop";
+import { useTrafficData } from "@/hooks/use-traffic-data";
+
+function fitMapToPoints(map: MapRef, points: number[][]) {
+  let minLat = Infinity,
+    maxLat = -Infinity,
+    minLng = Infinity,
+    maxLng = -Infinity;
+
+  for (const [lat, lng] of points) {
+    if (lat < minLat) minLat = lat;
+    if (lat > maxLat) maxLat = lat;
+    if (lng < minLng) minLng = lng;
+    if (lng > maxLng) maxLng = lng;
+  }
+
+  if (minLat !== Infinity) {
+    map.fitBounds(
+      [
+        [minLng, minLat],
+        [maxLng, maxLat],
+      ] as LngLatBoundsLike,
+      { padding: 60, duration: 500 },
+    );
+  }
+}
+
+async function fetchDepartures(stopId: string): Promise<StopDeparture[]> {
+  const res = await fetch(`/api/departures?stopId=${stopId}`);
+  const data = await res.json();
+  return data.slice(0, 5);
+}
 
 const INITIAL_VIEW_STATE = {
   longitude: TALLINN_CENTER[1],
@@ -29,67 +72,7 @@ const INITIAL_VIEW_STATE = {
   zoom: DEFAULT_ZOOM,
 };
 
-const svgCache: Record<string, string> = {};
-
-function createVehicleIcon(
-  color: string,
-  bearing: number,
-  size: number,
-): string {
-  const roundedBearing = Math.round(bearing / 5) * 5;
-  const cacheKey = `${color}|${roundedBearing}|${size}`;
-  const cached = svgCache[cacheKey];
-  if (cached) return cached;
-
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24">
-    <g transform="rotate(${roundedBearing} 12 12)">
-      <polygon points="12,3 20,21 12,16 4,21" fill="${color}" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/>
-    </g>
-  </svg>`;
-
-  const result = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-  svgCache[cacheKey] = result;
-  return result;
-}
-
-function createStopIcon(): string {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12">
-    <rect x="2" y="2" width="8" height="8" rx="2" fill="#fff" stroke="#666" stroke-width="1.5"/>
-  </svg>`;
-  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-}
-
-function createBoardingStopIcon(lineNumber: string, color: string): string {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
-    <circle cx="10" cy="10" r="8" fill="${color}" stroke="#fff" stroke-width="2"/>
-    <text x="10" y="14" text-anchor="middle" fill="#fff" font-size="9" font-weight="bold" font-family="system-ui">${lineNumber}</text>
-  </svg>`;
-  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-}
-
-function createPinIcon(color: string, label: string): string {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="32" viewBox="0 0 24 32">
-    <path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 20 12 20s12-11 12-20C24 5.4 18.6 0 12 0z" fill="${color}"/>
-    <circle cx="12" cy="12" r="5" fill="#fff"/>
-    <text x="12" y="15" text-anchor="middle" fill="${color}" font-size="8" font-weight="bold" font-family="system-ui">${label}</text>
-  </svg>`;
-  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-}
-
-const mdQuery = "(min-width: 768px)";
-const subscribe = (cb: () => void) => {
-  const mql = window.matchMedia(mdQuery);
-  mql.addEventListener("change", cb);
-  return () => mql.removeEventListener("change", cb);
-};
-const getSnapshot = () => window.matchMedia(mdQuery).matches;
-const getServerSnapshot = () => true;
-
-function useIsDesktop() {
-  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
-}
-
-interface MapViewInnerProps {
+export interface MapViewInnerProps {
   vehicles: VehicleDto[];
   routePlan: RoutePlanResponse | null;
   selectedRouteIndex: number;
@@ -102,6 +85,7 @@ interface MapViewInnerProps {
   onVehicleClick: (id: number) => void;
   onDeselectVehicle: () => void;
   selectedStop: StopDto | null;
+  showTraffic?: boolean;
 }
 
 export function MapViewInner({
@@ -117,6 +101,7 @@ export function MapViewInner({
   onVehicleClick,
   onDeselectVehicle,
   selectedStop,
+  showTraffic = false,
 }: MapViewInnerProps) {
   const mapRef = useRef<MapRef>(null);
   const [viewState, setViewState] = useState(INITIAL_VIEW_STATE);
@@ -125,13 +110,25 @@ export function MapViewInner({
   const [stopDepartures, setStopDepartures] = useState<StopDeparture[]>([]);
   const [departuresLoading, setDeparturesLoading] = useState(false);
   const followingRef = useRef(false);
-  const lastFocusedIdRef = useRef<number | null>(null);
   const isDesktop = useIsDesktop();
   const [webglLost, setWebglLost] = useState(false);
   const webglCleanupRef = useRef<(() => void) | null>(null);
+  const [mapBounds, setMapBounds] = useState<{
+    minLat: number;
+    minLng: number;
+    maxLat: number;
+    maxLng: number;
+  } | null>(null);
+
+  const trafficData = useTrafficData(mapBounds, viewState.zoom, {
+    enabled: showTraffic,
+    minZoom: 11,
+    debounceMs: 400,
+  });
 
   const handleMapLoad = useCallback(() => {
-    const canvas = mapRef.current?.getMap()?.getCanvas();
+    const map = mapRef.current?.getMap();
+    const canvas = map?.getCanvas();
     if (!canvas) return;
 
     const handleLost = (e: Event) => {
@@ -146,6 +143,16 @@ export function MapViewInner({
       canvas.removeEventListener("webglcontextlost", handleLost);
       canvas.removeEventListener("webglcontextrestored", handleRestored);
     };
+
+    if (map) {
+      const bounds = map.getBounds();
+      setMapBounds({
+        minLat: bounds.getSouth(),
+        minLng: bounds.getWest(),
+        maxLat: bounds.getNorth(),
+        maxLng: bounds.getEast(),
+      });
+    }
   }, []);
 
   useEffect(() => {
@@ -157,8 +164,7 @@ export function MapViewInner({
     return vehicles.find((v) => v.id === focusedVehicleId) ?? null;
   }, [vehicles, focusedVehicleId]);
 
-  if (focusedVehicleId !== lastFocusedIdRef.current) {
-    lastFocusedIdRef.current = focusedVehicleId;
+  useEffect(() => {
     if (focusedVehicle) {
       // Only center on vehicle if it has no route shape (fitBounds handles that case)
       const hasRouteShape =
@@ -176,7 +182,9 @@ export function MapViewInner({
     } else {
       setPopupVehicle(null);
     }
-  }
+    // Only trigger when the focused vehicle *identity* changes, not on every position update
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusedVehicleId]);
 
   const handleMapClick = useCallback(
     (e: MapLayerMouseEvent) => {
@@ -207,9 +215,7 @@ export function MapViewInner({
     setStopDepartures([]);
 
     try {
-      const res = await fetch(`/api/departures?stopId=${stop.stopId}`);
-      const data = await res.json();
-      setStopDepartures(data.slice(0, 5));
+      setStopDepartures(await fetchDepartures(stop.stopId));
     } catch (err) {
       console.error("Failed to fetch departures:", err);
     } finally {
@@ -246,9 +252,7 @@ export function MapViewInner({
 
     const intervalId = setInterval(async () => {
       try {
-        const res = await fetch(`/api/departures?stopId=${popupStop.stopId}`);
-        const data = await res.json();
-        setStopDepartures(data.slice(0, 5));
+        setStopDepartures(await fetchDepartures(popupStop.stopId));
       } catch (err) {
         console.error("Failed to refresh departures:", err);
       }
@@ -262,63 +266,32 @@ export function MapViewInner({
     if (!map || !routePlan || !routePlan.routes[selectedRouteIndex]) return;
 
     const route = routePlan.routes[selectedRouteIndex];
-    let minLat = Infinity,
-      maxLat = -Infinity,
-      minLng = Infinity,
-      maxLng = -Infinity;
-
-    for (const leg of route.legs) {
-      for (const [lat, lng] of leg.polyline) {
-        if (lat < minLat) minLat = lat;
-        if (lat > maxLat) maxLat = lat;
-        if (lng < minLng) minLng = lng;
-        if (lng > maxLng) maxLng = lng;
-      }
-    }
-
-    if (minLat !== Infinity) {
-      map.fitBounds(
-        [
-          [minLng, minLat],
-          [maxLng, maxLat],
-        ] as LngLatBoundsLike,
-        { padding: 60, duration: 500 },
-      );
-    }
+    const points = route.legs.flatMap((leg) => leg.polyline);
+    fitMapToPoints(map, points);
   }, [routePlan, selectedRouteIndex]);
 
-  // Fit map bounds to vehicle route shape when a vehicle is focused
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !focusedVehicle || !shapes || !focusedVehicle.routeKey) return;
     const shape = shapes[focusedVehicle.routeKey];
     if (!shape || shape.length === 0) return;
 
-    let minLat = Infinity,
-      maxLat = -Infinity,
-      minLng = Infinity,
-      maxLng = -Infinity;
-
-    for (const [lat, lng] of shape) {
-      if (lat < minLat) minLat = lat;
-      if (lat > maxLat) maxLat = lat;
-      if (lng < minLng) minLng = lng;
-      if (lng > maxLng) maxLng = lng;
-    }
-
-    if (minLat !== Infinity) {
-      map.fitBounds(
-        [
-          [minLng, minLat],
-          [maxLng, maxLat],
-        ] as LngLatBoundsLike,
-        { padding: 60, duration: 500 },
-      );
-    }
-  }, [focusedVehicle?.id, focusedVehicle?.routeKey, shapes]);
+    fitMapToPoints(map, shape);
+  }, [focusedVehicle, shapes]);
 
   const handleMoveEnd = useCallback(() => {
     followingRef.current = false;
+
+    const map = mapRef.current?.getMap();
+    if (map) {
+      const bounds = map.getBounds();
+      setMapBounds({
+        minLat: bounds.getSouth(),
+        minLng: bounds.getWest(),
+        maxLat: bounds.getNorth(),
+        maxLng: bounds.getEast(),
+      });
+    }
   }, []);
 
   const routeLegsGeoJson = useMemo(() => {
@@ -380,116 +353,6 @@ export function MapViewInner({
     }
     return stops;
   }, [routePlan, selectedRouteIndex]);
-
-  const vehiclePopupContent = (vehicle: VehicleDto) => (
-    <div className="min-w-[180px] p-1">
-      <div className="flex items-center gap-2 mb-2">
-        <Badge
-          className="text-white"
-          style={{
-            backgroundColor:
-              vehicle.transportType === "bus"
-                ? "#2196F3"
-                : vehicle.transportType === "tram"
-                  ? "#F44336"
-                  : vehicle.transportType === "trolleybus"
-                    ? "#4CAF50"
-                    : "#999",
-          }}
-        >
-          {vehicle.lineNumber}
-        </Badge>
-        <span className="text-xs text-muted-foreground">
-          {vehicle.transportType} #{vehicle.id}
-        </span>
-      </div>
-
-      {vehicle.destination && (
-        <div className="text-sm mb-2">
-          <span className="text-muted-foreground">To: </span>
-          <span className="font-medium">{vehicle.destination}</span>
-        </div>
-      )}
-
-      {vehicle.nextStop && (
-        <>
-          <div className="text-sm font-medium mb-1">
-            Next: {vehicle.nextStop.name}
-          </div>
-          <div className="text-lg font-bold text-primary mb-2">
-            {formatEta(vehicle.nextStop.etaSeconds)}
-          </div>
-        </>
-      )}
-
-      <div className="space-y-1 text-xs">
-        {vehicle.nextStop && (
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Distance</span>
-            <span>
-              {formatDistance(vehicle.nextStop.distanceMeters)}
-            </span>
-          </div>
-        )}
-        <div className="flex justify-between">
-          <span className="text-muted-foreground">Stop</span>
-          <span>
-            {vehicle.stopIndex + 1} / {vehicle.totalStops}
-          </span>
-        </div>
-      </div>
-    </div>
-  );
-
-  const stopPopupContent = (stop: StopDto) => (
-    <div className="min-w-[200px] p-1">
-      <div className="font-semibold text-sm">{stop.stopName}</div>
-      {stop.stopDesc && (
-        <div className="text-xs text-muted-foreground mb-2">
-          {stop.stopDesc}
-        </div>
-      )}
-      {!stop.stopDesc && <div className="mb-2" />}
-
-      {departuresLoading ? (
-        <div className="text-xs text-muted-foreground">
-          Loading arrivals...
-        </div>
-      ) : stopDepartures.length === 0 ? (
-        <div className="text-xs text-muted-foreground">
-          No real-time arrivals available for this stop.
-        </div>
-      ) : (
-        <div className="space-y-1.5">
-          {stopDepartures.map((dep, i) => (
-            <div key={i} className="flex items-center gap-2 text-xs">
-              <Badge
-                className="text-white text-[10px] px-1.5 py-0 h-4"
-                style={{
-                  backgroundColor:
-                    dep.transportType === "bus"
-                      ? "#2196F3"
-                      : dep.transportType === "tram"
-                        ? "#F44336"
-                        : dep.transportType === "trolleybus"
-                          ? "#4CAF50"
-                          : "#999",
-                }}
-              >
-                {dep.route}
-              </Badge>
-              <span className="flex-1 truncate text-muted-foreground">
-                {dep.destination}
-              </span>
-              <span className="font-medium">
-                {formatEta(dep.secondsUntilArrival)}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
 
   const handleBottomSheetClose = useCallback(() => {
     setPopupVehicle(null);
@@ -565,14 +428,46 @@ export function MapViewInner({
           </Source>
         )}
 
+        {/* Traffic flow layer - using TomTom raster tiles */}
+        {!webglLost && showTraffic && trafficData.flowTileInfo && (
+          <Source
+            id="traffic-flow"
+            type="raster"
+            tiles={[trafficData.flowTileInfo.tileUrlTemplate]}
+            tileSize={256}
+            attribution={trafficData.flowTileInfo.attribution}
+            key="traffic-flow-source"
+          >
+            <Layer
+              id="traffic-flow-tiles"
+              type="raster"
+              paint={{
+                "raster-opacity": 0.8,
+                "raster-fade-duration": 0,
+              }}
+            />
+          </Source>
+        )}
+
+        {/* Traffic incidents as markers */}
+        {showTraffic &&
+          trafficData.incidents?.features.map((feature, i) => (
+            <Marker
+              key={`incident-${feature.properties.id}-${i}`}
+              longitude={feature.geometry.coordinates[0]}
+              latitude={feature.geometry.coordinates[1]}
+              anchor="center"
+            >
+              <IncidentIcon
+                category={feature.properties.iconCategory}
+                size={32}
+              />
+            </Marker>
+          ))}
+
         {origin && (
           <Marker longitude={origin.lng} latitude={origin.lat} anchor="bottom">
-            <img
-              src={createPinIcon("#22c55e", "A")}
-              width={24}
-              height={32}
-              alt="Origin"
-            />
+            <PinIcon color="#22c55e" label="A" />
           </Marker>
         )}
 
@@ -582,12 +477,7 @@ export function MapViewInner({
             latitude={destination.lat}
             anchor="bottom"
           >
-            <img
-              src={createPinIcon("#ef4444", "B")}
-              width={24}
-              height={32}
-              alt="Destination"
-            />
+            <PinIcon color="#ef4444" label="B" />
           </Marker>
         )}
 
@@ -602,17 +492,11 @@ export function MapViewInner({
               latitude={stop.lat}
               anchor="center"
             >
-              <img
-                src={
-                  stop.lineNumber
-                    ? createBoardingStopIcon(stop.lineNumber, color)
-                    : createStopIcon()
-                }
-                width={stop.lineNumber ? 20 : 12}
-                height={stop.lineNumber ? 20 : 12}
-                style={{ cursor: "pointer" }}
-                alt={stop.name}
-              />
+              {stop.lineNumber ? (
+                <BoardingStopIcon lineNumber={stop.lineNumber} color={color} />
+              ) : (
+                <StopIcon />
+              )}
             </Marker>
           );
         })}
@@ -627,45 +511,34 @@ export function MapViewInner({
               handleStopClick(selectedStop);
             }}
           >
-            <img
-              src={createStopIcon()}
-              width={12}
-              height={12}
-              style={{ cursor: "pointer" }}
-              alt={selectedStop.stopName}
-            />
+            <StopIcon />
           </Marker>
         )}
 
-        {!webglLost && vehicles.map((v) => {
-          const baseColor = TYPE_COLORS[v.transportType] || TYPE_COLORS.unknown;
-          const isFocused = focusedVehicleId === v.id;
-          const color = isFocused ? "#FF9800" : baseColor;
-          const size = isFocused ? 32 : 24;
-          const bearing = v.bearing ?? v.heading;
-          const icon = createVehicleIcon(color, bearing, size);
+        {!webglLost &&
+          vehicles.map((v) => {
+            const baseColor =
+              TYPE_COLORS[v.transportType] || TYPE_COLORS.unknown;
+            const isFocused = focusedVehicleId === v.id;
+            const color = isFocused ? "#FF9800" : baseColor;
+            const size = isFocused ? 32 : 24;
+            const bearing = v.bearing ?? v.heading;
 
-          return (
-            <Marker
-              key={v.id}
-              longitude={v.longitude}
-              latitude={v.latitude}
-              anchor="center"
-              onClick={(e) => {
-                e.originalEvent.stopPropagation();
-                handleVehicleClick(v);
-              }}
-            >
-              <img
-                src={icon}
-                width={size}
-                height={size}
-                style={{ cursor: "pointer" }}
-                alt={`${v.lineNumber}`}
-              />
-            </Marker>
-          );
-        })}
+            return (
+              <Marker
+                key={v.id}
+                longitude={v.longitude}
+                latitude={v.latitude}
+                anchor="center"
+                onClick={(e) => {
+                  e.originalEvent.stopPropagation();
+                  handleVehicleClick(v);
+                }}
+              >
+                <VehicleIcon color={color} bearing={bearing} size={size} />
+              </Marker>
+            );
+          })}
 
         {/* Desktop-only popups */}
         {!webglLost && isDesktop && popupVehicle && (
@@ -678,7 +551,7 @@ export function MapViewInner({
             onClose={() => setPopupVehicle(null)}
             maxWidth="280px"
           >
-            {vehiclePopupContent(popupVehicle)}
+            <VehiclePopup vehicle={popupVehicle} />
           </Popup>
         )}
 
@@ -692,7 +565,11 @@ export function MapViewInner({
             onClose={() => setPopupStop(null)}
             maxWidth="280px"
           >
-            {stopPopupContent(popupStop)}
+            <StopPopup
+              stop={popupStop}
+              departures={stopDepartures}
+              loading={departuresLoading}
+            />
           </Popup>
         )}
       </Map>
@@ -702,8 +579,14 @@ export function MapViewInner({
         open={!!(popupVehicle || popupStop)}
         onClose={handleBottomSheetClose}
       >
-        {popupVehicle && vehiclePopupContent(popupVehicle)}
-        {popupStop && stopPopupContent(popupStop)}
+        {popupVehicle && <VehiclePopup vehicle={popupVehicle} />}
+        {popupStop && (
+          <StopPopup
+            stop={popupStop}
+            departures={stopDepartures}
+            loading={departuresLoading}
+          />
+        )}
       </BottomSheet>
     </>
   );

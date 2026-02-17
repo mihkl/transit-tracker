@@ -5,10 +5,12 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import { Footprints } from "lucide-react";
+import { Icon } from "@/components/icon";
 import { PlaceSearchInput } from "./place-search-input";
 import { RouteLegCard } from "./route-leg-card";
 import { formatDuration, formatTime } from "@/lib/format-utils";
-import { MODE_COLORS } from "@/lib/constants";
+import { getTransportColor } from "@/lib/constants";
 import type { RoutePlanResponse, PlannedRoute, RouteLeg } from "@/lib/types";
 
 export type TimeOption = "now" | "depart" | "arrive";
@@ -95,37 +97,18 @@ function LegChain({ legs }: { legs: RouteLeg[] }) {
       {visibleLegs.map((leg, i) => (
         <div key={i} className="flex items-center gap-0.5">
           {i > 0 && (
-            <svg
-              width="8"
-              height="8"
-              viewBox="0 0 8 8"
+            <Icon
+              name="chevron-right-sm"
+              size={8}
               className="text-gray-400 mx-0.5 shrink-0"
-            >
-              <path
-                d="M2 0l4 4-4 4"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-              />
-            </svg>
+            />
           )}
           {leg.mode === "WALK" ? (
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              className="text-gray-500 shrink-0"
-            >
-              <circle cx="12" cy="5" r="2" />
-              <path d="M10 22l2-7 3 3v6M10.5 11l2.5-3 3.5 2" />
-            </svg>
+            <Footprints size={14} className="text-gray-500 shrink-0" />
           ) : (
             <Badge
               className="text-white text-[10px] px-1.5 py-0 h-5 font-semibold shrink-0 rounded"
-              style={{ backgroundColor: MODE_COLORS[leg.mode] || "#999" }}
+              style={{ backgroundColor: getTransportColor(leg.mode) }}
             >
               {leg.lineNumber || leg.mode}
             </Badge>
@@ -187,18 +170,7 @@ function RouteInputs({
           className="self-center ml-1 p-2 rounded-full hover:bg-gray-100 transition-colors shrink-0 text-gray-500 hover:text-gray-700"
           title="Swap origin and destination"
         >
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4" />
-          </svg>
+          <Icon name="swap" size={18} />
         </button>
       </div>
     </div>
@@ -248,7 +220,7 @@ function RouteSummaryRow({
   isSelected: boolean;
   onClick: () => void;
 }) {
-  const { dep, arr, firstTransitDep } = getRouteTimeRange(route);
+  const { dep, arr } = getRouteTimeRange(route);
   const firstTransit = getFirstTransitDeparture(route);
 
   return (
@@ -397,8 +369,8 @@ export function RoutePlanner({
             )}
           </Button>
         </div>
-        {hasRoutes && (
-          isDesktop ? (
+        {hasRoutes &&
+          (isDesktop ? (
             <ScrollArea className="flex-1 min-h-0">
               <div className="divide-y divide-border">
                 {routePlan.routes.map((route, i) => {
@@ -436,8 +408,7 @@ export function RoutePlanner({
                 ))}
               </div>
             </div>
-          )
-        )}
+          ))}
         {routePlan &&
           routePlan.routes &&
           routePlan.routes.length === 0 &&
@@ -458,18 +429,7 @@ export function RoutePlanner({
           onClick={handleBackToList}
           className="p-1.5 rounded-full hover:bg-gray-100 transition-colors shrink-0 text-gray-500"
         >
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
+          <Icon name="chevron-left" size={20} />
         </button>
         <div className="flex-1 min-w-0">
           {(() => {

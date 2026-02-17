@@ -1,8 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import type { VehicleDto, RoutePlanResponse } from "@/lib/types";
-import type { StopDto } from "@/app/api/all-stops/route";
+import type { MapViewInnerProps } from "./map-view-inner";
 
 const MapViewInner = dynamic(
   () => import("./map-view-inner").then((mod) => mod.MapViewInner),
@@ -16,21 +15,6 @@ const MapViewInner = dynamic(
   },
 );
 
-interface MapViewProps {
-  vehicles: VehicleDto[];
-  routePlan: RoutePlanResponse | null;
-  selectedRouteIndex: number;
-  origin: { lat: number; lng: number } | null;
-  destination: { lat: number; lng: number } | null;
-  pickingPoint: "origin" | "destination" | null;
-  onMapClick: (pointType: string, lat: number, lng: number) => void;
-  focusedVehicleId: number | null;
-  shapes: Record<string, number[][]> | null;
-  onVehicleClick: (id: number) => void;
-  onDeselectVehicle: () => void;
-  selectedStop: StopDto | null;
-}
-
-export function MapView(props: MapViewProps) {
+export function MapView(props: MapViewInnerProps) {
   return <MapViewInner {...props} />;
 }

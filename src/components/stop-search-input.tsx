@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useClickOutside } from "@/hooks/use-click-outside";
 import { MapPin } from "lucide-react";
+import { Icon } from "@/components/icon";
 import { Input } from "@/components/ui/input";
 import {
   Command,
@@ -11,14 +12,14 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import type { StopDto } from "@/app/api/all-stops/route";
+import type { StopDto } from "@/lib/types";
 
 interface StopSearchInputProps {
   value: StopDto | null;
   onSelect: (stop: StopDto | null) => void;
 }
 
-const TYPE_COLORS: Record<string, string> = {
+const STOP_TYPE_COLORS: Record<string, string> = {
   B: "#2196F3",
   T: "#F44336",
   t: "#4CAF50",
@@ -26,24 +27,16 @@ const TYPE_COLORS: Record<string, string> = {
 };
 
 export function StopSearchInput({ value, onSelect }: StopSearchInputProps) {
-  const [query, setQuery] = useState(() =>
-    value ? value.stopName : "",
-  );
+  const [query, setQuery] = useState(() => (value ? value.stopName : ""));
   const [stops, setStops] = useState<StopDto[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const controller = new AbortController();
-    fetch("/api/all-stops", { signal: controller.signal })
+    fetch("/api/all-stops")
       .then((r) => r.json())
       .then((data: StopDto[]) => setStops(data))
-      .catch((err) => {
-        if (err.name !== "AbortError") {
-          console.error("Failed to load stops:", err);
-        }
-      });
-    return () => controller.abort();
+      .catch((err) => console.error("Failed to load stops:", err));
   }, []);
 
   const filtered = useMemo(() => {
@@ -98,17 +91,7 @@ export function StopSearchInput({ value, onSelect }: StopSearchInputProps) {
             onClick={handleClear}
             className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded-full hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition-colors"
           >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-            >
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
+            <Icon name="x-close" size={14} />
           </button>
         )}
       </div>
@@ -153,7 +136,8 @@ export function StopSearchInput({ value, onSelect }: StopSearchInputProps) {
                             {stop.lines.slice(0, 8).map((line) => {
                               const typeCode = line[0];
                               const lineNum = line.slice(2);
-                              const color = TYPE_COLORS[typeCode] || "#666";
+                              const color =
+                                STOP_TYPE_COLORS[typeCode] || "#666";
                               return (
                                 <span
                                   key={line}

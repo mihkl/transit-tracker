@@ -3,7 +3,9 @@
 import { LineSearchInput } from "@/components/line-search-input";
 import { StopSearchInput } from "@/components/stop-search-input";
 import { Button } from "@/components/ui/button";
-import type { StopDto } from "@/app/api/all-stops/route";
+import { Car } from "lucide-react";
+import { Icon } from "@/components/icon";
+import type { StopDto, LineDto } from "@/lib/types";
 
 interface FilterPanelProps {
   selectedLine: { lineNumber: string; type: string } | null;
@@ -13,6 +15,9 @@ interface FilterPanelProps {
   vehicleCount: number;
   lastUpdate: Date | null;
   onTogglePlanner: () => void;
+  showTraffic?: boolean;
+  onToggleTraffic?: () => void;
+  lines: LineDto[];
 }
 
 export function FilterPanel({
@@ -23,15 +28,34 @@ export function FilterPanel({
   vehicleCount,
   lastUpdate,
   onTogglePlanner,
+  showTraffic = false,
+  onToggleTraffic,
+  lines,
 }: FilterPanelProps) {
   return (
     <>
-      <div className="absolute top-3 left-3 right-3 z-[1000] md:hidden">
+      <div className="absolute top-3 left-3 right-3 z-1000 md:hidden">
         <div className="flex items-center gap-1.5 px-2 py-2.5 bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.12),0_0_1px_rgba(0,0,0,0.08)] overflow-hidden">
           <div className="flex-1 min-w-0 flex items-center gap-1.5">
-            <LineSearchInput value={selectedLine} onSelect={onLineSelect} />
+            <LineSearchInput
+              value={selectedLine}
+              onSelect={onLineSelect}
+              lines={lines}
+            />
             <StopSearchInput value={selectedStop} onSelect={onStopSelect} />
           </div>
+
+          {onToggleTraffic && (
+            <Button
+              variant={showTraffic ? "default" : "ghost"}
+              size="sm"
+              className="h-9 px-2 text-sm font-medium"
+              onClick={onToggleTraffic}
+              title="Toggle traffic overlay"
+            >
+              <Car className="w-4 h-4" />
+            </Button>
+          )}
 
           <Button
             variant="ghost"
@@ -39,15 +63,7 @@ export function FilterPanel({
             className="h-9 px-3 text-sm font-medium hover:bg-gray-100"
             onClick={onTogglePlanner}
           >
-            <svg
-              className="w-4 h-4 mr-1.5"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+            <Icon name="arrow-right" className="w-4 h-4 mr-1.5" />
             <span className="hidden sm:inline">Directions</span>
           </Button>
 
@@ -59,11 +75,28 @@ export function FilterPanel({
         </div>
       </div>
 
-      <div className="hidden md:flex absolute top-3 right-3 z-[1000] items-center gap-2 px-3 py-2.5 bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.12),0_0_1px_rgba(0,0,0,0.08)]">
-        <LineSearchInput value={selectedLine} onSelect={onLineSelect} />
+      <div className="hidden md:flex absolute top-3 right-3 z-1000 items-center gap-2 px-3 py-2.5 bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.12),0_0_1px_rgba(0,0,0,0.08)]">
+        <LineSearchInput
+          value={selectedLine}
+          onSelect={onLineSelect}
+          lines={lines}
+        />
         <StopSearchInput value={selectedStop} onSelect={onStopSelect} />
 
         <div className="w-px h-6 bg-gray-200" />
+
+        {onToggleTraffic && (
+          <Button
+            variant={showTraffic ? "default" : "ghost"}
+            size="sm"
+            className="h-9 px-3 text-sm font-medium"
+            onClick={onToggleTraffic}
+            title="Toggle traffic overlay"
+          >
+            <Car className="w-4 h-4 mr-1.5" />
+            Traffic
+          </Button>
+        )}
 
         <Button
           variant="ghost"
@@ -71,15 +104,7 @@ export function FilterPanel({
           className="h-9 px-3 text-sm font-medium hover:bg-gray-100"
           onClick={onTogglePlanner}
         >
-          <svg
-            className="w-4 h-4 mr-1.5"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+          <Icon name="arrow-right" className="w-4 h-4 mr-1.5" />
           Directions
         </Button>
 

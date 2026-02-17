@@ -14,6 +14,52 @@ import type {
   ScheduleEntry,
 } from "@/lib/types";
 
+function parseCsvLine(line: string): string[] {
+  const fields: string[] = [];
+  let i = 0;
+  const len = line.length;
+
+  while (i <= len) {
+    if (i === len) {
+      fields.push("");
+      break;
+    }
+
+    if (line[i] === '"') {
+      // Quoted field (RFC 4180)
+      let value = "";
+      i++; // skip opening quote
+      while (i < len) {
+        if (line[i] === '"') {
+          if (i + 1 < len && line[i + 1] === '"') {
+            value += '"';
+            i += 2;
+          } else {
+            i++; // skip closing quote
+            break;
+          }
+        } else {
+          value += line[i];
+          i++;
+        }
+      }
+      fields.push(value);
+      if (i < len && line[i] === ",") i++; // skip comma
+    } else {
+      // Unquoted field
+      const next = line.indexOf(",", i);
+      if (next === -1) {
+        fields.push(line.slice(i));
+        break;
+      }
+      fields.push(line.slice(i, next));
+      i = next + 1;
+    }
+  }
+
+  return fields;
+}
+
 async function* readCsv(
   filePath: string,
 ): AsyncGenerator<Record<string, string>> {
@@ -26,13 +72,13 @@ async function* readCsv(
     let line = rawLine;
     if (!headers) {
       if (line.charCodeAt(0) === 0xfeff) line = line.slice(1);
-      headers = line.split(",");
+      headers = parseCsvLine(line);
       continue;
     }
 
     if (!line.trim()) continue;
 
-    const values = line.split(",");
+    const values = parseCsvLine(line);
     const record: Record<string, string> = {};
     for (let i = 0; i < headers.length && i < values.length; i++) {
       record[headers[i]] = values[i];

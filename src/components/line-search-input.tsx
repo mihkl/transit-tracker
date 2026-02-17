@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { useState, useRef, useMemo, useCallback } from "react";
 import { useClickOutside } from "@/hooks/use-click-outside";
 import { Bus, TramFront, TrainFront, Zap } from "lucide-react";
+import { Icon } from "@/components/icon";
 import { Input } from "@/components/ui/input";
 import {
   Command,
@@ -17,6 +18,7 @@ import type { LineDto } from "@/lib/types";
 interface LineSearchInputProps {
   value: { lineNumber: string; type: string } | null;
   onSelect: (line: { lineNumber: string; type: string } | null) => void;
+  lines: LineDto[];
 }
 
 const TYPE_ORDER = ["train", "tram", "trolleybus", "bus"];
@@ -45,18 +47,14 @@ function displayLabel(line: { lineNumber: string; type: string }) {
 
 export { TypeIcon };
 
-export function LineSearchInput({ value, onSelect }: LineSearchInputProps) {
+export function LineSearchInput({
+  value,
+  onSelect,
+  lines,
+}: LineSearchInputProps) {
   const [query, setQuery] = useState(() => (value ? displayLabel(value) : ""));
-  const [lines, setLines] = useState<LineDto[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    fetch("/api/lines")
-      .then((r) => r.json())
-      .then((data: LineDto[]) => setLines(data))
-      .catch((err) => console.error("Failed to load lines:", err));
-  }, []);
 
   const uniqueLines = useMemo(() => {
     const seen = new Set<string>();
@@ -134,16 +132,10 @@ export function LineSearchInput({ value, onSelect }: LineSearchInputProps) {
   return (
     <div className="relative" ref={wrapperRef}>
       <div className="relative flex items-center">
-        <svg
+        <Icon
+          name="clock"
           className="absolute left-2.5 w-3.5 h-3.5 text-gray-400 pointer-events-none"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-        >
-          <circle cx="12" cy="12" r="10" />
-          <path d="M12 6v6l4 2" />
-        </svg>
+        />
         <Input
           className="w-full h-9 pl-8 pr-7 text-sm bg-gray-50 border-0 focus:bg-white focus:ring-1 focus:ring-gray-200 min-w-0"
           type="text"
@@ -157,22 +149,12 @@ export function LineSearchInput({ value, onSelect }: LineSearchInputProps) {
             onClick={handleClear}
             className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded-full hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition-colors"
           >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-            >
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
+            <Icon name="x-close" size={14} />
           </button>
         )}
       </div>
       {showDropdown && (
-        <div className="fixed left-3 right-3 top-16 z-[1100] md:absolute md:top-full md:left-0 md:right-auto md:mt-1.5 md:w-44">
+        <div className="fixed left-3 right-3 top-16 z-1100 md:absolute md:top-full md:left-0 md:right-auto md:mt-1.5 md:w-44">
           <Command
             className="bg-white border border-gray-100 rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.1)]"
             shouldFilter={false}

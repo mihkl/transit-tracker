@@ -1,8 +1,4 @@
-import type {
-  GoogleRoutesResponse,
-  PlaceSearchResult,
-  NominatimResult,
-} from "@/lib/types";
+import type { GoogleRoutesResponse, PlaceSearchResult } from "@/lib/types";
 
 const ROUTES_URL = "https://routes.googleapis.com/directions/v2:computeRoutes";
 
@@ -81,49 +77,73 @@ export async function computeRoutes(
   return JSON.parse(body) as GoogleRoutesResponse;
 }
 
-function buildPlaceName(r: NominatimResult): string {
-  const addr = r.address;
-  if (addr) {
-    const road = addr.road;
-    const houseNumber = addr.house_number;
-    if (road && houseNumber) return `${road} ${houseNumber}`;
-    if (road) return road;
-  }
-  if (r.display_name) {
-    const parts = r.display_name.split(",").map((s) => s.trim());
-    if (parts.length >= 2) return `${parts[1]} ${parts[0]}`;
-    return parts[0];
-  }
-  return r.name || "";
+interface GoogleGeocodingResult {
+  formatted_address: string;
+  geometry: {
+    location: { lat: number; lng: number };
+  };
+  address_components: {
+    long_name: string;
+    short_name: string;
+    types: string[];
+  }[];
+}
+
+function buildPlaceNameFromComponents(
+  components: GoogleGeocodingResult["address_components"],
+): string {
+  const find = (type: string) =>
+    components.find((c) => c.types.includes(type))?.long_name;
+
+  const poi = find("point_of_interest") || find("establishment");
+  if (poi) return poi;
+
+  const route = find("route");
+  const streetNumber = find("street_number");
+  if (route && streetNumber) return `${route} ${streetNumber}`;
+  if (route) return route;
+
+  const neighborhood = find("neighborhood") || find("sublocality");
+  if (neighborhood) return neighborhood;
+
+  return components[0]?.long_name || "";
 }
 
 export async function searchPlaces(
   query: string,
 ): Promise<PlaceSearchResult[]> {
+  const apiKey = getApiKey();
   const url =
-    `https://nominatim.openstreetmap.org/search` +
-    `?q=${encodeURIComponent(query)}` +
-    `&format=json&limit=5&addressdetails=1` +
-    `&viewbox=24.5,59.5,25.0,59.35&bounded=0`;
+    `https://maps.googleapis.com/maps/api/geocode/json` +
+    `?address=${encodeURIComponent("Tallinn " + query)}` +
+    `&key=${apiKey}` +
+    `&bounds=59.35,24.5%7C59.5,25.0` +
+    `&language=et` +
+    `&region=ee`;
 
-  const res = await fetch(url, {
-    headers: { "User-Agent": "TransitTracker/1.0" },
-  });
-
+  const res = await fetch(url);
   const body = await res.text();
 
   if (!res.ok) {
-    console.error(`Nominatim error (${res.status}): ${body}`);
+    console.error(`Google Geocoding error (${res.status}): ${body}`);
     return [];
   }
 
-  const results: NominatimResult[] = JSON.parse(body);
+  const data = JSON.parse(body) as {
+    results: GoogleGeocodingResult[];
+    status: string;
+  };
 
-  return results.map((r) => ({
-    name: buildPlaceName(r),
-    address: r.display_name || "",
-    lat: parseFloat(r.lat) || 0,
-    lng: parseFloat(r.lon) || 0,
+  if (data.status !== "OK" && data.status !== "ZERO_RESULTS") {
+    console.error(`Google Geocoding status: ${data.status}`);
+    return [];
+  }
+
+  return data.results.slice(0, 5).map((r) => ({
+    name: buildPlaceNameFromComponents(r.address_components),
+    address: r.formatted_address,
+    lat: r.geometry.location.lat,
+    lng: r.geometry.location.lng,
   }));
 }
 

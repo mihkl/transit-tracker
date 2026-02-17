@@ -243,23 +243,6 @@ export interface GoogleLocalizedValues {
   arrivalTime?: { time?: { text: string }; timeZone: string };
 }
 
-export interface NominatimResult {
-  lat: string;
-  lon: string;
-  display_name?: string;
-  name?: string;
-  address?: {
-    house_number?: string;
-    road?: string;
-    neighbourhood?: string;
-    suburb?: string;
-    city?: string;
-    town?: string;
-    village?: string;
-    [key: string]: string | undefined;
-  };
-}
-
 export interface ScheduleEntry {
   tripId: string;
   directionId: number;
@@ -336,4 +319,14 @@ export interface VehicleCandidateInfo {
   etaSeconds: number;
   timeDiffSeconds: number | null;
   isSelected: boolean;
+}
+
+export interface StopDto {
+  stopId: string;
+  stopName: string;
+  latitude: number;
+  longitude: number;
+  stopDesc?: string;
+  stopArea?: string;
+  lines?: string[];
 }

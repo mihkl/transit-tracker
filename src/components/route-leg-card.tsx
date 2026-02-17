@@ -1,9 +1,10 @@
 "use client";
 
+import { Footprints } from "lucide-react";
 import type { RouteLeg } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { formatDuration, formatDelay, formatTime } from "@/lib/format-utils";
-import { MODE_COLORS, MODE_LABELS, DELAY_COLORS } from "@/lib/constants";
+import { getTransportColor, MODE_LABELS, DELAY_COLORS } from "@/lib/constants";
 
 interface RouteLegCardProps {
   leg: RouteLeg;
@@ -14,23 +15,12 @@ export function RouteLegCard({ leg, onLocateVehicle }: RouteLegCardProps) {
   const isTransit = leg.mode !== "WALK" && !!leg.lineNumber;
   const depTime = formatTime(leg.scheduledDeparture);
   const arrTime = formatTime(leg.scheduledArrival);
-  const color = MODE_COLORS[leg.mode] || "#999";
+  const color = getTransportColor(leg.mode);
 
   if (leg.mode === "WALK") {
     return (
       <div className="flex items-center gap-3 px-2 py-1.5">
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="#999"
-          strokeWidth="2"
-          className="shrink-0"
-        >
-          <circle cx="12" cy="5" r="2" />
-          <path d="M10 22l2-7 3 3v6M10.5 11l2.5-3 3.5 2" />
-        </svg>
+        <Footprints size={16} className="shrink-0 text-[#999]" />
         <span className="text-xs text-gray-500">
           Walk {formatDuration(leg.duration)}
         </span>

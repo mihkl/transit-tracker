@@ -36,6 +36,13 @@ export async function fetchStopDepartures(
   }
 }
 
+/**
+ * Parses the SIRI stop departures response.
+ * Format: line 0 = stop name, line 1 = metadata, lines 2+ = departure rows.
+ * Each departure row: transportType,route,expectedTime,scheduleTime,destination,secondsUntilArrival
+ * The destination field may contain commas, so we parse from both ends:
+ * first 4 fields by indexOf, last field by lastIndexOf, and everything between is the destination.
+ */
 function parseSiriResponse(text: string): StopDeparture[] {
   const lines = text.split("\n");
   const departures: StopDeparture[] = [];
@@ -44,20 +51,42 @@ function parseSiriResponse(text: string): StopDeparture[] {
     const line = lines[i].trim();
     if (!line) continue;
 
-    const parts = line.split(",");
-    if (parts.length < 6) continue;
-
     try {
-      const expectedTime = parseInt(parts[2], 10);
-      const scheduleTime = parseInt(parts[3], 10);
+      // Find the first 4 commas (transportType, route, expectedTime, scheduleTime)
+      let pos = 0;
+      const commaPositions: number[] = [];
+      for (let c = 0; c < 4 && pos < line.length; c++) {
+        const idx = line.indexOf(",", pos);
+        if (idx === -1) break;
+        commaPositions.push(idx);
+        pos = idx + 1;
+      }
+
+      // Find the last comma (before secondsUntilArrival)
+      const lastComma = line.lastIndexOf(",");
+
+      if (commaPositions.length < 4 || lastComma <= commaPositions[3]) continue;
+
+      const transportType = line.slice(0, commaPositions[0]);
+      const route = line.slice(commaPositions[0] + 1, commaPositions[1]);
+      const expectedTime = parseInt(
+        line.slice(commaPositions[1] + 1, commaPositions[2]),
+        10,
+      );
+      const scheduleTime = parseInt(
+        line.slice(commaPositions[2] + 1, commaPositions[3]),
+        10,
+      );
+      const destination = line.slice(commaPositions[3] + 1, lastComma);
+      const secondsUntilArrival = parseInt(line.slice(lastComma + 1), 10);
 
       departures.push({
-        transportType: parts[0],
-        route: parts[1],
+        transportType,
+        route,
         expectedTime,
         scheduleTime,
-        destination: parts[4],
-        secondsUntilArrival: parseInt(parts[5], 10),
+        destination,
+        secondsUntilArrival,
         delaySeconds: expectedTime - scheduleTime,
       });
     } catch {
