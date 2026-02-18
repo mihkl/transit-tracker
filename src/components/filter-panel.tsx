@@ -1,7 +1,6 @@
 "use client";
 
-import { LineSearchInput } from "@/components/line-search-input";
-import { StopSearchInput } from "@/components/stop-search-input";
+import { UnifiedSearch } from "@/components/unified-search";
 import { Button } from "@/components/ui/button";
 import { Car } from "lucide-react";
 import { Icon } from "@/components/icon";
@@ -13,7 +12,6 @@ interface FilterPanelProps {
   selectedStop: StopDto | null;
   onStopSelect: (stop: StopDto | null) => void;
   vehicleCount: number;
-  lastUpdate: Date | null;
   onTogglePlanner: () => void;
   showTraffic?: boolean;
   onToggleTraffic?: () => void;
@@ -26,7 +24,6 @@ export function FilterPanel({
   selectedStop,
   onStopSelect,
   vehicleCount,
-  lastUpdate,
   onTogglePlanner,
   showTraffic = false,
   onToggleTraffic,
@@ -34,62 +31,39 @@ export function FilterPanel({
 }: FilterPanelProps) {
   return (
     <>
+      {/* Mobile — just the search bar, clean and minimal */}
       <div className="absolute top-3 left-3 right-3 z-1000 md:hidden">
-        <div className="flex items-center gap-1.5 px-2 py-2.5 bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.12),0_0_1px_rgba(0,0,0,0.08)] overflow-hidden">
-          <div className="flex-1 min-w-0 flex items-center gap-1.5">
-            <LineSearchInput
-              value={selectedLine}
-              onSelect={onLineSelect}
-              lines={lines}
-            />
-            <StopSearchInput value={selectedStop} onSelect={onStopSelect} />
-          </div>
-
-          {onToggleTraffic && (
-            <Button
-              variant={showTraffic ? "default" : "ghost"}
-              size="sm"
-              className="h-9 px-2 text-sm font-medium"
-              onClick={onToggleTraffic}
-              title="Toggle traffic overlay"
-            >
-              <Car className="w-4 h-4" />
-            </Button>
-          )}
-
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-9 px-3 text-sm font-medium hover:bg-gray-100"
-            onClick={onTogglePlanner}
-          >
-            <Icon name="arrow-right" className="w-4 h-4 mr-1.5" />
-            <span className="hidden sm:inline">Directions</span>
-          </Button>
-
-          <div className="shrink-0 flex items-center gap-1.5 px-2 py-1 bg-gray-50 rounded-full">
-            <span className="text-xs font-medium text-gray-600 tabular-nums">
-              {vehicleCount}
-            </span>
-          </div>
-        </div>
+        <UnifiedSearch
+          lines={lines}
+          selectedLine={selectedLine}
+          onLineSelect={onLineSelect}
+          selectedStop={selectedStop}
+          onStopSelect={onStopSelect}
+          vehicleCount={vehicleCount}
+        />
       </div>
 
-      <div className="hidden md:flex absolute top-3 right-3 z-1000 items-center gap-2 px-3 py-2.5 bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.12),0_0_1px_rgba(0,0,0,0.08)]">
-        <LineSearchInput
-          value={selectedLine}
-          onSelect={onLineSelect}
-          lines={lines}
-        />
-        <StopSearchInput value={selectedStop} onSelect={onStopSelect} />
+      {/* Desktop — search bar + controls in one row */}
+      <div className="hidden md:flex absolute top-3 right-3 z-1000 items-center gap-2 px-2 py-1.5 bg-white rounded-2xl shadow-panel">
+        <div className="w-64">
+          <UnifiedSearch
+            lines={lines}
+            selectedLine={selectedLine}
+            onLineSelect={onLineSelect}
+            selectedStop={selectedStop}
+            onStopSelect={onStopSelect}
+            vehicleCount={vehicleCount}
+            embedded
+          />
+        </div>
 
-        <div className="w-px h-6 bg-gray-200" />
+        <div className="w-px h-5 bg-foreground/6" />
 
         {onToggleTraffic && (
           <Button
             variant={showTraffic ? "default" : "ghost"}
             size="sm"
-            className="h-9 px-3 text-sm font-medium"
+            className="h-8 px-2.5 rounded-xl text-sm font-medium"
             onClick={onToggleTraffic}
             title="Toggle traffic overlay"
           >
@@ -101,24 +75,21 @@ export function FilterPanel({
         <Button
           variant="ghost"
           size="sm"
-          className="h-9 px-3 text-sm font-medium hover:bg-gray-100"
+          className="h-8 px-2.5 rounded-xl text-sm font-medium"
           onClick={onTogglePlanner}
         >
           <Icon name="arrow-right" className="w-4 h-4 mr-1.5" />
           Directions
         </Button>
 
-        <div className="flex items-center gap-1.5 px-2 py-1 bg-gray-50 rounded-full">
-          <span className="text-xs font-medium text-gray-600">
-            {vehicleCount}
+        <div className="w-px h-5 bg-foreground/6" />
+
+        <div className="flex items-center gap-1.5 px-2">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-live shrink-0" />
+          <span className="text-[11px] text-foreground/45 font-medium">
+            live
           </span>
-          <span className="text-[10px] text-gray-400">vehicles</span>
         </div>
-        {lastUpdate && (
-          <span className="text-[11px] text-gray-400 tabular-nums">
-            {lastUpdate.toLocaleTimeString()}
-          </span>
-        )}
       </div>
     </>
   );

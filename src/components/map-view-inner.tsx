@@ -9,7 +9,7 @@ import Map, {
   type MapRef,
 } from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
-import type { LngLatBoundsLike } from "maplibre-gl";
+import type { LngLatBoundsLike, Map as MaplibreMap } from "maplibre-gl";
 import type {
   VehicleDto,
   RoutePlanResponse,
@@ -27,7 +27,6 @@ import type { MapLayerMouseEvent } from "maplibre-gl";
 import {
   IncidentIcon,
   PinIcon,
-  VehicleIcon,
   StopIcon,
   BoardingStopIcon,
 } from "@/components/map-icons";
@@ -64,6 +63,30 @@ async function fetchDepartures(stopId: string): Promise<StopDeparture[]> {
   const res = await fetch(`/api/departures?stopId=${stopId}`);
   const data = await res.json();
   return data.slice(0, 5);
+}
+
+function addVehicleArrowImage(map: MaplibreMap) {
+  const size = 32;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+
+  // Arrow shape matching VehicleIcon SVG (viewBox 0 0 24 24) scaled to 32×32
+  const s = size / 24;
+  ctx.beginPath();
+  ctx.moveTo(12 * s, 3 * s);
+  ctx.lineTo(20 * s, 21 * s);
+  ctx.lineTo(12 * s, 16 * s);
+  ctx.lineTo(4 * s, 21 * s);
+  ctx.closePath();
+  ctx.lineJoin = "round";
+  ctx.fillStyle = "#fff";
+  ctx.fill();
+
+  const imageData = ctx.getImageData(0, 0, size, size);
+  if (map.hasImage("vehicle-arrow")) map.removeImage("vehicle-arrow");
+  map.addImage("vehicle-arrow", imageData, { sdf: true });
 }
 
 const INITIAL_VIEW_STATE = {
@@ -113,6 +136,8 @@ export function MapViewInner({
   const isDesktop = useIsDesktop();
   const [webglLost, setWebglLost] = useState(false);
   const webglCleanupRef = useRef<(() => void) | null>(null);
+  const vehiclesRef = useRef(vehicles);
+  vehiclesRef.current = vehicles;
   const [mapBounds, setMapBounds] = useState<{
     minLat: number;
     minLng: number;
@@ -129,13 +154,19 @@ export function MapViewInner({
   const handleMapLoad = useCallback(() => {
     const map = mapRef.current?.getMap();
     const canvas = map?.getCanvas();
-    if (!canvas) return;
+    if (!canvas || !map) return;
+
+    addVehicleArrowImage(map);
 
     const handleLost = (e: Event) => {
       e.preventDefault();
       setWebglLost(true);
     };
-    const handleRestored = () => setWebglLost(false);
+    const handleRestored = () => {
+      setWebglLost(false);
+      const m = mapRef.current?.getMap();
+      if (m) addVehicleArrowImage(m);
+    };
 
     canvas.addEventListener("webglcontextlost", handleLost);
     canvas.addEventListener("webglcontextrestored", handleRestored);
@@ -144,15 +175,13 @@ export function MapViewInner({
       canvas.removeEventListener("webglcontextrestored", handleRestored);
     };
 
-    if (map) {
-      const bounds = map.getBounds();
-      setMapBounds({
-        minLat: bounds.getSouth(),
-        minLng: bounds.getWest(),
-        maxLat: bounds.getNorth(),
-        maxLng: bounds.getEast(),
-      });
-    }
+    const bounds = map.getBounds();
+    setMapBounds({
+      minLat: bounds.getSouth(),
+      minLng: bounds.getWest(),
+      maxLat: bounds.getNorth(),
+      maxLng: bounds.getEast(),
+    });
   }, []);
 
   useEffect(() => {
@@ -190,22 +219,28 @@ export function MapViewInner({
     (e: MapLayerMouseEvent) => {
       if (pickingPoint) {
         onMapClick(pickingPoint, e.lngLat.lat, e.lngLat.lng);
-      } else {
-        onDeselectVehicle();
-        setPopupVehicle(null);
-        setPopupStop(null);
+        return;
       }
-    },
-    [pickingPoint, onMapClick, onDeselectVehicle],
-  );
 
-  const handleVehicleClick = useCallback(
-    (v: VehicleDto) => {
-      onVehicleClick(v.id);
-      setPopupVehicle(v);
+      const vehicleFeature = e.features?.find(
+        (f) => f.layer?.id === "vehicles",
+      );
+      if (vehicleFeature) {
+        const vehicleId = vehicleFeature.properties?.id as number | undefined;
+        const vehicle = vehiclesRef.current.find((v) => v.id === vehicleId);
+        if (vehicle) {
+          onVehicleClick(vehicle.id);
+          setPopupVehicle(vehicle);
+          setPopupStop(null);
+          return;
+        }
+      }
+
+      onDeselectVehicle();
+      setPopupVehicle(null);
       setPopupStop(null);
     },
-    [onVehicleClick],
+    [pickingPoint, onMapClick, onDeselectVehicle, onVehicleClick],
   );
 
   const handleStopClick = useCallback(async (stop: StopDto) => {
@@ -329,6 +364,26 @@ export function MapViewInner({
     };
   }, [focusedVehicle, shapes]);
 
+  const vehiclesGeoJson = useMemo(
+    () => ({
+      type: "FeatureCollection" as const,
+      features: vehicles.map((v) => ({
+        type: "Feature" as const,
+        geometry: {
+          type: "Point" as const,
+          coordinates: [v.longitude, v.latitude],
+        },
+        properties: {
+          id: v.id,
+          bearing: v.bearing ?? v.heading,
+          color: TYPE_COLORS[v.transportType] || TYPE_COLORS.unknown,
+          focused: focusedVehicleId === v.id ? 1 : 0,
+        },
+      })),
+    }),
+    [vehicles, focusedVehicleId],
+  );
+
   const boardingStops = useMemo(() => {
     if (!routePlan || !routePlan.routes[selectedRouteIndex]) return [];
     const route = routePlan.routes[selectedRouteIndex];
@@ -376,6 +431,7 @@ export function MapViewInner({
           }
         }}
         onMoveEnd={handleMoveEnd}
+        interactiveLayerIds={["vehicles"]}
         onClick={handleMapClick}
         onLoad={handleMapLoad}
         style={{ width: "100%", height: "100%" }}
@@ -515,30 +571,43 @@ export function MapViewInner({
           </Marker>
         )}
 
-        {!webglLost &&
-          vehicles.map((v) => {
-            const baseColor =
-              TYPE_COLORS[v.transportType] || TYPE_COLORS.unknown;
-            const isFocused = focusedVehicleId === v.id;
-            const color = isFocused ? "#FF9800" : baseColor;
-            const size = isFocused ? 32 : 24;
-            const bearing = v.bearing ?? v.heading;
-
-            return (
-              <Marker
-                key={v.id}
-                longitude={v.longitude}
-                latitude={v.latitude}
-                anchor="center"
-                onClick={(e) => {
-                  e.originalEvent.stopPropagation();
-                  handleVehicleClick(v);
-                }}
-              >
-                <VehicleIcon color={color} bearing={bearing} size={size} />
-              </Marker>
-            );
-          })}
+        {!webglLost && (
+          <Source id="vehicles" type="geojson" data={vehiclesGeoJson}>
+            <Layer
+              id="vehicles"
+              type="symbol"
+              layout={{
+                "icon-image": "vehicle-arrow",
+                "icon-rotation-alignment": "map",
+                "icon-rotate": ["get", "bearing"],
+                "icon-allow-overlap": true,
+                "icon-ignore-placement": true,
+                "icon-size": [
+                  "case",
+                  ["==", ["get", "focused"], 1],
+                  1.0,
+                  0.75,
+                ],
+                "symbol-sort-key": [
+                  "case",
+                  ["==", ["get", "focused"], 1],
+                  1,
+                  0,
+                ],
+              }}
+              paint={{
+                "icon-color": [
+                  "case",
+                  ["==", ["get", "focused"], 1],
+                  "#FF9800",
+                  ["get", "color"],
+                ],
+                "icon-halo-color": "#fff",
+                "icon-halo-width": 1,
+              }}
+            />
+          </Source>
+        )}
 
         {/* Desktop-only popups */}
         {!webglLost && isDesktop && popupVehicle && (

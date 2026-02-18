@@ -5,6 +5,8 @@ import { FilterPanel } from "@/components/filter-panel";
 import { MapView } from "@/components/map-view";
 import { RoutePlanner, type TimeOption } from "@/components/route-planner";
 import { LoadingOverlay } from "@/components/loading-overlay";
+import { Car } from "lucide-react";
+import { Icon } from "@/components/icon";
 import { useVehicleStream } from "@/hooks/use-vehicle-stream";
 import { useAnimatedVehicles } from "@/hooks/use-animated-vehicles";
 import type {
@@ -64,11 +66,10 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
   const lineFilter = selectedLine?.lineNumber ?? "";
   const typeFilter = selectedLine?.type ?? "all";
 
-  const {
-    vehicles: rawVehicles,
-    lastUpdate,
-    loading,
-  } = useVehicleStream(lineFilter, typeFilter);
+  const { vehicles: rawVehicles, loading } = useVehicleStream(
+    lineFilter,
+    typeFilter,
+  );
 
   const vehicles = useAnimatedVehicles(rawVehicles);
 
@@ -223,7 +224,6 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
         selectedStop={selectedStop}
         onStopSelect={handleStopSelect}
         vehicleCount={vehicles.length}
-        lastUpdate={lastUpdate}
         onTogglePlanner={() => setShowPlanner((p) => !p)}
         showTraffic={showTraffic}
         onToggleTraffic={() => setShowTraffic((t) => !t)}
@@ -280,6 +280,30 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
             selectedStop={selectedStop}
             showTraffic={showTraffic}
           />
+
+          {/* Mobile-only map overlay controls */}
+          {!showPlanner && !pickingPoint && !focusedVehicleId && !selectedStop && (
+            <div className="absolute bottom-6 right-3 flex flex-col gap-2 z-1000 md:hidden">
+              <button
+                onClick={() => setShowTraffic((t) => !t)}
+                className={`w-11 h-11 rounded-xl flex items-center justify-center shadow-fab transition-all duration-150 active:scale-95 ${
+                  showTraffic
+                    ? "bg-foreground text-white"
+                    : "bg-white text-foreground/50"
+                }`}
+                title="Toggle traffic"
+              >
+                <Car size={18} />
+              </button>
+              <button
+                onClick={() => setShowPlanner(true)}
+                className="w-11 h-11 rounded-xl bg-primary text-primary-foreground flex items-center justify-center shadow-fab transition-all duration-150 active:scale-95"
+                title="Directions"
+              >
+                <Icon name="arrow-right" className="w-5 h-5" />
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

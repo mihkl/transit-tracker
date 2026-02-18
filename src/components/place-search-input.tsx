@@ -2,8 +2,6 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useClickOutside } from "@/hooks/use-click-outside";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import {
   Command,
   CommandEmpty,
@@ -11,7 +9,7 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { Icon } from "@/components/icon";
+import { Crosshair, MapPin, Navigation } from "lucide-react";
 import { formatCoord } from "@/lib/format-utils";
 import type { PlaceSearchResult } from "@/lib/types";
 
@@ -130,86 +128,93 @@ export function PlaceSearchInput({
   const isOrigin = pointType === "origin";
 
   return (
-    <div className="flex items-center gap-2" ref={wrapperRef}>
+    <div className="relative" ref={wrapperRef}>
       <div
-        className="w-3 h-3 rounded-full shrink-0"
-        style={{ backgroundColor: dotColor }}
-      />
-      <div className="relative flex-1">
-        <Input
+        className={`relative flex items-center h-10 rounded-xl border transition-all duration-150 ${
+          isPicking
+            ? "border-primary/40 bg-primary/5 ring-1 ring-primary/20"
+            : "border-foreground/10 bg-foreground/[0.03] focus-within:border-foreground/20 focus-within:bg-white focus-within:shadow-sm"
+        }`}
+      >
+        <input
           ref={inputRef}
-          className="h-8 text-sm bg-gray-50 border-0 focus:bg-white focus:ring-1 focus:ring-gray-200"
+          className="w-full h-full pl-3 pr-16 text-sm bg-transparent rounded-xl outline-none placeholder:text-foreground/50 text-foreground/85 font-medium"
           type="text"
-          placeholder={isOrigin ? "Your location" : `Search ${label}...`}
+          placeholder={isOrigin ? "From" : "To"}
           value={query}
           onChange={handleInput}
-          onFocus={() => {
-            setShowDropdown(true);
-          }}
+          onFocus={() => setShowDropdown(true)}
         />
+
+        {/* Loading spinner */}
         {(loading || gettingLocation) && (
-          <div className="absolute right-2 top-1/2 -translate-y-1/2">
-            <div className="w-3 h-3 border-2 border-gray-300 border-t-transparent rounded-full animate-spin" />
+          <div className="absolute right-10 top-1/2 -translate-y-1/2">
+            <div className="w-3.5 h-3.5 border-2 border-foreground/10 border-t-foreground/50 rounded-full animate-spin" />
           </div>
         )}
-        {showDropdown && (
-          <div className="absolute z-50 top-full left-0 w-80 mt-1">
-            <Command className="bg-white border border-gray-100 rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.1)]">
-              <CommandList>
-                <CommandEmpty>No results.</CommandEmpty>
-                {isOrigin && (
-                  <CommandGroup>
-                    <CommandItem
-                      onSelect={handleUseMyLocation}
-                      className="cursor-pointer px-3 py-2 hover:bg-gray-50 rounded-md mx-1"
-                    >
-                      <Icon
-                        name="crosshair"
-                        className="w-4 h-4 mr-2 text-blue-500"
-                      />
-                      <span className="text-sm font-medium text-blue-600">
-                        Your location
-                      </span>
-                    </CommandItem>
-                  </CommandGroup>
-                )}
-                {results.length > 0 && (
-                  <CommandGroup>
-                    {results.map((place, i) => (
-                      <CommandItem
-                        key={i}
-                        onSelect={() => handleSelect(place)}
-                        className="cursor-pointer px-3 py-2 hover:bg-gray-50 rounded-md mx-1"
-                      >
-                        <Icon
-                          name="map-pin"
-                          className="w-4 h-4 mr-2 text-gray-400 shrink-0"
-                        />
-                        <div className="min-w-0">
-                          <div className="text-sm font-medium text-gray-800 truncate">
-                            {place.name}
-                          </div>
-                          <div className="text-xs text-gray-400 truncate">
-                            {place.address}
-                          </div>
-                        </div>
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
-                )}
-              </CommandList>
-            </Command>
-          </div>
-        )}
+
+        {/* Map picker button — icon only */}
+        <button
+          onClick={() => onStartPicking(isPicking ? null : pointType)}
+          className={`absolute right-1.5 top-1/2 -translate-y-1/2 w-7 h-7 rounded-lg flex items-center justify-center transition-all ${
+            isPicking
+              ? "bg-primary text-white"
+              : "text-foreground/45 hover:text-foreground/70 hover:bg-foreground/[0.06]"
+          }`}
+          title={isPicking ? "Cancel picking" : "Pick on map"}
+        >
+          <Navigation size={14} />
+        </button>
       </div>
-      <Button
-        variant={isPicking ? "secondary" : "outline"}
-        size="sm"
-        className="h-8 shrink-0 text-xs bg-gray-100 border-0 hover:bg-gray-200 text-gray-600"
-        onClick={() => onStartPicking(isPicking ? null : pointType)}
-      >
-        {isPicking ? "Picking..." : "Map"}
-      </Button>
+
+      {showDropdown && (
+        <div className="absolute z-50 top-full left-0 right-0 md:w-80 mt-1.5 animate-scale-in">
+          <Command className="bg-white border border-foreground/8 rounded-xl shadow-dropdown">
+            <CommandList>
+              <CommandEmpty className="py-4 text-center text-sm text-foreground/50">
+                No results.
+              </CommandEmpty>
+              {isOrigin && (
+                <CommandGroup>
+                  <CommandItem
+                    onSelect={handleUseMyLocation}
+                    className="cursor-pointer px-3 py-2.5 hover:bg-blue-50 rounded-lg mx-1 transition-colors"
+                  >
+                    <Crosshair size={15} className="mr-2.5 text-blue-500 shrink-0" />
+                    <span className="text-sm font-semibold text-blue-600">
+                      Use my location
+                    </span>
+                  </CommandItem>
+                </CommandGroup>
+              )}
+              {results.length > 0 && (
+                <CommandGroup>
+                  {results.map((place, i) => (
+                    <CommandItem
+                      key={i}
+                      onSelect={() => handleSelect(place)}
+                      className="cursor-pointer px-3 py-2.5 hover:bg-foreground/[0.04] rounded-lg mx-1 transition-colors"
+                    >
+                      <MapPin
+                        size={15}
+                        className="mr-2.5 text-foreground/40 shrink-0"
+                      />
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-foreground/85 truncate">
+                          {place.name}
+                        </div>
+                        <div className="text-xs text-foreground/50 truncate">
+                          {place.address}
+                        </div>
+                      </div>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              )}
+            </CommandList>
+          </Command>
+        </div>
+      )}
     </div>
   );
 }

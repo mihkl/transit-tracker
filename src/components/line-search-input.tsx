@@ -134,10 +134,10 @@ export function LineSearchInput({
       <div className="relative flex items-center">
         <Icon
           name="clock"
-          className="absolute left-2.5 w-3.5 h-3.5 text-gray-400 pointer-events-none"
+          className="absolute left-2.5 w-3.5 h-3.5 text-foreground/30 pointer-events-none"
         />
         <Input
-          className="w-full h-9 pl-8 pr-7 text-sm bg-gray-50 border-0 focus:bg-white focus:ring-1 focus:ring-gray-200 min-w-0"
+          className="w-full h-9 pl-8 pr-7 text-sm bg-foreground/[0.04] border-0 rounded-xl focus:bg-white focus:ring-1 focus:ring-foreground/10 focus:shadow-sm min-w-0 transition-all duration-150 placeholder:text-foreground/30"
           type="text"
           placeholder="Line"
           value={query}
@@ -147,16 +147,16 @@ export function LineSearchInput({
         {value && (
           <button
             onClick={handleClear}
-            className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded-full hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition-colors"
+            className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded-full hover:bg-foreground/10 text-foreground/30 hover:text-foreground/50 transition-colors"
           >
             <Icon name="x-close" size={14} />
           </button>
         )}
       </div>
       {showDropdown && (
-        <div className="fixed left-3 right-3 top-16 z-1100 md:absolute md:top-full md:left-0 md:right-auto md:mt-1.5 md:w-44">
+        <div className="fixed left-3 right-3 top-16 z-1100 md:absolute md:top-full md:left-0 md:right-auto md:mt-2 md:w-48 animate-scale-in">
           <Command
-            className="bg-white border border-gray-100 rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.1)]"
+            className="bg-white border border-foreground/5 rounded-xl shadow-dropdown"
             shouldFilter={false}
           >
             <CommandList>
@@ -169,10 +169,12 @@ export function LineSearchInput({
                     <CommandItem
                       key={`${line.type}_${line.lineNumber}`}
                       onSelect={() => handleSelect(line)}
-                      className="cursor-pointer px-3 py-1.5 hover:bg-gray-50 rounded-md mx-1"
+                      className="cursor-pointer px-3 py-1.5 hover:bg-foreground/[0.04] rounded-lg mx-1 transition-colors"
                     >
                       <TypeIcon type={line.type} className="shrink-0" />
-                      <span className="text-sm">{line.lineNumber}</span>
+                      <span className="text-sm font-medium">
+                        {line.lineNumber}
+                      </span>
                     </CommandItem>
                   ))}
                 </CommandGroup>
@@ -181,10 +183,10 @@ export function LineSearchInput({
                 <CommandGroup heading="Train">
                   <CommandItem
                     onSelect={handleSelectAllTrains}
-                    className="cursor-pointer px-3 py-1.5 hover:bg-gray-50 rounded-md mx-1"
+                    className="cursor-pointer px-3 py-1.5 hover:bg-foreground/[0.04] rounded-lg mx-1 transition-colors"
                   >
                     <TypeIcon type="train" className="shrink-0" />
-                    <span className="text-sm">All Trains</span>
+                    <span className="text-sm font-medium">All Trains</span>
                   </CommandItem>
                 </CommandGroup>
               )}

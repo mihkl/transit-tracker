@@ -75,11 +75,11 @@ export function StopSearchInput({ value, onSelect }: StopSearchInputProps) {
     <div className="relative" ref={wrapperRef}>
       <div className="relative flex items-center">
         <MapPin
-          className="absolute left-2.5 w-3.5 h-3.5 text-gray-400 pointer-events-none"
+          className="absolute left-2.5 w-3.5 h-3.5 text-foreground/30 pointer-events-none"
           size={14}
         />
         <Input
-          className="w-full h-9 pl-8 pr-7 text-sm bg-gray-50 border-0 focus:bg-white focus:ring-1 focus:ring-gray-200 min-w-0"
+          className="w-full h-9 pl-8 pr-7 text-sm bg-foreground/[0.04] border-0 rounded-xl focus:bg-white focus:ring-1 focus:ring-foreground/10 focus:shadow-sm min-w-0 transition-all duration-150 placeholder:text-foreground/30"
           type="text"
           placeholder="Stop"
           value={query}
@@ -89,16 +89,16 @@ export function StopSearchInput({ value, onSelect }: StopSearchInputProps) {
         {value && (
           <button
             onClick={handleClear}
-            className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded-full hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition-colors"
+            className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded-full hover:bg-foreground/10 text-foreground/30 hover:text-foreground/50 transition-colors"
           >
             <Icon name="x-close" size={14} />
           </button>
         )}
       </div>
       {showDropdown && (
-        <div className="fixed left-3 right-3 top-16 z-[1100] md:absolute md:top-full md:left-0 md:right-auto md:mt-1.5 md:w-72">
+        <div className="fixed left-3 right-3 top-16 z-[1100] md:absolute md:top-full md:left-0 md:right-auto md:mt-2 md:w-80 animate-scale-in">
           <Command
-            className="bg-white border border-gray-100 rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.1)]"
+            className="bg-white border border-foreground/5 rounded-xl shadow-dropdown"
             shouldFilter={false}
           >
             <CommandList>
@@ -109,25 +109,25 @@ export function StopSearchInput({ value, onSelect }: StopSearchInputProps) {
                     <CommandItem
                       key={stop.stopId}
                       onSelect={() => handleSelect(stop)}
-                      className="cursor-pointer py-2 px-3 hover:bg-gray-50 rounded-md mx-1"
+                      className="cursor-pointer py-2 px-3 hover:bg-foreground/[0.04] rounded-lg mx-1 transition-colors"
                     >
                       <MapPin
                         size={14}
-                        className="shrink-0 mr-2 text-gray-400 mt-0.5"
+                        className="shrink-0 mr-2 text-foreground/25 mt-0.5"
                       />
                       <div className="flex flex-col min-w-0 flex-1">
                         <div className="flex items-center gap-1">
-                          <span className="text-sm truncate">
+                          <span className="text-sm font-medium truncate">
                             {stop.stopName}
                           </span>
                           {stop.stopArea && stop.stopArea !== "Kesklinn" && (
-                            <span className="text-xs text-gray-400">
+                            <span className="text-xs text-foreground/30">
                               ({stop.stopArea})
                             </span>
                           )}
                         </div>
                         {stop.stopDesc && (
-                          <span className="text-xs text-gray-400 truncate mt-0.5">
+                          <span className="text-xs text-foreground/30 truncate mt-0.5">
                             {stop.stopDesc}
                           </span>
                         )}
@@ -141,7 +141,7 @@ export function StopSearchInput({ value, onSelect }: StopSearchInputProps) {
                               return (
                                 <span
                                   key={line}
-                                  className="text-[9px] px-1 rounded text-white font-medium"
+                                  className="text-[9px] px-1 rounded text-white font-semibold"
                                   style={{ backgroundColor: color }}
                                 >
                                   {lineNum}
@@ -149,7 +149,7 @@ export function StopSearchInput({ value, onSelect }: StopSearchInputProps) {
                               );
                             })}
                             {stop.lines.length > 8 && (
-                              <span className="text-[9px] text-gray-400">
+                              <span className="text-[9px] text-foreground/30 font-medium">
                                 +{stop.lines.length - 8}
                               </span>
                             )}
