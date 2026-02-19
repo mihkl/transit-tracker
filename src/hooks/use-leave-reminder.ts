@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import type { PlannedRoute } from "@/lib/types";
 
 export interface LeaveInfo {
@@ -59,12 +59,46 @@ function getLeaveInfo(route: PlannedRoute): LeaveInfo | null {
   };
 }
 
-// --- localStorage helpers ---
+// --- VAPID / push subscription ---
+
+function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = atob(base64);
+  const bytes = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; i++) {
+    bytes[i] = rawData.charCodeAt(i);
+  }
+  return bytes;
+}
+
+async function getPushSubscription(): Promise<PushSubscription | null> {
+  if (
+    typeof navigator === "undefined" ||
+    !("serviceWorker" in navigator) ||
+    !("PushManager" in window)
+  )
+    return null;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const existing = await reg.pushManager.getSubscription();
+    if (existing) return existing;
+    const pubKey = await fetch("/api/push").then((r) => r.text());
+    if (!pubKey) return null;
+    return reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(pubKey),
+    });
+  } catch {
+    return null;
+  }
+}
+
+// --- localStorage (persists isSet state across reloads) ---
 
 interface StoredReminder {
+  endpoint: string;
   notifyAt: number;
-  title: string;
-  body: string;
 }
 
 function saveReminder(data: StoredReminder) {
@@ -92,106 +126,58 @@ function loadStoredReminder(): StoredReminder | null {
   }
 }
 
-
-function postToSW(message: object) {
-  if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
-  navigator.serviceWorker.controller?.postMessage(message);
-}
-
-
 export function useLeaveReminder(route: PlannedRoute | null) {
   const [isSet, setIsSet] = useState(false);
-  const [permission, setPermission] = useState<NotificationPermission>("default");
+  const [permission, setPermission] =
+    useState<NotificationPermission>("default");
   const [minutesUntil, setMinutesUntil] = useState<number | null>(null);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pendingRef = useRef<StoredReminder | null>(null);
 
   const leaveInfo = useMemo(
     () => (route ? getLeaveInfo(route) : null),
     [route],
   );
 
-  // Sync notification permission state
+  // Sync notification permission on mount
   useEffect(() => {
     if (typeof window === "undefined" || !("Notification" in window)) return;
     Promise.resolve().then(() => setPermission(Notification.permission));
   }, []);
 
-  const scheduleTimer = useCallback((data: StoredReminder) => {
-    const delay = data.notifyAt - Date.now();
-    if (delay <= 0) return;
-
-    postToSW({ type: "SCHEDULE_NOTIFICATION", ...data });
-
-    if (timerRef.current) clearTimeout(timerRef.current);
-    pendingRef.current = data;
-    timerRef.current = setTimeout(() => {
-      try {
-        new Notification(data.title, {
-          body: data.body,
-          icon: "/icon-192x192.png",
-          tag: "leave-reminder",
-        });
-      } catch {}
-      setIsSet(false);
-      clearStoredReminder();
-      pendingRef.current = null;
-    }, delay);
+  // Restore isSet from localStorage on mount
+  useEffect(() => {
+    async function restore() {
+      const stored = loadStoredReminder();
+      if (stored) setIsSet(true);
+    }
+    restore();
   }, []);
 
-  useEffect(() => {
-    async function recover() {
-      const stored = loadStoredReminder();
-      if (stored && typeof Notification !== "undefined" && Notification.permission === "granted") {
-        setIsSet(true);
-        scheduleTimer(stored);
-      }
-    }
-    recover();
-  }, [scheduleTimer]);
-
-  useEffect(() => {
-    const handleVisibility = () => {
-      if (document.hidden || !pendingRef.current) return;
-      const { notifyAt } = pendingRef.current;
-      if (notifyAt > Date.now()) {
-        scheduleTimer(pendingRef.current);
-      } else {
-        setIsSet(false);
-        clearStoredReminder();
-        pendingRef.current = null;
-      }
-    };
-    document.addEventListener("visibilitychange", handleVisibility);
-    return () => document.removeEventListener("visibilitychange", handleVisibility);
-  }, [scheduleTimer]);
-
-  // Update countdown every 30s
+  // Countdown timer
   useEffect(() => {
     if (!leaveInfo) {
       Promise.resolve().then(() => setMinutesUntil(null));
       return;
     }
-    const update = () => {
+    const update = () =>
       setMinutesUntil(
         Math.round((leaveInfo.leaveTime.getTime() - Date.now()) / 60_000),
       );
-    };
     update();
     const tick = setInterval(update, 30_000);
     return () => clearInterval(tick);
   }, [leaveInfo]);
 
-  // Cancel timer when route changes
+  // Clear isSet when route changes
   useEffect(() => {
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-      setIsSet(false);
-    };
+    return () => setIsSet(false);
   }, [route]);
 
   const scheduleReminder = useCallback(async () => {
-    if (!leaveInfo || typeof window === "undefined" || !("Notification" in window))
+    if (
+      !leaveInfo ||
+      typeof window === "undefined" ||
+      !("Notification" in window)
+    )
       return;
 
     let perm = permission;
@@ -200,33 +186,50 @@ export function useLeaveReminder(route: PlannedRoute | null) {
       setPermission(perm);
     }
     if (perm !== "granted") return;
+    if (leaveInfo.leaveTime.getTime() < Date.now()) return;
 
-    const msUntilLeave = leaveInfo.leaveTime.getTime() - Date.now();
-    if (msUntilLeave < 0) return;
+    const sub = await getPushSubscription();
+    if (!sub) return;
 
     const { lineNumber, depTimeStr, walkMinutes, departureStop } = leaveInfo;
     const walkText =
       walkMinutes > 0
         ? `Walk ${walkMinutes} min to ${departureStop}`
         : `Head to ${departureStop}`;
-    const data: StoredReminder = {
+
+    await fetch("/api/push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        subscription: sub.toJSON(),
+        notifyAt: leaveInfo.leaveTime.getTime(),
+        title: "Time to leave!",
+        body: `${walkText} · ${lineNumber} departs ${depTimeStr}`,
+      }),
+    });
+
+    saveReminder({
+      endpoint: sub.endpoint,
       notifyAt: leaveInfo.leaveTime.getTime(),
-      title: "Time to leave!",
-      body: `${walkText} · ${lineNumber} departs ${depTimeStr}`,
-    };
-
-    scheduleTimer(data);
-    saveReminder(data);
+    });
     setIsSet(true);
-  }, [leaveInfo, permission, scheduleTimer]);
+  }, [leaveInfo, permission]);
 
-  const clearReminder = useCallback(() => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = null;
-    pendingRef.current = null;
-    postToSW({ type: "CANCEL_NOTIFICATION" });
+  const clearReminder = useCallback(async () => {
     clearStoredReminder();
     setIsSet(false);
+    // Cancel on the server — fire-and-forget
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) {
+        fetch("/api/push", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ endpoint: sub.endpoint }),
+        });
+      }
+    } catch {}
   }, []);
 
   return {

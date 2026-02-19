@@ -1,29 +1,23 @@
-const CACHE_NAME = "transit-tracker-v1";
+/// <reference lib="webworker" />
+declare const self: ServiceWorkerGlobalScope;
 
-let notificationTimer = null;
-
-self.addEventListener("message", (event) => {
-  if (event.data?.type === "SCHEDULE_NOTIFICATION") {
-    if (notificationTimer) clearTimeout(notificationTimer);
-    const { notifyAt, title, body } = event.data;
-    const delay = notifyAt - Date.now();
-    if (delay <= 0) return;
-    notificationTimer = setTimeout(() => {
-      self.registration.showNotification(title, {
-        body,
-        icon: "/icon-192x192.png",
-      });
-      notificationTimer = null;
-    }, delay);
-  } else if (event.data?.type === "CANCEL_NOTIFICATION") {
-    if (notificationTimer) {
-      clearTimeout(notificationTimer);
-      notificationTimer = null;
-    }
-  }
-});
+const CACHE_NAME = "transit-tracker-v2";
 
 const PRECACHE_URLS = ["/", "/icon-192x192.png", "/icon-512x512.png"];
+
+
+self.addEventListener("push", (event) => {
+  const data = (event.data?.json() ?? {}) as { title?: string; body?: string };
+  event.waitUntil(
+    self.registration.showNotification(data.title ?? "Reminder", {
+      body: data.body ?? "",
+      icon: "/icon-192x192.png",
+      tag: "leave-reminder",
+    })
+  );
+});
+
+// --- Lifecycle ---
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -40,29 +34,28 @@ self.addEventListener("activate", (event) => {
       .keys()
       .then((keys) =>
         Promise.all(
-          keys
-            .filter((key) => key !== CACHE_NAME)
-            .map((key) => caches.delete(key))
+          keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))
         )
       )
       .then(() => self.clients.claim())
   );
 });
 
+// --- Fetch strategy ---
+
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // Skip non-GET requests
   if (request.method !== "GET") return;
 
-  // Skip SSE stream — EventSource handles its own connection
-  if (url.pathname.startsWith("/api/vehicles/stream")) return;
+  // Never intercept SSE or push API — let them go straight to the server
+  if (url.pathname.startsWith("/api/")) return;
 
-  // Skip large files (schedule data)
+  // Skip large GTFS schedule file
   if (url.pathname.endsWith("schedule.json")) return;
 
-  // Cache-first for static assets
+  // Cache-first for immutable static assets
   if (
     url.pathname.startsWith("/_next/static/") ||
     url.pathname.match(/\.(png|jpg|jpeg|svg|ico|woff2?|ttf|eot)$/)
@@ -70,7 +63,7 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       caches.match(request).then(
         (cached) =>
-          cached ||
+          cached ??
           fetch(request).then((response) => {
             const clone = response.clone();
             caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
@@ -81,7 +74,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Network-first for everything else (API routes, navigation)
+  // Network-first for navigation and everything else
   event.respondWith(
     fetch(request)
       .then((response) => {
@@ -89,6 +82,6 @@ self.addEventListener("fetch", (event) => {
         caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
         return response;
       })
-      .catch(() => caches.match(request))
+      .catch(() => caches.match(request) as Promise<Response>)
   );
 });

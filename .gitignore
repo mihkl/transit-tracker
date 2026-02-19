@@ -33,12 +33,12 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# Generated files
+/public/sw.js
+
 # GTFS data
 /data/tallinn/
 public/gtfs-preprocessed/
-
-# vercel
-.vercel
 
 # typescript
 *.tsbuildinfo

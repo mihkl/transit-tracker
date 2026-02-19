@@ -1,5 +1,3 @@
-import { SpeedInsights } from "@vercel/speed-insights/next";
-import { Analytics } from "@vercel/analytics/next";
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 import { Geist, Geist_Mono } from "next/font/google";
@@ -53,8 +51,6 @@ export default function RootLayout({
             `,
           }}
         />
-        <SpeedInsights />
-        <Analytics />
       </body>
     </html>
   );
