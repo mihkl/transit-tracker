@@ -21,6 +21,7 @@ interface PlaceSearchInputProps {
   pickingPoint: "origin" | "destination" | null;
   pointType: "origin" | "destination";
   onStartPicking: (point: "origin" | "destination" | null) => void;
+  currentLocation?: { lat: number; lng: number } | null;
 }
 
 export function PlaceSearchInput({
@@ -31,6 +32,7 @@ export function PlaceSearchInput({
   pickingPoint,
   pointType,
   onStartPicking,
+  currentLocation,
 }: PlaceSearchInputProps) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<PlaceSearchResult[]>([]);
@@ -86,6 +88,13 @@ export function PlaceSearchInput({
   };
 
   const handleUseMyLocation = useCallback(() => {
+    if (currentLocation) {
+      setQuery("Your location");
+      setShowDropdown(false);
+      setResults([]);
+      onSelect({ lat: currentLocation.lat, lng: currentLocation.lng, name: "Your location" });
+      return;
+    }
     if (!navigator.geolocation) {
       alert("Geolocation is not supported by your browser");
       return;
@@ -97,23 +106,17 @@ export function PlaceSearchInput({
         setQuery("Your location");
         setShowDropdown(false);
         setResults([]);
-        onSelect({
-          lat: latitude,
-          lng: longitude,
-          name: "Your location",
-        });
+        onSelect({ lat: latitude, lng: longitude, name: "Your location" });
         setGettingLocation(false);
       },
       (error) => {
         console.error("Geolocation error:", error);
-        alert(
-          "Unable to get your location. Please enable location permissions.",
-        );
+        alert("Unable to get your location. Please enable location permissions.");
         setGettingLocation(false);
       },
       { enableHighAccuracy: true, timeout: 10000 },
     );
-  }, [onSelect]);
+  }, [currentLocation, onSelect]);
 
   useEffect(() => {
     return () => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { FilterPanel } from "@/components/filter-panel";
 import { MapView } from "@/components/map-view";
 import { RoutePlanner, type TimeOption } from "@/components/route-planner";
@@ -60,6 +60,22 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
   const [selectedDateTime, setSelectedDateTime] = useState(() =>
     toLocalDateTimeString(new Date()),
   );
+
+  const [userLocation, setUserLocation] = useState<{
+    lat: number;
+    lng: number;
+  } | null>(null);
+
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) return;
+    const watchId = navigator.geolocation.watchPosition(
+      ({ coords }) =>
+        setUserLocation({ lat: coords.latitude, lng: coords.longitude }),
+      (err) => console.warn("Geolocation error:", err.message),
+      { enableHighAccuracy: true, maximumAge: 30_000, timeout: 15_000 },
+    );
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, []);
 
   const pickingFromPlannerRef = useRef(false);
   const hasPlanSearchedRef = useRef(false);
@@ -236,6 +252,7 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
       <div className="flex-1 flex relative overflow-hidden">
         {showPlanner && (
           <RoutePlanner
+            userLocation={userLocation}
             origin={origin}
             destination={destination}
             pickingPoint={pickingPoint}

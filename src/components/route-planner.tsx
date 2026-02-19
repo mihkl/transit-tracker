@@ -243,6 +243,7 @@ function RouteCard({
 /* ── Main RoutePlanner ──────────────────────────────────────── */
 
 interface RoutePlannerProps {
+  userLocation: { lat: number; lng: number } | null;
   origin: { lat: number; lng: number; name?: string } | null;
   destination: { lat: number; lng: number; name?: string } | null;
   pickingPoint: "origin" | "destination" | null;
@@ -265,6 +266,7 @@ interface RoutePlannerProps {
 }
 
 export function RoutePlanner({
+  userLocation,
   origin,
   destination,
   pickingPoint,
@@ -339,6 +341,7 @@ export function RoutePlanner({
             pickingPoint={pickingPoint}
             pointType="origin"
             onStartPicking={onStartPicking}
+            currentLocation={userLocation}
           />
           <PlaceSearchInput
             label="destination"
