@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -9,12 +9,18 @@ import {
   ChevronLeft,
   ArrowUpDown,
   Search,
+  Bell,
 } from "lucide-react";
 import { Icon } from "@/components/icon";
 import { PlaceSearchInput } from "./place-search-input";
-import { RouteLegCard } from "./route-leg-card";
+import { RouteLegCard, TransferBadge } from "./route-leg-card";
 import { formatDuration, formatTime } from "@/lib/format-utils";
 import { getTransportColor } from "@/lib/constants";
+import {
+  useTransferViability,
+  type TransferInfo,
+} from "@/hooks/use-transfer-viability";
+import { useLeaveReminder } from "@/hooks/use-leave-reminder";
 import type { RoutePlanResponse, PlannedRoute, RouteLeg } from "@/lib/types";
 
 export type TimeOption = "now" | "depart" | "arrive";
@@ -64,7 +70,12 @@ function getRouteTimeRange(route: PlannedRoute) {
     );
   }
 
-  return { dep, arr, firstTransitDep, walkBefore: Math.round(walkBeforeSeconds / 60) };
+  return {
+    dep,
+    arr,
+    firstTransitDep,
+    walkBefore: Math.round(walkBeforeSeconds / 60),
+  };
 }
 
 /* ── Leg chain (compact badges) ─────────────────────────────── */
@@ -106,7 +117,43 @@ function LegChain({ legs }: { legs: RouteLeg[] }) {
   );
 }
 
+/* ── Leg list with interleaved transfer badges ──────────────── */
+
+function LegList({
+  route,
+  transfersByArrivingLeg,
+  onLocateVehicle,
+}: {
+  route: PlannedRoute;
+  transfersByArrivingLeg: Map<RouteLeg, TransferInfo>;
+  onLocateVehicle: (leg: RouteLeg) => void;
+}) {
+  const visible = route.legs.filter(
+    (l) => !(l.mode === "WALK" && formatDuration(l.duration) === "0 min"),
+  );
+
+  return (
+    <>
+      {visible.map((leg, i) => (
+        <Fragment key={i}>
+          <RouteLegCard leg={leg} onLocateVehicle={onLocateVehicle} />
+          {transfersByArrivingLeg.has(leg) && (
+            <TransferBadge transfer={transfersByArrivingLeg.get(leg)!} />
+          )}
+        </Fragment>
+      ))}
+    </>
+  );
+}
+
 /* ── Route card ─────────────────────────────────────────────── */
+
+interface ReminderProps {
+  isSet: boolean;
+  minutesUntil: number | null;
+  onSchedule: () => void;
+  onClear: () => void;
+}
 
 function RouteCard({
   route,
@@ -114,12 +161,16 @@ function RouteCard({
   isExpanded,
   onClick,
   onLocateVehicle,
+  reminderProps,
+  transfersByArrivingLeg,
 }: {
   route: PlannedRoute;
   isSelected: boolean;
   isExpanded: boolean;
   onClick: () => void;
   onLocateVehicle: (leg: RouteLeg) => void;
+  reminderProps?: ReminderProps;
+  transfersByArrivingLeg?: Map<RouteLeg, TransferInfo>;
 }) {
   const { dep, arr } = getRouteTimeRange(route);
 
@@ -149,18 +200,40 @@ function RouteCard({
 
       {isExpanded && (
         <div className="px-3 pb-3 pt-1 border-t border-foreground/6 space-y-1.5">
-          {route.legs
-            .filter(
-              (l) =>
-                !(l.mode === "WALK" && formatDuration(l.duration) === "0 min"),
-            )
-            .map((leg, i) => (
-              <RouteLegCard
-                key={i}
-                leg={leg}
-                onLocateVehicle={onLocateVehicle}
+          {reminderProps && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                reminderProps.isSet
+                  ? reminderProps.onClear()
+                  : reminderProps.onSchedule();
+              }}
+              className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-xl border transition-colors text-left ${
+                reminderProps.isSet
+                  ? "bg-primary/6 border-primary/20 text-primary"
+                  : "bg-foreground/2 border-foreground/8 text-foreground/60 hover:text-foreground/80"
+              }`}
+            >
+              <Bell
+                size={14}
+                fill={reminderProps.isSet ? "currentColor" : "none"}
+                className="shrink-0"
               />
-            ))}
+              <span className="text-xs font-semibold">
+                {reminderProps.isSet
+                  ? reminderProps.minutesUntil !== null &&
+                    reminderProps.minutesUntil > 0
+                    ? `Reminder set · leaving in ${reminderProps.minutesUntil} min`
+                    : "Reminder set · tap to cancel"
+                  : "Remind me when to leave"}
+              </span>
+            </button>
+          )}
+          <LegList
+            route={route}
+            transfersByArrivingLeg={transfersByArrivingLeg ?? new Map()}
+            onLocateVehicle={onLocateVehicle}
+          />
         </div>
       )}
     </div>
@@ -216,6 +289,31 @@ export function RoutePlanner({
   const [mobileDetail, setMobileDetail] = useState<number | null>(null);
 
   const hasRoutes = !!(routePlan?.routes?.length);
+  const selectedRoute = routePlan?.routes[selectedRouteIndex] ?? null;
+
+  // Live transfer viability for the selected route
+  const transfers = useTransferViability(selectedRoute);
+  const transfersByArrivingLeg = new Map(
+    transfers.map((t) => [t.arrivingLeg, t]),
+  );
+
+  // Leave reminder for the selected route
+  const {
+    leaveInfo,
+    isSet: isReminderSet,
+    minutesUntil,
+    scheduleReminder,
+    clearReminder,
+  } = useLeaveReminder(selectedRoute);
+
+  const reminderProps: ReminderProps | undefined = leaveInfo
+    ? {
+        isSet: isReminderSet,
+        minutesUntil,
+        onSchedule: scheduleReminder,
+        onClear: clearReminder,
+      }
+    : undefined;
 
   const handleRouteClick = (i: number) => {
     onSelectRoute(i);
@@ -302,8 +400,7 @@ export function RoutePlanner({
     </div>
   );
 
-  const noResults =
-    routePlan?.routes?.length === 0 && !planLoading;
+  const noResults = routePlan?.routes?.length === 0 && !planLoading;
 
   /* ── Mobile detail view ────────────────────────────── */
   const mobileDetailRoute =
@@ -327,6 +424,8 @@ export function RoutePlanner({
           noResults,
           onClear,
           onClose,
+          reminderProps,
+          transfersByArrivingLeg,
         })}
 
         {/* Mobile detail sheet */}
@@ -353,23 +452,48 @@ export function RoutePlanner({
                 <LegChain legs={mobileDetailRoute.legs} />
               </div>
             </div>
-          </div>
-          <div className="overflow-y-auto max-h-[50vh] p-3 space-y-1.5">
-            {mobileDetailRoute.legs
-              .filter(
-                (l) =>
-                  !(
-                    l.mode === "WALK" &&
-                    formatDuration(l.duration) === "0 min"
-                  ),
-              )
-              .map((leg, i) => (
-                <RouteLegCard
-                  key={i}
-                  leg={leg}
-                  onLocateVehicle={onLocateVehicle}
+            {/* Bell — large target for gloved fingers */}
+            {reminderProps && (
+              <button
+                onClick={() =>
+                  reminderProps.isSet
+                    ? reminderProps.onClear()
+                    : reminderProps.onSchedule()
+                }
+                className={`p-2.5 rounded-xl transition-colors active:scale-95 shrink-0 ${
+                  reminderProps.isSet
+                    ? "bg-primary/10 text-primary"
+                    : "text-foreground/40 hover:text-foreground/70"
+                }`}
+                title={
+                  reminderProps.isSet ? "Cancel reminder" : "Remind me to leave"
+                }
+              >
+                <Bell
+                  size={20}
+                  fill={reminderProps.isSet ? "currentColor" : "none"}
                 />
-              ))}
+              </button>
+            )}
+          </div>
+
+          <div className="overflow-y-auto max-h-[55vh] p-3 space-y-1.5">
+            {/* Reminder countdown banner */}
+            {reminderProps?.isSet && (
+              <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-primary/6 border border-primary/15">
+                <Bell size={14} className="text-primary shrink-0" />
+                <span className="text-xs text-primary font-semibold">
+                  {minutesUntil !== null && minutesUntil > 0
+                    ? `Leaving in ${minutesUntil} min`
+                    : "Reminder set"}
+                </span>
+              </div>
+            )}
+            <LegList
+              route={mobileDetailRoute}
+              transfersByArrivingLeg={transfersByArrivingLeg}
+              onLocateVehicle={onLocateVehicle}
+            />
           </div>
         </div>
       </>
@@ -390,6 +514,8 @@ export function RoutePlanner({
         noResults,
         onClear,
         onClose,
+        reminderProps,
+        transfersByArrivingLeg,
       })}
 
       {/* Mobile fullscreen */}
@@ -428,7 +554,7 @@ export function RoutePlanner({
                     className={`w-full text-left rounded-xl border p-4 transition-all duration-150 ${
                       i === selectedRouteIndex
                         ? "border-primary/25 bg-primary/[0.04]"
-                        : "border-foreground/8 bg-white active:bg-foreground/[0.02]"
+                        : "border-foreground/8 bg-white active:bg-foreground/2"
                     }`}
                   >
                     <div className="flex items-baseline justify-between gap-3">
@@ -473,6 +599,8 @@ function desktopSidebar({
   noResults,
   onClear,
   onClose,
+  reminderProps,
+  transfersByArrivingLeg,
 }: {
   formBlock: React.ReactNode;
   hasRoutes: boolean;
@@ -484,6 +612,8 @@ function desktopSidebar({
   noResults: boolean;
   onClear?: () => void;
   onClose: () => void;
+  reminderProps?: ReminderProps;
+  transfersByArrivingLeg: Map<RouteLeg, TransferInfo>;
 }) {
   return (
     <div className="hidden md:flex w-[340px] border-r border-foreground/6 bg-white flex-col shrink-0">
@@ -518,6 +648,12 @@ function desktopSidebar({
               isExpanded={expandedRoute === i}
               onClick={() => handleRouteClick(i)}
               onLocateVehicle={onLocateVehicle}
+              reminderProps={
+                i === selectedRouteIndex ? reminderProps : undefined
+              }
+              transfersByArrivingLeg={
+                i === selectedRouteIndex ? transfersByArrivingLeg : undefined
+              }
             />
           ))}
         </div>

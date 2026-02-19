@@ -2,7 +2,7 @@
 
 import { UnifiedSearch } from "@/components/unified-search";
 import { Button } from "@/components/ui/button";
-import { Car } from "lucide-react";
+import { Car, Bus } from "lucide-react";
 import { Icon } from "@/components/icon";
 import type { StopDto, LineDto } from "@/lib/types";
 
@@ -15,6 +15,8 @@ interface FilterPanelProps {
   onTogglePlanner: () => void;
   showTraffic?: boolean;
   onToggleTraffic?: () => void;
+  showVehicles?: boolean;
+  onToggleVehicles?: () => void;
   lines: LineDto[];
 }
 
@@ -27,6 +29,8 @@ export function FilterPanel({
   onTogglePlanner,
   showTraffic = false,
   onToggleTraffic,
+  showVehicles = false,
+  onToggleVehicles,
   lines,
 }: FilterPanelProps) {
   return (
@@ -58,6 +62,19 @@ export function FilterPanel({
         </div>
 
         <div className="w-px h-5 bg-foreground/6" />
+
+        {onToggleVehicles && (
+          <Button
+            variant={showVehicles ? "default" : "ghost"}
+            size="sm"
+            className="h-8 px-2.5 rounded-xl text-sm font-medium"
+            onClick={onToggleVehicles}
+            title="Toggle live vehicles"
+          >
+            <Bus className="w-4 h-4 mr-1.5" />
+            Vehicles
+          </Button>
+        )}
 
         {onToggleTraffic && (
           <Button

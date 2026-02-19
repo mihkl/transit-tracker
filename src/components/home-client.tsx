@@ -5,7 +5,7 @@ import { FilterPanel } from "@/components/filter-panel";
 import { MapView } from "@/components/map-view";
 import { RoutePlanner, type TimeOption } from "@/components/route-planner";
 import { LoadingOverlay } from "@/components/loading-overlay";
-import { Car } from "lucide-react";
+import { Car, Bus } from "lucide-react";
 import { Icon } from "@/components/icon";
 import { useVehicleStream } from "@/hooks/use-vehicle-stream";
 import { useAnimatedVehicles } from "@/hooks/use-animated-vehicles";
@@ -35,6 +35,7 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
   } | null>(null);
   const [selectedStop, setSelectedStop] = useState<StopDto | null>(null);
   const [showTraffic, setShowTraffic] = useState(false);
+  const [showVehicles, setShowVehicles] = useState(false);
 
   const [showPlanner, setShowPlanner] = useState(false);
   const [origin, setOrigin] = useState<{
@@ -69,6 +70,7 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
   const { vehicles: rawVehicles, loading } = useVehicleStream(
     lineFilter,
     typeFilter,
+    showVehicles,
   );
 
   const vehicles = useAnimatedVehicles(rawVehicles);
@@ -227,6 +229,8 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
         onTogglePlanner={() => setShowPlanner((p) => !p)}
         showTraffic={showTraffic}
         onToggleTraffic={() => setShowTraffic((t) => !t)}
+        showVehicles={showVehicles}
+        onToggleVehicles={() => setShowVehicles((v) => !v)}
         lines={lines}
       />
       <div className="flex-1 flex relative overflow-hidden">
@@ -284,6 +288,17 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
           {/* Mobile-only map overlay controls */}
           {!showPlanner && !pickingPoint && !focusedVehicleId && !selectedStop && (
             <div className="absolute bottom-6 right-3 flex flex-col gap-2 z-1000 md:hidden">
+              <button
+                onClick={() => setShowVehicles((v) => !v)}
+                className={`w-11 h-11 rounded-xl flex items-center justify-center shadow-fab transition-all duration-150 active:scale-95 ${
+                  showVehicles
+                    ? "bg-foreground text-white"
+                    : "bg-white text-foreground/50"
+                }`}
+                title="Toggle vehicles"
+              >
+                <Bus size={18} />
+              </button>
               <button
                 onClick={() => setShowTraffic((t) => !t)}
                 className={`w-11 h-11 rounded-xl flex items-center justify-center shadow-fab transition-all duration-150 active:scale-95 ${

@@ -132,6 +132,23 @@ export function StopIcon({ size = 12 }: { size?: number }) {
   );
 }
 
+export function UserLocationDot() {
+  return (
+    <div style={{ position: "relative", width: 20, height: 20 }}>
+      {/* Pulsing outer ring */}
+      <div
+        className="animate-ping absolute inset-0 rounded-full bg-blue-400"
+        style={{ opacity: 0.5 }}
+      />
+      {/* Solid inner dot */}
+      <div
+        className="relative rounded-full bg-blue-500 border-2 border-white"
+        style={{ width: 20, height: 20, boxShadow: "0 1px 4px rgba(0,0,0,0.3)" }}
+      />
+    </div>
+  );
+}
+
 export function BoardingStopIcon({
   lineNumber,
   color,

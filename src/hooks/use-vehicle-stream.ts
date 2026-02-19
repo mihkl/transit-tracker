@@ -9,13 +9,26 @@ interface StreamData {
   timestamp: string;
 }
 
-export function useVehicleStream(lineFilter: string, typeFilter: string) {
+export function useVehicleStream(
+  lineFilter: string,
+  typeFilter: string,
+  enabled: boolean = true,
+) {
   const [allVehicles, setAllVehicles] = useState<VehicleDto[]>([]);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const eventSourceRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
+    if (!enabled) {
+      eventSourceRef.current?.close();
+      eventSourceRef.current = null;
+      setAllVehicles([]);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
     const es = new EventSource("/api/vehicles/stream");
     eventSourceRef.current = es;
 
@@ -38,7 +51,7 @@ export function useVehicleStream(lineFilter: string, typeFilter: string) {
       es.close();
       eventSourceRef.current = null;
     };
-  }, []);
+  }, [enabled]);
 
   const vehicles = useMemo(() => {
     if (!lineFilter && (!typeFilter || typeFilter === "all")) {

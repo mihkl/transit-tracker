@@ -5,6 +5,7 @@ import type { RouteLeg } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { formatDuration, formatDelay, formatTime } from "@/lib/format-utils";
 import { getTransportColor, MODE_LABELS, DELAY_COLORS } from "@/lib/constants";
+import type { TransferInfo } from "@/hooks/use-transfer-viability";
 
 interface RouteLegCardProps {
   leg: RouteLeg;
@@ -112,6 +113,75 @@ export function RouteLegCard({ leg, onLocateVehicle }: RouteLegCardProps) {
           Tap to locate on map
         </div>
       )}
+    </div>
+  );
+}
+
+const TRANSFER_CONFIG = {
+  safe: {
+    bg: "bg-green-50",
+    border: "border-green-200",
+    text: "text-green-700",
+    label: "Transfer OK",
+  },
+  tight: {
+    bg: "bg-amber-50",
+    border: "border-amber-200",
+    text: "text-amber-700",
+    label: "Tight transfer",
+  },
+  missed: {
+    bg: "bg-red-50",
+    border: "border-red-200",
+    text: "text-red-700",
+    label: "May miss connection",
+  },
+  unknown: {
+    bg: "bg-foreground/[0.03]",
+    border: "border-foreground/10",
+    text: "text-foreground/50",
+    label: "Transfer",
+  },
+} as const;
+
+export function TransferBadge({ transfer }: { transfer: TransferInfo }) {
+  if (transfer.status === "unknown") return null;
+
+  const cfg = TRANSFER_CONFIG[transfer.status];
+  const { bufferSeconds, departingLeg, walkSeconds } = transfer;
+  const nextColor = getTransportColor(departingLeg.mode);
+
+  const bufferMins = Math.abs(Math.round(bufferSeconds / 60));
+  const bufferText =
+    transfer.status === "missed"
+      ? `${bufferMins} min late`
+      : `${bufferMins} min buffer`;
+
+  return (
+    <div
+      className={`flex items-center gap-2 px-3 py-2 rounded-xl border ${cfg.bg} ${cfg.border}`}
+    >
+      <div className="flex-1 min-w-0 flex items-center gap-1.5 flex-wrap">
+        <span className={`text-xs font-semibold ${cfg.text}`}>
+          {cfg.label}
+        </span>
+        {departingLeg.lineNumber && (
+          <span
+            className="inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[10px] font-bold text-white shrink-0"
+            style={{ backgroundColor: nextColor }}
+          >
+            {departingLeg.lineNumber}
+          </span>
+        )}
+        {walkSeconds > 0 && (
+          <span className={`text-[11px] ${cfg.text} opacity-70`}>
+            · {Math.round(walkSeconds / 60)} min walk
+          </span>
+        )}
+      </div>
+      <span className={`text-xs font-bold tabular-nums shrink-0 ${cfg.text}`}>
+        {bufferText}
+      </span>
     </div>
   );
 }

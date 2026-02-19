@@ -29,11 +29,13 @@ import {
   PinIcon,
   StopIcon,
   BoardingStopIcon,
+  UserLocationDot,
 } from "@/components/map-icons";
 import { VehiclePopup } from "@/components/vehicle-popup";
 import { StopPopup } from "@/components/stop-popup";
 import { useIsDesktop } from "@/hooks/use-is-desktop";
 import { useTrafficData } from "@/hooks/use-traffic-data";
+import { Icon } from "@/components/icon";
 
 function fitMapToPoints(map: MapRef, points: number[][]) {
   let minLat = Infinity,
@@ -150,6 +152,41 @@ export function MapViewInner({
     minZoom: 11,
     debounceMs: 400,
   });
+
+  // User location
+  const [userLocation, setUserLocation] = useState<{
+    lat: number;
+    lng: number;
+  } | null>(null);
+  const hasInitiallyLocated = useRef(false);
+
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) return;
+
+    const watchId = navigator.geolocation.watchPosition(
+      ({ coords }) => {
+        const { latitude, longitude } = coords;
+        setUserLocation({ lat: latitude, lng: longitude });
+
+        if (!hasInitiallyLocated.current) {
+          hasInitiallyLocated.current = true;
+          // Only auto-pan if the map hasn't been moved from the default center
+          setViewState((prev) => {
+            const atDefault =
+              Math.abs(prev.latitude - TALLINN_CENTER[0]) < 0.02 &&
+              Math.abs(prev.longitude - TALLINN_CENTER[1]) < 0.02 &&
+              prev.zoom === DEFAULT_ZOOM;
+            if (!atDefault) return prev;
+            return { ...prev, latitude, longitude, zoom: 14 };
+          });
+        }
+      },
+      (err) => console.warn("Geolocation error:", err.message),
+      { enableHighAccuracy: true, maximumAge: 30_000, timeout: 15_000 },
+    );
+
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, []);
 
   const handleMapLoad = useCallback(() => {
     const map = mapRef.current?.getMap();
@@ -415,6 +452,16 @@ export function MapViewInner({
     onDeselectVehicle();
   }, [onDeselectVehicle]);
 
+  const handleLocateMe = useCallback(() => {
+    if (!userLocation || !mapRef.current) return;
+    const currentZoom = mapRef.current.getMap()?.getZoom() ?? DEFAULT_ZOOM;
+    mapRef.current.getMap()?.flyTo({
+      center: [userLocation.lng, userLocation.lat],
+      zoom: Math.max(currentZoom, 15),
+      duration: 600,
+    });
+  }, [userLocation]);
+
   return (
     <>
       <Map
@@ -571,6 +618,16 @@ export function MapViewInner({
           </Marker>
         )}
 
+        {userLocation && (
+          <Marker
+            longitude={userLocation.lng}
+            latitude={userLocation.lat}
+            anchor="center"
+          >
+            <UserLocationDot />
+          </Marker>
+        )}
+
         {!webglLost && (
           <Source id="vehicles" type="geojson" data={vehiclesGeoJson}>
             <Layer
@@ -642,6 +699,16 @@ export function MapViewInner({
           </Popup>
         )}
       </Map>
+
+      {userLocation && (
+        <button
+          onClick={handleLocateMe}
+          className="absolute bottom-6 left-3 z-1000 w-11 h-11 rounded-xl bg-white shadow-fab flex items-center justify-center text-foreground/60 hover:text-foreground/80 active:scale-95 transition-all duration-150"
+          title="Center on my location"
+        >
+          <Icon name="crosshair" className="w-5 h-5" />
+        </button>
+      )}
 
       {/* Mobile bottom sheet */}
       <BottomSheet
