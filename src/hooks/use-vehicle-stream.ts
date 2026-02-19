@@ -77,7 +77,6 @@ export function useVehicleStream(
     }
 
     return allVehicles.filter((v) => {
-      if (lineFilter && v.lineNumber !== lineFilter) return false;
       if (typeFilter && typeFilter !== "all") {
         if (typeFilter === "bus" && v.transportType !== "bus") return false;
         if (typeFilter === "tram" && v.transportType !== "tram") return false;

@@ -95,6 +95,12 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
 
   const pickingFromPlannerRef = useRef(false);
   const hasPlanSearchedRef = useRef(false);
+  // Tracks showVehicles state before a "locate vehicle" action so we can
+  // restore it when the user dismisses (clicks the map).
+  const vehiclesBeforeLocateRef = useRef<boolean | null>(null);
+  // Always-current ref so callbacks don't need showVehicles in their deps.
+  const showVehiclesRef = useRef(showVehicles);
+  showVehiclesRef.current = showVehicles;
 
   const lineFilter = selectedLine?.lineNumber ?? "";
   const typeFilter = selectedLine?.type ?? "all";
@@ -121,6 +127,10 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
   const handleDeselectVehicle = useCallback(() => {
     setFocusedVehicleId(null);
     setSelectedLine(null);
+    if (vehiclesBeforeLocateRef.current !== null) {
+      setShowVehicles(vehiclesBeforeLocateRef.current);
+      vehiclesBeforeLocateRef.current = null;
+    }
   }, []);
 
   const handlePlanRoute = useCallback(async () => {
@@ -205,11 +215,20 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
 
   const handleLocateVehicle = useCallback((leg: RouteLeg) => {
     if (leg.mode && leg.mode !== "WALK") {
+      // Save current overlay state so we can restore it when the user dismisses.
+      vehiclesBeforeLocateRef.current = showVehiclesRef.current;
       setSelectedLine({
         lineNumber: leg.lineNumber || "",
         type: leg.mode.toLowerCase(),
       });
+      setShowVehicles(true);
     }
+  }, []);
+
+  const handleToggleVehicles = useCallback(() => {
+    // A manual toggle cancels the pending "restore on dismiss" behaviour.
+    vehiclesBeforeLocateRef.current = null;
+    setShowVehicles((v) => !v);
   }, []);
 
   const handleClearPlanner = useCallback(() => {
@@ -225,6 +244,7 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
     setTimeOption("now");
     setSelectedDateTime(toLocalDateTimeString(new Date()));
     hasPlanSearchedRef.current = false;
+    vehiclesBeforeLocateRef.current = null;
   }, []);
 
   const handleStopSelect = useCallback((stop: StopDto | null) => {
@@ -262,7 +282,7 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
         showTraffic={showTraffic}
         onToggleTraffic={() => setShowTraffic((t) => !t)}
         showVehicles={showVehicles}
-        onToggleVehicles={() => setShowVehicles((v) => !v)}
+        onToggleVehicles={handleToggleVehicles}
         lines={lines}
       />
       <div className="flex-1 flex relative overflow-hidden">
@@ -323,7 +343,7 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
           {!showPlanner && !pickingPoint && !focusedVehicleId && !selectedStop && (
             <div className="absolute bottom-6 right-3 flex flex-col gap-2 z-1000 md:hidden">
               <button
-                onClick={() => setShowVehicles((v) => !v)}
+                onClick={handleToggleVehicles}
                 className={`w-11 h-11 rounded-xl flex items-center justify-center shadow-fab transition-all duration-150 active:scale-95 ${
                   showVehicles
                     ? "bg-foreground text-white"

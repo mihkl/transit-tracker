@@ -77,8 +77,24 @@ function parseSiriResponse(text: string): StopDeparture[] {
         line.slice(commaPositions[2] + 1, commaPositions[3]),
         10,
       );
-      const destination = line.slice(commaPositions[3] + 1, lastComma);
-      const secondsUntilArrival = parseInt(line.slice(lastComma + 1), 10);
+
+      let destEnd = lastComma;
+      let secondsUntilArrival = parseInt(line.slice(lastComma + 1), 10);
+      if (isNaN(secondsUntilArrival) || secondsUntilArrival < 0) {
+        const secondLastComma = line.lastIndexOf(",", lastComma - 1);
+        if (secondLastComma > commaPositions[3]) {
+          const fallback = parseInt(
+            line.slice(secondLastComma + 1, lastComma),
+            10,
+          );
+          if (!isNaN(fallback) && fallback >= 0) {
+            secondsUntilArrival = fallback;
+            destEnd = secondLastComma;
+          }
+        }
+      }
+
+      const destination = line.slice(commaPositions[3] + 1, destEnd);
 
       departures.push({
         transportType,
