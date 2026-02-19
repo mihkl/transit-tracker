@@ -322,15 +322,25 @@ export function MapViewInner({
   useEffect(() => {
     if (!popupStop) return;
 
-    const intervalId = setInterval(async () => {
+    const refresh = async () => {
       try {
         setStopDepartures(await fetchDepartures(popupStop.stopId));
       } catch (err) {
         console.error("Failed to refresh departures:", err);
       }
-    }, 5_000);
+    };
 
-    return () => clearInterval(intervalId);
+    const intervalId = setInterval(refresh, 5_000);
+
+    const handleVisibility = () => {
+      if (!document.hidden) refresh();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, [popupStop]);
 
   useEffect(() => {

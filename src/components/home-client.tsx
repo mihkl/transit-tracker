@@ -77,6 +77,22 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
     return () => navigator.geolocation.clearWatch(watchId);
   }, []);
 
+  const [mapKey, setMapKey] = useState(0);
+  useEffect(() => {
+    const STALE_MS = 5 * 60 * 1000;
+    let hiddenAt: number | null = null;
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        hiddenAt = Date.now();
+      } else if (hiddenAt !== null && Date.now() - hiddenAt > STALE_MS) {
+        setMapKey((k) => k + 1);
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () =>
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, []);
+
   const pickingFromPlannerRef = useRef(false);
   const hasPlanSearchedRef = useRef(false);
 
@@ -287,6 +303,7 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
         <div className="flex-1 relative">
           {loading && <LoadingOverlay />}
           <MapView
+            key={mapKey}
             vehicles={vehicles}
             routePlan={routePlan}
             selectedRouteIndex={selectedRouteIndex}

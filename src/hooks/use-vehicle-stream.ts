@@ -20,36 +20,54 @@ export function useVehicleStream(
   const eventSourceRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
+
     if (!enabled) {
       eventSourceRef.current?.close();
       eventSourceRef.current = null;
-      setAllVehicles([]);
-      setLoading(false);
-      return;
+      Promise.resolve().then(() => {
+        if (!cancelled) {
+          setAllVehicles([]);
+          setLoading(false);
+        }
+      });
+      return () => { cancelled = true; };
     }
 
-    setLoading(true);
-    const es = new EventSource("/api/vehicles/stream");
-    eventSourceRef.current = es;
+    function connect() {
+      eventSourceRef.current?.close();
+      setLoading(true);
+      const es = new EventSource("/api/vehicles/stream");
+      eventSourceRef.current = es;
 
-    es.onmessage = (event) => {
-      try {
-        const data: StreamData = JSON.parse(event.data);
-        setAllVehicles(data.vehicles);
-        setLastUpdate(new Date(data.timestamp));
-        setLoading(false);
-      } catch (err) {
-        console.error("SSE parse error:", err);
-      }
-    };
+      es.onmessage = (event) => {
+        try {
+          const data: StreamData = JSON.parse(event.data);
+          setAllVehicles(data.vehicles);
+          setLastUpdate(new Date(data.timestamp));
+          setLoading(false);
+        } catch (err) {
+          console.error("SSE parse error:", err);
+        }
+      };
 
-    es.onerror = () => {
-      console.warn("SSE connection error, reconnecting...");
+      es.onerror = () => {
+        console.warn("SSE connection error, reconnecting...");
+      };
+    }
+
+    connect();
+
+    const handleVisibility = () => {
+      if (!document.hidden) connect();
     };
+    document.addEventListener("visibilitychange", handleVisibility);
 
     return () => {
-      es.close();
+      cancelled = true;
+      eventSourceRef.current?.close();
       eventSourceRef.current = null;
+      document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, [enabled]);
 

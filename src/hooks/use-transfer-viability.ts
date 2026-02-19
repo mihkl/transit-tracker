@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { PlannedRoute, RouteLeg, DelayInfo } from "@/lib/types";
 
 export type TransferStatus = "safe" | "tight" | "missed" | "unknown";
@@ -118,6 +118,7 @@ export function useTransferViability(
   route: PlannedRoute | null,
 ): TransferInfo[] {
   const [transfers, setTransfers] = useState<TransferInfo[]>([]);
+  const pollRef = useRef<(() => Promise<void>) | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -152,6 +153,7 @@ export function useTransferViability(
         if (!cancelled) setTransfers(computeTransfers(currentRoute, liveDelays));
       }
 
+      pollRef.current = poll;
       await poll();
       if (cancelled) return;
       intervalId = setInterval(poll, POLL_INTERVAL_MS);
@@ -159,9 +161,16 @@ export function useTransferViability(
 
     run();
 
+    const handleVisibility = () => {
+      if (!document.hidden) pollRef.current?.();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+
     return () => {
       cancelled = true;
+      pollRef.current = null;
       if (intervalId) clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, [route]);
 
