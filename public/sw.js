@@ -1,5 +1,28 @@
 const CACHE_NAME = "transit-tracker-v1";
 
+let notificationTimer = null;
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SCHEDULE_NOTIFICATION") {
+    if (notificationTimer) clearTimeout(notificationTimer);
+    const { notifyAt, title, body } = event.data;
+    const delay = notifyAt - Date.now();
+    if (delay <= 0) return;
+    notificationTimer = setTimeout(() => {
+      self.registration.showNotification(title, {
+        body,
+        icon: "/icon-192x192.png",
+      });
+      notificationTimer = null;
+    }, delay);
+  } else if (event.data?.type === "CANCEL_NOTIFICATION") {
+    if (notificationTimer) {
+      clearTimeout(notificationTimer);
+      notificationTimer = null;
+    }
+  }
+});
+
 const PRECACHE_URLS = ["/", "/icon-192x192.png", "/icon-512x512.png"];
 
 self.addEventListener("install", (event) => {
