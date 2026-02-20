@@ -11,12 +11,20 @@ import { useVehicleStream } from "@/hooks/use-vehicle-stream";
 import { useAnimatedVehicles } from "@/hooks/use-animated-vehicles";
 import type {
   RoutePlanResponse,
+  PlannedRoute,
   RouteLeg,
   LineDto,
   StopDto,
 } from "@/lib/types";
 
 type ShapesMap = Record<string, number[][]>;
+const ROUTE_SNAPSHOT_KEY = "transit-reminder-route-snapshot";
+const SNAPSHOT_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+
+interface StoredRouteSnapshot {
+  route: PlannedRoute;
+  savedAt: number;
+}
 
 function toLocalDateTimeString(date: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -65,6 +73,33 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
     lat: number;
     lng: number;
   } | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("trip") !== "1") return;
+
+    try {
+      const raw = localStorage.getItem(ROUTE_SNAPSHOT_KEY);
+      if (!raw) return;
+      const snapshot = JSON.parse(raw) as StoredRouteSnapshot;
+      const isFresh =
+        snapshot?.savedAt && Date.now() - snapshot.savedAt <= SNAPSHOT_MAX_AGE_MS;
+      const hasLegs = Array.isArray(snapshot?.route?.legs);
+      if (!isFresh || !hasLegs) return;
+
+      setShowPlanner(true);
+      setRoutePlan({ routes: [snapshot.route] } as RoutePlanResponse);
+      setSelectedRouteIndex(0);
+    } catch {
+      // Ignore malformed snapshot.
+    } finally {
+      params.delete("trip");
+      const next = params.toString();
+      const nextUrl = `${window.location.pathname}${next ? `?${next}` : ""}${window.location.hash}`;
+      window.history.replaceState({}, "", nextUrl);
+    }
+  }, []);
 
   useEffect(() => {
     if (typeof navigator === "undefined" || !navigator.geolocation) return;

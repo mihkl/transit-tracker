@@ -151,6 +151,7 @@ function LegList({
 interface ReminderProps {
   isSet: boolean;
   minutesUntil: number | null;
+  isLiveAdjusted: boolean;
   onSchedule: () => void;
   onClear: () => void;
 }
@@ -204,9 +205,11 @@ function RouteCard({
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                reminderProps.isSet
-                  ? reminderProps.onClear()
-                  : reminderProps.onSchedule();
+                if (reminderProps.isSet) {
+                  reminderProps.onClear();
+                } else {
+                  reminderProps.onSchedule();
+                }
               }}
               className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-xl border transition-colors text-left ${
                 reminderProps.isSet
@@ -223,9 +226,9 @@ function RouteCard({
                 {reminderProps.isSet
                   ? reminderProps.minutesUntil !== null &&
                     reminderProps.minutesUntil > 0
-                    ? `Reminder set · leaving in ${reminderProps.minutesUntil} min`
-                    : "Reminder set · tap to cancel"
-                  : "Remind me when to leave"}
+                    ? `Leave in ${reminderProps.minutesUntil} min${reminderProps.isLiveAdjusted ? " · auto-adjusting" : ""}`
+                    : "Reminder active · tap to cancel"
+                  : "Set smart leave reminder"}
               </span>
             </button>
           )}
@@ -303,6 +306,7 @@ export function RoutePlanner({
   const {
     leaveInfo,
     isSet: isReminderSet,
+    isLiveAdjusted,
     minutesUntil,
     scheduleReminder,
     clearReminder,
@@ -312,6 +316,7 @@ export function RoutePlanner({
     ? {
         isSet: isReminderSet,
         minutesUntil,
+        isLiveAdjusted,
         onSchedule: scheduleReminder,
         onClear: clearReminder,
       }
@@ -487,8 +492,8 @@ export function RoutePlanner({
                 <Bell size={14} className="text-primary shrink-0" />
                 <span className="text-xs text-primary font-semibold">
                   {minutesUntil !== null && minutesUntil > 0
-                    ? `Leaving in ${minutesUntil} min`
-                    : "Reminder set"}
+                    ? `Leave in ${minutesUntil} min${isLiveAdjusted ? " · auto-adjusting live" : ""}`
+                    : "Reminder active"}
                 </span>
               </div>
             )}

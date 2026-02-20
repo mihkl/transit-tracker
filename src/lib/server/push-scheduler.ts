@@ -15,10 +15,19 @@ interface ScheduledEntry {
   timeoutId: ReturnType<typeof setTimeout>;
 }
 
+interface PushPayload {
+  title: string;
+  body: string;
+  tag?: string;
+  url?: string;
+  timestamp?: number;
+  category?: string;
+}
+
 // endpoint → pending notification
 const scheduled = new Map<string, ScheduledEntry>();
 
-async function sendPush(subscription: PushSubscription, payload: object) {
+async function sendPush(subscription: PushSubscription, payload: PushPayload) {
   try {
     await webpush.sendNotification(subscription, JSON.stringify(payload));
   } catch (err) {
@@ -33,8 +42,7 @@ async function sendPush(subscription: PushSubscription, payload: object) {
 export function scheduleNotification(
   subscription: PushSubscription,
   notifyAt: number,
-  title: string,
-  body: string,
+  payload: PushPayload,
 ) {
   // Replace any existing scheduled notification for this subscription
   const existing = scheduled.get(subscription.endpoint);
@@ -42,12 +50,12 @@ export function scheduleNotification(
 
   const delay = notifyAt - Date.now();
   if (delay <= 0) {
-    sendPush(subscription, { title, body });
+    sendPush(subscription, payload);
     return;
   }
 
   const timeoutId = setTimeout(() => {
-    sendPush(subscription, { title, body });
+    sendPush(subscription, payload);
     scheduled.delete(subscription.endpoint);
   }, delay);
 

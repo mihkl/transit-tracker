@@ -5,15 +5,132 @@ const CACHE_NAME = "transit-tracker-v2";
 
 const PRECACHE_URLS = ["/", "/icon-192x192.png", "/icon-512x512.png"];
 
+interface ReminderPayload {
+  title?: string;
+  body?: string;
+  tag?: string;
+  url?: string;
+  timestamp?: number;
+  category?: "leave-reminder";
+}
 
 self.addEventListener("push", (event) => {
-  const data = (event.data?.json() ?? {}) as { title?: string; body?: string };
+  const data = (event.data?.json() ?? {}) as ReminderPayload;
+  const targetUrl = data.url || "/";
+  const timestamp =
+    typeof data.timestamp === "number" && Number.isFinite(data.timestamp)
+      ? data.timestamp
+      : Date.now();
+
   event.waitUntil(
-    self.registration.showNotification(data.title ?? "Reminder", {
-      body: data.body ?? "",
+    self.registration.showNotification(data.title ?? "Time to leave", {
+      body: data.body ?? "Open Transit Tracker for updated directions.",
       icon: "/icon-192x192.png",
-      tag: "leave-reminder",
-    })
+      badge: "/icon-192x192.png",
+      tag: data.tag ?? "leave-reminder",
+      renotify: true,
+      requireInteraction: true,
+      timestamp,
+      data: {
+        url: targetUrl,
+        title: data.title ?? "Time to leave",
+        body: data.body ?? "",
+        tag: data.tag ?? "leave-reminder",
+      },
+      actions: [
+        { action: "open", title: "Open trip" },
+        { action: "snooze-2m", title: "Snooze 2 min" },
+        { action: "dismiss", title: "Dismiss" },
+      ],
+    }),
+  );
+});
+
+async function focusOrOpen(targetUrl: string): Promise<void> {
+  const clients = await self.clients.matchAll({
+    type: "window",
+    includeUncontrolled: true,
+  });
+  for (const client of clients) {
+    if (client.type !== "window") continue;
+    const windowClient = client as WindowClient;
+    if ("navigate" in windowClient) {
+      await windowClient.navigate(targetUrl);
+    }
+    await windowClient.focus();
+    return;
+  }
+  await self.clients.openWindow(targetUrl);
+}
+
+async function rescheduleByMinutes(
+  minutes: number,
+  data: {
+    title?: string;
+    body?: string;
+    tag?: string;
+    url?: string;
+  },
+): Promise<boolean> {
+  try {
+    const reg = await self.registration;
+    const subscription = await reg.pushManager.getSubscription();
+    if (!subscription) return false;
+
+    const notifyAt = Date.now() + minutes * 60_000;
+    const response = await fetch("/api/push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        subscription: subscription.toJSON(),
+        notifyAt,
+        title: data.title ?? "Time to leave",
+        body: data.body ?? "Open Transit Tracker for updated directions.",
+        tag: data.tag ?? "leave-reminder",
+        url: data.url ?? "/",
+        timestamp: notifyAt,
+        category: "leave-reminder",
+      }),
+    });
+
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+
+  event.waitUntil(
+    (async () => {
+      const data = (event.notification.data ?? {}) as {
+        url?: string;
+        title?: string;
+        body?: string;
+        tag?: string;
+      };
+      const target = data.url || "/";
+
+      if (event.action === "dismiss") {
+        return;
+      }
+
+      if (event.action === "snooze-2m") {
+        const ok = await rescheduleByMinutes(2, data);
+        if (!ok) {
+          await self.registration.showNotification("Snooze failed", {
+            body: "Could not schedule a new reminder. Open the app to retry.",
+            icon: "/icon-192x192.png",
+            badge: "/icon-192x192.png",
+            tag: "leave-reminder-error",
+          });
+        }
+        return;
+      }
+
+      await focusOrOpen(target);
+    })(),
   );
 });
 

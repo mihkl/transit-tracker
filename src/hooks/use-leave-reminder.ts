@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
-import type { PlannedRoute } from "@/lib/types";
+import type { PlannedRoute, RouteLeg, DelayInfo } from "@/lib/types";
 
 export interface LeaveInfo {
   leaveTime: Date;
@@ -11,7 +11,19 @@ export interface LeaveInfo {
   departureStop: string;
 }
 
+interface ReminderBaseInfo extends LeaveInfo {
+  baseLeaveTimeMs: number;
+  walkBeforeSeconds: number;
+  firstTransitLeg: RouteLeg | null;
+  scheduledDepartureMs: number;
+}
+
 const STORAGE_KEY = "transit-leave-reminder";
+const ROUTE_SNAPSHOT_KEY = "transit-reminder-route-snapshot";
+const ADAPTIVE_POLL_MS = 20_000;
+const RESCHEDULE_THRESHOLD_MS = 60_000;
+const SAFETY_BUFFER_SECONDS = 2 * 60;
+const SNAPSHOT_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 
 function parseDurationSeconds(duration?: string): number {
   if (!duration) return 0;
@@ -19,9 +31,10 @@ function parseDurationSeconds(duration?: string): number {
   return match ? parseInt(match[1], 10) : 0;
 }
 
-function getLeaveInfo(route: PlannedRoute): LeaveInfo | null {
+function getReminderBaseInfo(route: PlannedRoute): ReminderBaseInfo | null {
   let walkBeforeSeconds = 0;
   let firstTransitDep: Date | null = null;
+  let firstTransitLeg: RouteLeg | null = null;
   let lineNumber = "";
   let departureStop = "";
 
@@ -33,6 +46,7 @@ function getLeaveInfo(route: PlannedRoute): LeaveInfo | null {
     } else {
       if (!firstTransitDep && leg.scheduledDeparture) {
         firstTransitDep = new Date(leg.scheduledDeparture);
+        firstTransitLeg = leg;
         lineNumber = leg.lineNumber ?? "";
         departureStop = leg.departureStop ?? "";
         break;
@@ -43,7 +57,9 @@ function getLeaveInfo(route: PlannedRoute): LeaveInfo | null {
   if (!firstTransitDep) return null;
 
   const leaveMs =
-    firstTransitDep.getTime() - walkBeforeSeconds * 1000 - 2 * 60 * 1000;
+    firstTransitDep.getTime() -
+    walkBeforeSeconds * 1000 -
+    SAFETY_BUFFER_SECONDS * 1000;
 
   if (leaveMs < Date.now() - 60_000) return null;
 
@@ -56,7 +72,107 @@ function getLeaveInfo(route: PlannedRoute): LeaveInfo | null {
       minute: "2-digit",
     }),
     departureStop,
+    baseLeaveTimeMs: leaveMs,
+    walkBeforeSeconds,
+    firstTransitLeg,
+    scheduledDepartureMs: firstTransitDep.getTime(),
   };
+}
+
+function formatTime(dateMs: number): string {
+  return new Date(dateMs).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatDelayLabel(delaySeconds: number): string {
+  const mins = Math.round(Math.abs(delaySeconds) / 60);
+  if (mins <= 0) return "on time";
+  return delaySeconds > 0 ? `${mins} min late` : `${mins} min early`;
+}
+
+async function fetchLegDelay(leg: RouteLeg): Promise<DelayInfo | null> {
+  const params = new URLSearchParams();
+  if (leg.lineNumber) params.set("line", leg.lineNumber);
+  if (leg.mode) params.set("type", leg.mode);
+  if (leg.departureStop) params.set("depStop", leg.departureStop);
+  if (leg.departureStopLat != null)
+    params.set("depLat", String(leg.departureStopLat));
+  if (leg.departureStopLng != null)
+    params.set("depLng", String(leg.departureStopLng));
+  if (leg.arrivalStop) params.set("arrStop", leg.arrivalStop);
+  if (leg.arrivalStopLat != null)
+    params.set("arrLat", String(leg.arrivalStopLat));
+  if (leg.arrivalStopLng != null)
+    params.set("arrLng", String(leg.arrivalStopLng));
+  if (leg.scheduledDeparture)
+    params.set("scheduledDep", leg.scheduledDeparture);
+
+  try {
+    const res = await fetch(`/api/leg-delay?${params}`);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+function computeNotifyAtMs(
+  baseInfo: ReminderBaseInfo,
+  delaySeconds: number,
+): number {
+  return (
+    baseInfo.scheduledDepartureMs +
+    delaySeconds * 1000 -
+    baseInfo.walkBeforeSeconds * 1000 -
+    SAFETY_BUFFER_SECONDS * 1000
+  );
+}
+
+function buildReminderText(
+  baseInfo: ReminderBaseInfo,
+  notifyAtMs: number,
+  delaySeconds: number,
+): { title: string; body: string } {
+  const line = baseInfo.lineNumber || "Transit";
+  const leaveAt = formatTime(notifyAtMs);
+  const depTime = formatTime(
+    baseInfo.scheduledDepartureMs + delaySeconds * 1000,
+  );
+  const delayLabel = formatDelayLabel(delaySeconds);
+  const walkText =
+    baseInfo.walkMinutes > 0
+      ? `${baseInfo.walkMinutes} min walk`
+      : "Head there";
+  const stopText = baseInfo.departureStop || "your stop";
+
+  return {
+    title: `Leave ${leaveAt} · Line ${line}`,
+    body: `${stopText} | ${walkText} | dep ${depTime} (${delayLabel})`,
+  };
+}
+
+async function scheduleServerReminder(
+  subscription: PushSubscription,
+  notifyAt: number,
+  title: string,
+  body: string,
+) {
+  await fetch("/api/push", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      subscription: subscription.toJSON(),
+      notifyAt,
+      title,
+      body,
+      tag: "leave-reminder",
+      url: "/?trip=1",
+      timestamp: notifyAt,
+      category: "leave-reminder",
+    }),
+  });
 }
 
 // --- VAPID / push subscription ---
@@ -99,6 +215,12 @@ async function getPushSubscription(): Promise<PushSubscription | null> {
 interface StoredReminder {
   endpoint: string;
   notifyAt: number;
+  routeKey?: string;
+}
+
+interface StoredRouteSnapshot {
+  route: PlannedRoute;
+  savedAt: number;
 }
 
 function saveReminder(data: StoredReminder) {
@@ -111,6 +233,33 @@ function clearStoredReminder() {
   try {
     localStorage.removeItem(STORAGE_KEY);
   } catch {}
+}
+
+function saveRouteSnapshot(route: PlannedRoute) {
+  try {
+    const payload: StoredRouteSnapshot = {
+      route,
+      savedAt: Date.now(),
+    };
+    localStorage.setItem(ROUTE_SNAPSHOT_KEY, JSON.stringify(payload));
+  } catch {}
+}
+
+function clearRouteSnapshot() {
+  try {
+    localStorage.removeItem(ROUTE_SNAPSHOT_KEY);
+  } catch {}
+}
+
+function hasFreshRouteSnapshot(): boolean {
+  try {
+    const raw = localStorage.getItem(ROUTE_SNAPSHOT_KEY);
+    if (!raw) return false;
+    const parsed = JSON.parse(raw) as StoredRouteSnapshot;
+    return Date.now() - parsed.savedAt <= SNAPSHOT_MAX_AGE_MS;
+  } catch {
+    return false;
+  }
 }
 
 function loadStoredReminder(): StoredReminder | null {
@@ -131,11 +280,34 @@ export function useLeaveReminder(route: PlannedRoute | null) {
   const [permission, setPermission] =
     useState<NotificationPermission>("default");
   const [minutesUntil, setMinutesUntil] = useState<number | null>(null);
+  const [notifyAtMs, setNotifyAtMs] = useState<number | null>(null);
+  const [isLiveAdjusted, setIsLiveAdjusted] = useState(false);
 
-  const leaveInfo = useMemo(
-    () => (route ? getLeaveInfo(route) : null),
+  const baseInfo = useMemo(
+    () => (route ? getReminderBaseInfo(route) : null),
     [route],
   );
+  const routeKey = useMemo(
+    () =>
+      route
+        ? route.legs
+            .map(
+              (leg) =>
+                `${leg.mode}|${leg.lineNumber ?? ""}|${leg.departureStop ?? ""}|${leg.scheduledDeparture ?? ""}`,
+            )
+            .join(">")
+        : "",
+    [route],
+  );
+  const leaveInfo: LeaveInfo | null = baseInfo
+    ? {
+        leaveTime: new Date(notifyAtMs ?? baseInfo.baseLeaveTimeMs),
+        walkMinutes: baseInfo.walkMinutes,
+        lineNumber: baseInfo.lineNumber,
+        depTimeStr: baseInfo.depTimeStr,
+        departureStop: baseInfo.departureStop,
+      }
+    : null;
 
   // Sync notification permission on mount
   useEffect(() => {
@@ -147,34 +319,31 @@ export function useLeaveReminder(route: PlannedRoute | null) {
   useEffect(() => {
     async function restore() {
       const stored = loadStoredReminder();
-      if (stored) setIsSet(true);
+      if (stored) {
+        setIsSet(true);
+        setNotifyAtMs(stored.notifyAt);
+      }
     }
     restore();
   }, []);
 
   // Countdown timer
   useEffect(() => {
-    if (!leaveInfo) {
+    const targetMs = notifyAtMs ?? baseInfo?.baseLeaveTimeMs ?? null;
+    if (!targetMs) {
       Promise.resolve().then(() => setMinutesUntil(null));
       return;
     }
     const update = () =>
-      setMinutesUntil(
-        Math.round((leaveInfo.leaveTime.getTime() - Date.now()) / 60_000),
-      );
+      setMinutesUntil(Math.round((targetMs - Date.now()) / 60_000));
     update();
     const tick = setInterval(update, 30_000);
     return () => clearInterval(tick);
-  }, [leaveInfo]);
-
-  // Clear isSet when route changes
-  useEffect(() => {
-    return () => setIsSet(false);
-  }, [route]);
+  }, [notifyAtMs, baseInfo?.baseLeaveTimeMs]);
 
   const scheduleReminder = useCallback(async () => {
     if (
-      !leaveInfo ||
+      !baseInfo ||
       typeof window === "undefined" ||
       !("Notification" in window)
     )
@@ -186,38 +355,103 @@ export function useLeaveReminder(route: PlannedRoute | null) {
       setPermission(perm);
     }
     if (perm !== "granted") return;
-    if (leaveInfo.leaveTime.getTime() < Date.now()) return;
 
     const sub = await getPushSubscription();
     if (!sub) return;
 
-    const { lineNumber, depTimeStr, walkMinutes, departureStop } = leaveInfo;
-    const walkText =
-      walkMinutes > 0
-        ? `Walk ${walkMinutes} min to ${departureStop}`
-        : `Head to ${departureStop}`;
+    let delaySeconds = 0;
+    if (baseInfo.firstTransitLeg) {
+      const liveDelay = await fetchLegDelay(baseInfo.firstTransitLeg);
+      delaySeconds = liveDelay?.estimatedDelaySeconds ?? 0;
+    }
+    let nextNotifyAt = computeNotifyAtMs(baseInfo, delaySeconds);
+    if (nextNotifyAt < Date.now() + 5_000) nextNotifyAt = Date.now() + 5_000;
 
-    await fetch("/api/push", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        subscription: sub.toJSON(),
-        notifyAt: leaveInfo.leaveTime.getTime(),
-        title: "Time to leave!",
-        body: `${walkText} · ${lineNumber} departs ${depTimeStr}`,
-      }),
-    });
+    const text = buildReminderText(baseInfo, nextNotifyAt, delaySeconds);
+    await scheduleServerReminder(sub, nextNotifyAt, text.title, text.body);
 
     saveReminder({
       endpoint: sub.endpoint,
-      notifyAt: leaveInfo.leaveTime.getTime(),
+      notifyAt: nextNotifyAt,
+      routeKey,
     });
+    if (route) {
+      saveRouteSnapshot(route);
+    }
     setIsSet(true);
-  }, [leaveInfo, permission]);
+    setNotifyAtMs(nextNotifyAt);
+    setIsLiveAdjusted(
+      Math.abs(nextNotifyAt - baseInfo.baseLeaveTimeMs) >=
+        RESCHEDULE_THRESHOLD_MS,
+    );
+  }, [baseInfo, permission, routeKey, route]);
+
+  // Adaptive rescheduling while reminder is active.
+  useEffect(() => {
+    if (!isSet || !baseInfo || !baseInfo.firstTransitLeg) return;
+    let cancelled = false;
+
+    const run = async () => {
+      try {
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.getSubscription();
+        if (!sub || cancelled) return;
+
+        const liveDelay = await fetchLegDelay(baseInfo.firstTransitLeg!);
+        if (cancelled) return;
+
+        const delaySeconds = liveDelay?.estimatedDelaySeconds ?? 0;
+        let nextNotifyAt = computeNotifyAtMs(baseInfo, delaySeconds);
+        if (nextNotifyAt < Date.now() + 5_000)
+          nextNotifyAt = Date.now() + 5_000;
+
+        const prevNotifyAt = notifyAtMs ?? baseInfo.baseLeaveTimeMs;
+        const needsReschedule =
+          Math.abs(nextNotifyAt - prevNotifyAt) >= RESCHEDULE_THRESHOLD_MS;
+
+        setIsLiveAdjusted(
+          Math.abs(nextNotifyAt - baseInfo.baseLeaveTimeMs) >=
+            RESCHEDULE_THRESHOLD_MS,
+        );
+
+        if (!needsReschedule) return;
+
+        const text = buildReminderText(baseInfo, nextNotifyAt, delaySeconds);
+        await scheduleServerReminder(sub, nextNotifyAt, text.title, text.body);
+        if (cancelled) return;
+
+        saveReminder({
+          endpoint: sub.endpoint,
+          notifyAt: nextNotifyAt,
+          routeKey,
+        });
+        setNotifyAtMs(nextNotifyAt);
+      } catch {
+        // Ignore transient failures; next poll will retry.
+      }
+    };
+
+    run();
+    const timer = setInterval(run, ADAPTIVE_POLL_MS);
+    const onVisible = () => {
+      if (!document.hidden) run();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [isSet, baseInfo, notifyAtMs, routeKey]);
 
   const clearReminder = useCallback(async () => {
     clearStoredReminder();
+    if (!hasFreshRouteSnapshot()) {
+      clearRouteSnapshot();
+    }
     setIsSet(false);
+    setNotifyAtMs(null);
+    setIsLiveAdjusted(false);
     // Cancel on the server — fire-and-forget
     try {
       const reg = await navigator.serviceWorker.ready;
@@ -235,6 +469,7 @@ export function useLeaveReminder(route: PlannedRoute | null) {
   return {
     leaveInfo,
     isSet,
+    isLiveAdjusted,
     permission,
     minutesUntil,
     scheduleReminder,

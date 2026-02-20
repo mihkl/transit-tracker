@@ -14,16 +14,22 @@ export function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const { subscription, notifyAt, title, body } = await req.json();
+  const { subscription, notifyAt, title, body, tag, url, timestamp, category } =
+    await req.json();
   if (!subscription?.endpoint || !notifyAt || !title) {
     return NextResponse.json({ error: "Missing fields" }, { status: 400 });
   }
-  scheduleNotification(
-    subscription,
-    Number(notifyAt),
-    String(title),
-    String(body ?? ""),
-  );
+  scheduleNotification(subscription, Number(notifyAt), {
+    title: String(title),
+    body: String(body ?? ""),
+    tag: typeof tag === "string" ? tag : undefined,
+    url: typeof url === "string" ? url : undefined,
+    timestamp:
+      typeof timestamp === "number" && Number.isFinite(timestamp)
+        ? timestamp
+        : undefined,
+    category: typeof category === "string" ? category : undefined,
+  });
   return NextResponse.json({ ok: true });
 }
 
