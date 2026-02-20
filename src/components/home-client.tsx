@@ -63,6 +63,8 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
   const [planLoading, setPlanLoading] = useState(false);
   const [selectedRouteIndex, setSelectedRouteIndex] = useState(0);
   const [focusedVehicleId, setFocusedVehicleId] = useState<number | null>(null);
+  const [openSelectedRouteDetails, setOpenSelectedRouteDetails] =
+    useState(false);
 
   const [timeOption, setTimeOption] = useState<TimeOption>("now");
   const [selectedDateTime, setSelectedDateTime] = useState(() =>
@@ -91,6 +93,7 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
       setShowPlanner(true);
       setRoutePlan({ routes: [snapshot.route] } as RoutePlanResponse);
       setSelectedRouteIndex(0);
+      setOpenSelectedRouteDetails(true);
     } catch {
       // Ignore malformed snapshot.
     } finally {
@@ -353,6 +356,10 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
             onDateTimeChange={setSelectedDateTime}
             onSwap={handleSwap}
             onClear={handleClearPlanner}
+            openSelectedRouteDetails={openSelectedRouteDetails}
+            onConsumeOpenSelectedRouteDetails={() =>
+              setOpenSelectedRouteDetails(false)
+            }
           />
         )}
         <div className="flex-1 relative">

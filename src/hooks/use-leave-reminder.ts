@@ -18,25 +18,46 @@ interface ReminderBaseInfo extends LeaveInfo {
   scheduledDepartureMs: number;
 }
 
-interface TransitLegInfo {
-  leg: RouteLeg;
-  depMs: number;
-  arrMs: number;
-  line: string;
-  depStop: string;
-  transferWalkSeconds: number;
+interface StoredReminder {
+  endpoint: string;
+  notifyAt: number;
+  routeKey?: string;
+  lastDelaySeconds?: number;
+  lastDelayPushAt?: number;
+}
+
+interface StoredRouteSnapshot {
+  route: PlannedRoute;
+  savedAt: number;
 }
 
 const STORAGE_KEY = "transit-leave-reminder";
 const ROUTE_SNAPSHOT_KEY = "transit-reminder-route-snapshot";
-const SAFETY_BUFFER_SECONDS = 2 * 60;
-const UPDATE_STEP_MS = 60_000;
 const SNAPSHOT_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+
+const SAFETY_BUFFER_SECONDS = 2 * 60;
+const RESCHEDULE_THRESHOLD_MS = 60_000;
+const ADAPTIVE_POLL_MS = 20_000;
+const DELAY_NOTIFY_THRESHOLD_S = 120;
+const DELAY_NOTIFY_COOLDOWN_MS = 5 * 60_000;
 
 function parseDurationSeconds(duration?: string): number {
   if (!duration) return 0;
   const match = duration.match(/(\d+)s/);
   return match ? parseInt(match[1], 10) : 0;
+}
+
+function formatTime(dateMs: number): string {
+  return new Date(dateMs).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatDelayLabel(delaySeconds: number): string {
+  const mins = Math.round(Math.abs(delaySeconds) / 60);
+  if (mins <= 0) return "on time";
+  return delaySeconds > 0 ? `${mins} min late` : `${mins} min early`;
 }
 
 function getReminderBaseInfo(route: PlannedRoute): ReminderBaseInfo | null {
@@ -85,19 +106,6 @@ function getReminderBaseInfo(route: PlannedRoute): ReminderBaseInfo | null {
   };
 }
 
-function formatTime(dateMs: number): string {
-  return new Date(dateMs).toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function formatDelayLabel(delaySeconds: number): string {
-  const mins = Math.round(Math.abs(delaySeconds) / 60);
-  if (mins <= 0) return "on time";
-  return delaySeconds > 0 ? `${mins} min late` : `${mins} min early`;
-}
-
 async function fetchLegDelay(leg: RouteLeg): Promise<DelayInfo | null> {
   const params = new URLSearchParams();
   if (leg.lineNumber) params.set("line", leg.lineNumber);
@@ -136,14 +144,34 @@ function computeNotifyAtMs(
   );
 }
 
-interface PushScheduleOptions {
-  jobKey: string;
-  url: string;
-  tag: string;
-  endpoint: string;
-  jobPrefix: string;
-  complete?: boolean;
-  category?: string;
+function buildLeaveReminderText(
+  baseInfo: ReminderBaseInfo,
+  notifyAtMs: number,
+  delaySeconds: number,
+): { title: string; body: string } {
+  const line = baseInfo.lineNumber || "Transit";
+  const leaveAt = formatTime(notifyAtMs);
+  const depTime = formatTime(baseInfo.scheduledDepartureMs + delaySeconds * 1000);
+  const stopText = baseInfo.departureStop || "your stop";
+  const walkText =
+    baseInfo.walkMinutes > 0 ? `${baseInfo.walkMinutes} min walk` : "Head there";
+
+  return {
+    title: `Leave ${leaveAt} · Line ${line}`,
+    body: `${stopText} | ${walkText} | dep ${depTime} (${formatDelayLabel(delaySeconds)})`,
+  };
+}
+
+function buildDelayUpdateText(
+  baseInfo: ReminderBaseInfo,
+  notifyAtMs: number,
+  delaySeconds: number,
+): { title: string; body: string } {
+  const line = baseInfo.lineNumber || "Transit";
+  return {
+    title: `Update · Line ${line} ${formatDelayLabel(delaySeconds)}`,
+    body: `New leave time ${formatTime(notifyAtMs)} from ${baseInfo.departureStop || "your stop"}`,
+  };
 }
 
 async function schedulePush(
@@ -151,7 +179,8 @@ async function schedulePush(
   notifyAt: number,
   title: string,
   body: string,
-  options: PushScheduleOptions,
+  jobKey: string,
+  endpoint: string,
 ) {
   await fetch("/api/push", {
     method: "POST",
@@ -161,191 +190,33 @@ async function schedulePush(
       notifyAt,
       title,
       body,
-      tag: options.tag,
-      url: options.url,
+      tag: "leave-reminder",
+      url: "/?trip=1",
       timestamp: notifyAt,
-      category: options.category ?? "leave-reminder",
-      endpoint: options.endpoint,
-      jobPrefix: options.jobPrefix,
-      jobKey: options.jobKey,
-      complete: options.complete ?? false,
+      category: "leave-reminder",
+      endpoint,
+      jobKey,
     }),
   });
-}
-
-function buildTransitLegInfos(route: PlannedRoute): TransitLegInfo[] {
-  const infos: TransitLegInfo[] = [];
-  let prevTransitLegIndex = -1;
-
-  for (let i = 0; i < route.legs.length; i++) {
-    const leg = route.legs[i];
-    if (leg.mode === "WALK") continue;
-    if (!leg.scheduledDeparture || !leg.scheduledArrival) continue;
-
-    let transferWalkSeconds = 0;
-    if (prevTransitLegIndex >= 0) {
-      for (let j = prevTransitLegIndex + 1; j < i; j++) {
-        if (route.legs[j].mode === "WALK") {
-          transferWalkSeconds += parseDurationSeconds(route.legs[j].duration);
-        }
-      }
-    }
-
-    infos.push({
-      leg,
-      depMs: new Date(leg.scheduledDeparture).getTime(),
-      arrMs: new Date(leg.scheduledArrival).getTime(),
-      line: leg.lineNumber || leg.mode,
-      depStop: leg.departureStop || "stop",
-      transferWalkSeconds,
-    });
-
-    prevTransitLegIndex = i;
-  }
-
-  return infos;
-}
-
-function buildLiveCardText(
-  atMs: number,
-  transitLegs: TransitLegInfo[],
-  walkBeforeSeconds: number,
-): { title: string; body: string; complete: boolean } {
-  const nextIndex = transitLegs.findIndex((leg) => leg.depMs > atMs);
-  if (nextIndex < 0) {
-    return {
-      title: "Trip complete",
-      body: "Only walking remains.",
-      complete: true,
-    };
-  }
-
-  const nextLeg = transitLegs[nextIndex];
-  const minutes = Math.max(0, Math.ceil((nextLeg.depMs - atMs) / 60_000));
-
-  if (nextIndex === 0) {
-    const walkMins = Math.max(0, Math.round(walkBeforeSeconds / 60));
-    const title =
-      minutes <= 0
-        ? `Leave now · Line ${nextLeg.line}`
-        : `Leave in ${minutes} min · Line ${nextLeg.line}`;
-    const body = `${nextLeg.depStop} | ${walkMins} min walk | dep ${formatTime(nextLeg.depMs)}`;
-    return { title, body, complete: false };
-  }
-
-  const prevLeg = transitLegs[nextIndex - 1];
-  const transferWalkMins = Math.max(
-    0,
-    Math.round(nextLeg.transferWalkSeconds / 60),
-  );
-  const title =
-    minutes <= 0
-      ? `Transfer now · Line ${nextLeg.line}`
-      : `Transfer in ${minutes} min · Line ${nextLeg.line}`;
-  const body = `${nextLeg.depStop} | from ${prevLeg.line} | ${transferWalkMins} min walk`;
-  return { title, body, complete: false };
-}
-
-async function scheduleLiveTripMonitor(
-  subscription: PushSubscription,
-  route: PlannedRoute,
-  baseInfo: ReminderBaseInfo,
-  initialDelaySeconds: number,
-  endpoint: string,
-  jobPrefix: string,
-) {
-  const transitLegs = buildTransitLegInfos(route);
-  if (transitLegs.length === 0) return;
-
-  const monitorTag = `live-trip-${jobPrefix}`;
-  const now = Date.now();
-  const endMs = transitLegs[transitLegs.length - 1].arrMs;
-  const startMs = now;
-
-  let seq = 0;
-  for (let ts = startMs; ts <= endMs; ts += UPDATE_STEP_MS) {
-    const text = buildLiveCardText(ts, transitLegs, baseInfo.walkBeforeSeconds);
-    const title = text.title;
-    const body =
-      seq === 0
-        ? `${text.body} | ${formatDelayLabel(initialDelaySeconds)}`
-        : text.body;
-
-    await schedulePush(subscription, ts + 1_000, title, body, {
-      endpoint,
-      jobPrefix,
-      jobKey: `${jobPrefix}${seq}`,
-      tag: monitorTag,
-      url: "/?trip=1",
-      category: "leave-reminder",
-    });
-    seq++;
-  }
-
-  await schedulePush(subscription, endMs + 15_000, "Trip complete", "", {
-    endpoint,
-    jobPrefix,
-    jobKey: `${jobPrefix}complete`,
-    tag: monitorTag,
-    url: "/?trip=1",
-    category: "leave-reminder",
-    complete: true,
-  });
-}
-
-// --- VAPID / push subscription ---
-
-function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
-  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
-  const rawData = atob(base64);
-  const bytes = new Uint8Array(rawData.length);
-  for (let i = 0; i < rawData.length; i++) {
-    bytes[i] = rawData.charCodeAt(i);
-  }
-  return bytes;
-}
-
-async function getPushSubscription(): Promise<PushSubscription | null> {
-  if (
-    typeof navigator === "undefined" ||
-    !("serviceWorker" in navigator) ||
-    !("PushManager" in window)
-  )
-    return null;
-  try {
-    const reg = await navigator.serviceWorker.ready;
-    const existing = await reg.pushManager.getSubscription();
-    if (existing) return existing;
-    const pubKey = await fetch("/api/push").then((r) => r.text());
-    if (!pubKey) return null;
-    return reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(pubKey),
-    });
-  } catch {
-    return null;
-  }
-}
-
-// --- localStorage (persists isSet state across reloads) ---
-
-interface StoredReminder {
-  endpoint: string;
-  notifyAt: number;
-  routeKey?: string;
-  jobPrefix?: string;
-}
-
-interface StoredRouteSnapshot {
-  route: PlannedRoute;
-  savedAt: number;
 }
 
 function saveReminder(data: StoredReminder) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   } catch {}
+}
+
+function loadStoredReminder(): StoredReminder | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw) as StoredReminder;
+    if (data.notifyAt > Date.now() - 30 * 60_000) return data;
+    localStorage.removeItem(STORAGE_KEY);
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 function clearStoredReminder() {
@@ -381,14 +252,34 @@ function hasFreshRouteSnapshot(): boolean {
   }
 }
 
-function loadStoredReminder(): StoredReminder | null {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const data = JSON.parse(raw) as StoredReminder;
-    if (data.notifyAt > Date.now() - 30 * 60_000) return data;
-    localStorage.removeItem(STORAGE_KEY);
+function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = atob(base64);
+  const bytes = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; i++) {
+    bytes[i] = rawData.charCodeAt(i);
+  }
+  return bytes;
+}
+
+async function getPushSubscription(): Promise<PushSubscription | null> {
+  if (
+    typeof navigator === "undefined" ||
+    !("serviceWorker" in navigator) ||
+    !("PushManager" in window)
+  )
     return null;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const existing = await reg.pushManager.getSubscription();
+    if (existing) return existing;
+    const pubKey = await fetch("/api/push").then((r) => r.text());
+    if (!pubKey) return null;
+    return reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(pubKey),
+    });
   } catch {
     return null;
   }
@@ -406,6 +297,7 @@ export function useLeaveReminder(route: PlannedRoute | null) {
     () => (route ? getReminderBaseInfo(route) : null),
     [route],
   );
+
   const routeKey = useMemo(
     () =>
       route
@@ -418,6 +310,7 @@ export function useLeaveReminder(route: PlannedRoute | null) {
         : "",
     [route],
   );
+
   const leaveInfo: LeaveInfo | null = baseInfo
     ? {
         leaveTime: new Date(notifyAtMs ?? baseInfo.baseLeaveTimeMs),
@@ -428,13 +321,11 @@ export function useLeaveReminder(route: PlannedRoute | null) {
       }
     : null;
 
-  // Sync notification permission on mount
   useEffect(() => {
     if (typeof window === "undefined" || !("Notification" in window)) return;
     Promise.resolve().then(() => setPermission(Notification.permission));
   }, []);
 
-  // Restore isSet from localStorage on mount
   useEffect(() => {
     Promise.resolve().then(() => {
       const stored = loadStoredReminder();
@@ -445,7 +336,6 @@ export function useLeaveReminder(route: PlannedRoute | null) {
     });
   }, []);
 
-  // Countdown timer (for first departure card in planner)
   useEffect(() => {
     const targetMs = notifyAtMs ?? baseInfo?.baseLeaveTimeMs ?? null;
     if (!targetMs) {
@@ -478,44 +368,132 @@ export function useLeaveReminder(route: PlannedRoute | null) {
     const sub = await getPushSubscription();
     if (!sub) return;
 
-    // Clear older scheduled notifications for this subscription first.
-    await fetch("/api/push", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ endpoint: sub.endpoint }),
-    });
+    let delaySeconds = 0;
+    if (baseInfo.firstTransitLeg) {
+      const liveDelay = await fetchLegDelay(baseInfo.firstTransitLeg);
+      delaySeconds = liveDelay?.estimatedDelaySeconds ?? 0;
+    }
 
-    const liveDelay =
-      baseInfo.firstTransitLeg != null
-        ? await fetchLegDelay(baseInfo.firstTransitLeg)
-        : null;
-    const delaySeconds = liveDelay?.estimatedDelaySeconds ?? 0;
-    const firstNotifyAt = computeNotifyAtMs(baseInfo, delaySeconds);
-    const jobPrefix = `trip-${Date.now()}-`;
+    let nextNotifyAt = computeNotifyAtMs(baseInfo, delaySeconds);
+    if (nextNotifyAt < Date.now() + 5_000) nextNotifyAt = Date.now() + 5_000;
 
-    await scheduleLiveTripMonitor(
+    const reminderText = buildLeaveReminderText(baseInfo, nextNotifyAt, delaySeconds);
+    await schedulePush(
       sub,
-      route,
-      baseInfo,
-      delaySeconds,
+      nextNotifyAt,
+      reminderText.title,
+      reminderText.body,
+      "leave-main",
       sub.endpoint,
-      jobPrefix,
     );
 
     saveReminder({
       endpoint: sub.endpoint,
-      notifyAt: firstNotifyAt,
+      notifyAt: nextNotifyAt,
       routeKey,
-      jobPrefix,
+      lastDelaySeconds: delaySeconds,
+      lastDelayPushAt: 0,
     });
     saveRouteSnapshot(route);
 
     setIsSet(true);
-    setNotifyAtMs(firstNotifyAt);
+    setNotifyAtMs(nextNotifyAt);
     setIsLiveAdjusted(
-      Math.abs(firstNotifyAt - baseInfo.baseLeaveTimeMs) >= 60_000,
+      Math.abs(nextNotifyAt - baseInfo.baseLeaveTimeMs) >= RESCHEDULE_THRESHOLD_MS,
     );
   }, [route, baseInfo, permission, routeKey]);
+
+  // Adaptive mode: keep one main reminder updated and only push delay updates sparingly.
+  useEffect(() => {
+    if (!isSet || !baseInfo || !baseInfo.firstTransitLeg) return;
+
+    let cancelled = false;
+
+    const run = async () => {
+      try {
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.getSubscription();
+        if (!sub || cancelled) return;
+
+        const stored = loadStoredReminder();
+        if (!stored) return;
+
+        const liveDelay = await fetchLegDelay(baseInfo.firstTransitLeg!);
+        if (cancelled) return;
+
+        const delaySeconds = liveDelay?.estimatedDelaySeconds ?? 0;
+        let nextNotifyAt = computeNotifyAtMs(baseInfo, delaySeconds);
+        if (nextNotifyAt < Date.now() + 5_000) nextNotifyAt = Date.now() + 5_000;
+
+        const prevNotifyAt = stored.notifyAt;
+        const needsReschedule =
+          Math.abs(nextNotifyAt - prevNotifyAt) >= RESCHEDULE_THRESHOLD_MS;
+
+        if (needsReschedule) {
+          const text = buildLeaveReminderText(baseInfo, nextNotifyAt, delaySeconds);
+          await schedulePush(
+            sub,
+            nextNotifyAt,
+            text.title,
+            text.body,
+            "leave-main",
+            sub.endpoint,
+          );
+          if (cancelled) return;
+          setNotifyAtMs(nextNotifyAt);
+        }
+
+        const prevDelaySeconds = stored.lastDelaySeconds ?? 0;
+        const delayChangedBy = Math.abs(delaySeconds - prevDelaySeconds);
+        const cooldownPassed =
+          Date.now() - (stored.lastDelayPushAt ?? 0) >= DELAY_NOTIFY_COOLDOWN_MS;
+        const isBeforeReminder = nextNotifyAt > Date.now() + 60_000;
+
+        let lastDelayPushAt = stored.lastDelayPushAt ?? 0;
+        if (delayChangedBy >= DELAY_NOTIFY_THRESHOLD_S && cooldownPassed && isBeforeReminder) {
+          const delayText = buildDelayUpdateText(baseInfo, nextNotifyAt, delaySeconds);
+          await schedulePush(
+            sub,
+            Date.now() + 1_000,
+            delayText.title,
+            delayText.body,
+            `delay-update-${Date.now()}`,
+            sub.endpoint,
+          );
+          if (cancelled) return;
+          lastDelayPushAt = Date.now();
+        }
+
+        saveReminder({
+          ...stored,
+          endpoint: sub.endpoint,
+          notifyAt: nextNotifyAt,
+          routeKey,
+          lastDelaySeconds: delaySeconds,
+          lastDelayPushAt,
+        });
+
+        setIsLiveAdjusted(
+          Math.abs(nextNotifyAt - baseInfo.baseLeaveTimeMs) >=
+            RESCHEDULE_THRESHOLD_MS,
+        );
+      } catch {
+        // Ignore transient failures.
+      }
+    };
+
+    run();
+    const timer = setInterval(run, ADAPTIVE_POLL_MS);
+    const onVisible = () => {
+      if (!document.hidden) run();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [isSet, baseInfo, routeKey]);
 
   const clearReminder = useCallback(async () => {
     const stored = loadStoredReminder();
@@ -537,8 +515,19 @@ export function useLeaveReminder(route: PlannedRoute | null) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             endpoint: sub.endpoint,
-            jobPrefix: stored?.jobPrefix,
+            jobPrefix: "delay-update-",
           }),
+        });
+        await fetch("/api/push", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ endpoint: sub.endpoint, jobPrefix: "leave-main" }),
+        });
+      } else if (stored?.endpoint) {
+        await fetch("/api/push", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ endpoint: stored.endpoint }),
         });
       }
     } catch {}

@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -266,6 +266,8 @@ interface RoutePlannerProps {
   onDateTimeChange: (dt: string) => void;
   onSwap: () => void;
   onClear?: () => void;
+  openSelectedRouteDetails?: boolean;
+  onConsumeOpenSelectedRouteDetails?: () => void;
 }
 
 export function RoutePlanner({
@@ -289,6 +291,8 @@ export function RoutePlanner({
   onDateTimeChange,
   onSwap,
   onClear,
+  openSelectedRouteDetails = false,
+  onConsumeOpenSelectedRouteDetails,
 }: RoutePlannerProps) {
   const [expandedRoute, setExpandedRoute] = useState<number | null>(null);
   const [mobileDetail, setMobileDetail] = useState<number | null>(null);
@@ -331,6 +335,32 @@ export function RoutePlanner({
     onSelectRoute(i);
     setMobileDetail(i);
   };
+
+  useEffect(() => {
+    if (!openSelectedRouteDetails || !hasRoutes || !routePlan) return;
+    let cancelled = false;
+    Promise.resolve().then(() => {
+      if (cancelled) return;
+      const idx =
+        selectedRouteIndex >= 0 && selectedRouteIndex < routePlan.routes.length
+          ? selectedRouteIndex
+          : 0;
+      onSelectRoute(idx);
+      setExpandedRoute(idx);
+      setMobileDetail(idx);
+      onConsumeOpenSelectedRouteDetails?.();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    openSelectedRouteDetails,
+    hasRoutes,
+    routePlan,
+    selectedRouteIndex,
+    onSelectRoute,
+    onConsumeOpenSelectedRouteDetails,
+  ]);
 
   /* ── Shared form block ─────────────────────────────── */
   const formBlock = (

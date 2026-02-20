@@ -39,7 +39,7 @@ self.addEventListener("push", (event) => {
       await self.registration.showNotification(data.title ?? "Time to leave", {
         body: data.body ?? "Open Transit Tracker for updated directions.",
         icon: "/icon-192x192.png",
-        badge: "/icon-192x192.png",
+        badge: "/icons/notification-badge.svg",
         tag,
         renotify: false,
         requireInteraction: true,
@@ -168,7 +168,7 @@ self.addEventListener("notificationclick", (event) => {
           await self.registration.showNotification("Snooze failed", {
             body: "Could not schedule a new reminder. Open the app to retry.",
             icon: "/icon-192x192.png",
-            badge: "/icon-192x192.png",
+            badge: "/icons/notification-badge.svg",
             tag: "leave-reminder-error",
           });
         }
