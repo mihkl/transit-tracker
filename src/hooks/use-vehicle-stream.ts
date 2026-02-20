@@ -84,6 +84,7 @@ export function useVehicleStream(
           return false;
         if (typeFilter === "train" && v.transportType !== "train") return false;
       }
+      if (lineFilter && v.lineNumber !== lineFilter) return false;
       return true;
     });
   }, [allVehicles, lineFilter, typeFilter]);
