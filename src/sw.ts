@@ -12,7 +12,12 @@ interface ReminderPayload {
   url?: string;
   timestamp?: number;
   category?: "leave-reminder";
+  complete?: boolean;
+  endpoint?: string;
+  jobPrefix?: string;
 }
+
+const skipCloseCancelTags = new Set<string>();
 
 self.addEventListener("push", (event) => {
   const data = (event.data?.json() ?? {}) as ReminderPayload;
@@ -23,26 +28,37 @@ self.addEventListener("push", (event) => {
       : Date.now();
 
   event.waitUntil(
-    self.registration.showNotification(data.title ?? "Time to leave", {
-      body: data.body ?? "Open Transit Tracker for updated directions.",
-      icon: "/icon-192x192.png",
-      badge: "/icon-192x192.png",
-      tag: data.tag ?? "leave-reminder",
-      renotify: true,
-      requireInteraction: true,
-      timestamp,
-      data: {
-        url: targetUrl,
-        title: data.title ?? "Time to leave",
-        body: data.body ?? "",
-        tag: data.tag ?? "leave-reminder",
-      },
-      actions: [
-        { action: "open", title: "Open trip" },
-        { action: "snooze-2m", title: "Snooze 2 min" },
-        { action: "dismiss", title: "Dismiss" },
-      ],
-    }),
+    (async () => {
+      const tag = data.tag ?? "leave-reminder";
+      if (data.complete) {
+        const active = await self.registration.getNotifications({ tag });
+        await Promise.all(active.map((n) => n.close()));
+        return;
+      }
+
+      await self.registration.showNotification(data.title ?? "Time to leave", {
+        body: data.body ?? "Open Transit Tracker for updated directions.",
+        icon: "/icon-192x192.png",
+        badge: "/icon-192x192.png",
+        tag,
+        renotify: false,
+        requireInteraction: true,
+        timestamp,
+        data: {
+          url: targetUrl,
+          title: data.title ?? "Time to leave",
+          body: data.body ?? "",
+          tag,
+          endpoint: data.endpoint,
+          jobPrefix: data.jobPrefix,
+        },
+        actions: [
+          { action: "open", title: "Open trip" },
+          { action: "snooze-2m", title: "Snooze 2 min" },
+          { action: "dismiss", title: "Dismiss" },
+        ],
+      });
+    })(),
   );
 });
 
@@ -70,6 +86,8 @@ async function rescheduleByMinutes(
     body?: string;
     tag?: string;
     url?: string;
+    endpoint?: string;
+    jobPrefix?: string;
   },
 ): Promise<boolean> {
   try {
@@ -90,6 +108,11 @@ async function rescheduleByMinutes(
         url: data.url ?? "/",
         timestamp: notifyAt,
         category: "leave-reminder",
+        endpoint: data.endpoint,
+        jobPrefix: data.jobPrefix,
+        jobKey: data.jobPrefix
+          ? `${data.jobPrefix}snooze-${notifyAt}`
+          : `snooze-${notifyAt}`,
       }),
     });
 
@@ -99,7 +122,27 @@ async function rescheduleByMinutes(
   }
 }
 
+async function cancelScheduledUpdates(
+  endpoint?: string,
+  jobPrefix?: string,
+): Promise<void> {
+  if (!endpoint || !jobPrefix) return;
+  try {
+    await fetch("/api/push", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ endpoint, jobPrefix }),
+    });
+  } catch {
+    // Ignore cancellation failures.
+  }
+}
+
 self.addEventListener("notificationclick", (event) => {
+  const clickedTag = event.notification.tag;
+  if (clickedTag && event.action !== "dismiss") {
+    skipCloseCancelTags.add(clickedTag);
+  }
   event.notification.close();
 
   event.waitUntil(
@@ -109,10 +152,13 @@ self.addEventListener("notificationclick", (event) => {
         title?: string;
         body?: string;
         tag?: string;
+        endpoint?: string;
+        jobPrefix?: string;
       };
       const target = data.url || "/";
 
       if (event.action === "dismiss") {
+        await cancelScheduledUpdates(data.endpoint, data.jobPrefix);
         return;
       }
 
@@ -132,6 +178,18 @@ self.addEventListener("notificationclick", (event) => {
       await focusOrOpen(target);
     })(),
   );
+});
+
+self.addEventListener("notificationclose", (event) => {
+  if (event.notification.tag && skipCloseCancelTags.has(event.notification.tag)) {
+    skipCloseCancelTags.delete(event.notification.tag);
+    return;
+  }
+  const data = (event.notification.data ?? {}) as {
+    endpoint?: string;
+    jobPrefix?: string;
+  };
+  event.waitUntil(cancelScheduledUpdates(data.endpoint, data.jobPrefix));
 });
 
 // --- Lifecycle ---
