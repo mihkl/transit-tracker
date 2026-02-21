@@ -369,8 +369,6 @@ export function RoutePlanner({
       <div className="flex gap-2 items-start">
         <div className="flex-1 space-y-2 min-w-0">
           <PlaceSearchInput
-            label="origin"
-            dotColor="transparent"
             value={origin}
             onSelect={onSetOrigin}
             pickingPoint={pickingPoint}
@@ -379,8 +377,6 @@ export function RoutePlanner({
             currentLocation={userLocation}
           />
           <PlaceSearchInput
-            label="destination"
-            dotColor="transparent"
             value={destination}
             onSelect={onSetDestination}
             pickingPoint={pickingPoint}

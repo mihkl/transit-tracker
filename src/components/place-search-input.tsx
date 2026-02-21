@@ -9,13 +9,11 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { Crosshair, MapPin, Navigation } from "lucide-react";
+import { AlertCircle, Crosshair, MapPin, Navigation } from "lucide-react";
 import { formatCoord } from "@/lib/format-utils";
 import type { PlaceSearchResult } from "@/lib/types";
 
 interface PlaceSearchInputProps {
-  label: string;
-  dotColor: string;
   value: { lat: number; lng: number; name?: string } | null;
   onSelect: (place: { lat: number; lng: number; name: string }) => void;
   pickingPoint: "origin" | "destination" | null;
@@ -25,8 +23,6 @@ interface PlaceSearchInputProps {
 }
 
 export function PlaceSearchInput({
-  label,
-  dotColor,
   value,
   onSelect,
   pickingPoint,
@@ -38,7 +34,7 @@ export function PlaceSearchInput({
   const [results, setResults] = useState<PlaceSearchResult[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [gettingLocation, setGettingLocation] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -54,16 +50,23 @@ export function PlaceSearchInput({
   const searchPlaces = useCallback(async (q: string) => {
     if (q.length < 2) {
       setResults([]);
+      setErrorMessage(null);
       return;
     }
     setLoading(true);
+    setErrorMessage(null);
     try {
       const res = await fetch(`/api/places/search?q=${encodeURIComponent(q)}`);
+      if (!res.ok) {
+        throw new Error("Place search failed");
+      }
       const data = await res.json();
       setResults(data.results || []);
       setShowDropdown(true);
     } catch (err) {
       console.error("Search failed:", err);
+      setErrorMessage("Search failed. Check connection and try again.");
+      setResults([]);
     } finally {
       setLoading(false);
     }
@@ -72,6 +75,7 @@ export function PlaceSearchInput({
   const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setQuery(val);
+    if (errorMessage) setErrorMessage(null);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => searchPlaces(val), 400);
   };
@@ -88,34 +92,16 @@ export function PlaceSearchInput({
   };
 
   const handleUseMyLocation = useCallback(() => {
-    if (currentLocation) {
-      setQuery("Your location");
-      setShowDropdown(false);
-      setResults([]);
-      onSelect({ lat: currentLocation.lat, lng: currentLocation.lng, name: "Your location" });
-      return;
-    }
-    if (!navigator.geolocation) {
-      alert("Geolocation is not supported by your browser");
-      return;
-    }
-    setGettingLocation(true);
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
-        setQuery("Your location");
-        setShowDropdown(false);
-        setResults([]);
-        onSelect({ lat: latitude, lng: longitude, name: "Your location" });
-        setGettingLocation(false);
-      },
-      (error) => {
-        console.error("Geolocation error:", error);
-        alert("Unable to get your location. Please enable location permissions.");
-        setGettingLocation(false);
-      },
-      { enableHighAccuracy: true, timeout: 10000 },
-    );
+    if (!currentLocation) return;
+    setQuery("Your location");
+    setShowDropdown(false);
+    setResults([]);
+    setErrorMessage(null);
+    onSelect({
+      lat: currentLocation.lat,
+      lng: currentLocation.lng,
+      name: "Your location",
+    });
   }, [currentLocation, onSelect]);
 
   useEffect(() => {
@@ -129,6 +115,7 @@ export function PlaceSearchInput({
 
   const isPicking = pickingPoint === pointType;
   const isOrigin = pointType === "origin";
+  const canUseMyLocation = isOrigin && !!currentLocation;
 
   return (
     <div className="relative" ref={wrapperRef}>
@@ -150,7 +137,7 @@ export function PlaceSearchInput({
         />
 
         {/* Loading spinner */}
-        {(loading || gettingLocation) && (
+        {loading && (
           <div className="absolute right-10 top-1/2 -translate-y-1/2">
             <div className="w-3.5 h-3.5 border-2 border-foreground/10 border-t-foreground/50 rounded-full animate-spin" />
           </div>
@@ -174,10 +161,18 @@ export function PlaceSearchInput({
         <div className="absolute z-50 top-full left-0 right-0 md:w-80 mt-1.5 animate-scale-in">
           <Command className="bg-white border border-foreground/8 rounded-xl shadow-dropdown">
             <CommandList>
+              {errorMessage && (
+                <div className="mx-2 mt-2 mb-1 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-amber-800">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                    <span className="text-xs font-medium">{errorMessage}</span>
+                  </div>
+                </div>
+              )}
               <CommandEmpty className="py-4 text-center text-sm text-foreground/50">
                 No results.
               </CommandEmpty>
-              {isOrigin && (
+              {canUseMyLocation && (
                 <CommandGroup>
                   <CommandItem
                     onSelect={handleUseMyLocation}

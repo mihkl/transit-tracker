@@ -9,6 +9,7 @@ import { Car, Bus } from "lucide-react";
 import { Icon } from "@/components/icon";
 import { useVehicleStream } from "@/hooks/use-vehicle-stream";
 import { useAnimatedVehicles } from "@/hooks/use-animated-vehicles";
+import { isReliableUserLocation } from "@/lib/location-quality";
 import type {
   RoutePlanResponse,
   PlannedRoute,
@@ -70,7 +71,6 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
   const [selectedDateTime, setSelectedDateTime] = useState(() =>
     toLocalDateTimeString(new Date()),
   );
-
   const [userLocation, setUserLocation] = useState<{
     lat: number;
     lng: number;
@@ -107,8 +107,10 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
   useEffect(() => {
     if (typeof navigator === "undefined" || !navigator.geolocation) return;
     const watchId = navigator.geolocation.watchPosition(
-      ({ coords }) =>
-        setUserLocation({ lat: coords.latitude, lng: coords.longitude }),
+      ({ coords }) => {
+        if (!isReliableUserLocation(coords)) return;
+        setUserLocation({ lat: coords.latitude, lng: coords.longitude });
+      },
       (err) => console.warn("Geolocation error:", err.message),
       { enableHighAccuracy: true, maximumAge: 30_000, timeout: 15_000 },
     );

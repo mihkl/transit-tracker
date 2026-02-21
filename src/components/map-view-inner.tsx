@@ -36,6 +36,7 @@ import { StopPopup } from "@/components/stop-popup";
 import { useIsDesktop } from "@/hooks/use-is-desktop";
 import { useTrafficData } from "@/hooks/use-traffic-data";
 import { Icon } from "@/components/icon";
+import { isReliableUserLocation } from "@/lib/location-quality";
 
 function fitMapToPoints(map: MapRef, points: number[][]) {
   let minLat = Infinity,
@@ -165,6 +166,8 @@ export function MapViewInner({
 
     const watchId = navigator.geolocation.watchPosition(
       ({ coords }) => {
+        if (!isReliableUserLocation(coords)) return;
+
         const { latitude, longitude } = coords;
         setUserLocation({ lat: latitude, lng: longitude });
 
