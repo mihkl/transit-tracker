@@ -89,13 +89,90 @@ interface GoogleGeocodingResult {
   }[];
 }
 
+interface PlacesNewLocation {
+  latitude: number;
+  longitude: number;
+}
+
+interface PlacesNewDisplayName {
+  text?: string;
+}
+
+interface PlacesNewSearchPlace {
+  id?: string;
+  displayName?: PlacesNewDisplayName;
+  formattedAddress?: string;
+  location?: PlacesNewLocation;
+}
+
+interface PlacesNewSearchResponse {
+  places?: PlacesNewSearchPlace[];
+}
+
+interface PlacesNewDetailsResponse {
+  id?: string;
+  displayName?: PlacesNewDisplayName;
+  formattedAddress?: string;
+  location?: PlacesNewLocation;
+  businessStatus?: string;
+  movedPlace?: string;
+  movedPlaceId?: string;
+}
+
+function toPlaceResourceName(placeId: string): string {
+  return placeId.startsWith("places/") ? placeId : `places/${placeId}`;
+}
+
+async function fetchPlaceDetailsNew(
+  placeId: string,
+  apiKey: string,
+  depth = 0,
+): Promise<PlacesNewDetailsResponse | null> {
+  const resourceName = toPlaceResourceName(placeId);
+  const res = await fetch(`https://places.googleapis.com/v1/${resourceName}`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Goog-Api-Key": apiKey,
+      "X-Goog-FieldMask":
+        "id,displayName,formattedAddress,location,businessStatus,movedPlace,movedPlaceId",
+    },
+  });
+
+  const body = await res.text();
+  if (!res.ok) {
+    console.error(`Place Details (New) error (${res.status}): ${body}`);
+    return null;
+  }
+
+  const data = JSON.parse(body) as PlacesNewDetailsResponse;
+  const hasMoved =
+    data.businessStatus === "CLOSED_PERMANENTLY" &&
+    (data.movedPlaceId || data.movedPlace);
+
+  if (hasMoved && depth < 3) {
+    const nextPlaceId = data.movedPlaceId || data.movedPlace!;
+    return fetchPlaceDetailsNew(nextPlaceId, apiKey, depth + 1);
+  }
+
+  return data;
+}
+
 function buildPlaceNameFromComponents(
   components: GoogleGeocodingResult["address_components"],
 ): string {
   const find = (type: string) =>
     components.find((c) => c.types.includes(type))?.long_name;
 
-  const poi = find("point_of_interest") || find("establishment");
+  const poi =
+    find("point_of_interest") ||
+    find("establishment") ||
+    find("university") ||
+    find("school") ||
+    find("hospital") ||
+    find("airport") ||
+    find("premise") ||
+    find("subpremise");
   if (poi) return poi;
 
   const route = find("route");
@@ -112,8 +189,79 @@ function buildPlaceNameFromComponents(
 export async function searchPlaces(
   query: string,
 ): Promise<PlaceSearchResult[]> {
+  const placesApiKey = getApiKey();
+
+  try {
+    if (placesApiKey) {
+      const searchRes = await fetch(
+        "https://places.googleapis.com/v1/places:searchText",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Goog-Api-Key": placesApiKey,
+            "X-Goog-FieldMask":
+              "places.id,places.displayName,places.formattedAddress,places.location",
+          },
+          body: JSON.stringify({
+            textQuery: query,
+            languageCode: "et",
+            regionCode: "EE",
+            pageSize: 5,
+            locationBias: {
+              rectangle: {
+                low: { latitude: 59.35, longitude: 24.5 },
+                high: { latitude: 59.5, longitude: 25.0 },
+              },
+            },
+          }),
+        },
+      );
+
+      const searchBody = await searchRes.text();
+      if (!searchRes.ok) {
+        console.error(`Places Text Search (New) error (${searchRes.status}): ${searchBody}`);
+      } else {
+        const searchData = JSON.parse(searchBody) as PlacesNewSearchResponse;
+        const searchPlaces = (searchData.places ?? []).filter((p) => !!p.id);
+
+        if (searchPlaces.length > 0) {
+          const detailsList = await Promise.all(
+            searchPlaces.slice(0, 5).map(async (p) => {
+              const details = await fetchPlaceDetailsNew(p.id!, placesApiKey);
+              return { search: p, details };
+            }),
+          );
+
+          const enriched = detailsList
+            .map(({ search, details }) => {
+              const location = details?.location || search.location;
+              const name =
+                details?.displayName?.text?.trim() ||
+                search.displayName?.text?.trim() ||
+                "";
+              const address = details?.formattedAddress || search.formattedAddress || "";
+
+              if (!location || !name || !address) return null;
+              return {
+                name,
+                address,
+                lat: location.latitude,
+                lng: location.longitude,
+              } satisfies PlaceSearchResult;
+            })
+            .filter((p): p is PlaceSearchResult => p !== null);
+
+          if (enriched.length > 0) return enriched;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("Places (New) search/details failed, falling back to Geocoding:", err);
+  }
+
   const apiKey = getApiKey();
-  const url =
+  const geocodeUrl =
     `https://maps.googleapis.com/maps/api/geocode/json` +
     `?address=${encodeURIComponent("Tallinn " + query)}` +
     `&key=${apiKey}` +
@@ -121,7 +269,7 @@ export async function searchPlaces(
     `&language=et` +
     `&region=ee`;
 
-  const res = await fetch(url);
+  const res = await fetch(geocodeUrl);
   const body = await res.text();
 
   if (!res.ok) {
