@@ -18,6 +18,8 @@ function isWithinTallinn(lat: number, lng: number): boolean {
 // Accept either Tallinn-area fixes or globally precise fixes.
 export function isReliableUserLocation(coords: GeolocationCoordinates): boolean {
   const { latitude, longitude, accuracy } = coords;
-  return (isWithinTallinn(latitude, longitude) && accuracy <= 100);
+  const inTallinnWithReasonableAccuracy =
+    isWithinTallinn(latitude, longitude) && accuracy <= 1000;
+  const globallyPrecise = accuracy <= 100;
+  return inTallinnWithReasonableAccuracy || globallyPrecise;
 }
-
