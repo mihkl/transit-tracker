@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
-import type { PlannedRoute, RouteLeg, DelayInfo } from "@/lib/types";
-import { getLegDelay } from "@/actions";
+import type { PlannedRoute, RouteLeg } from "@/lib/types";
+import { parseDurationSeconds } from "@/lib/route-time";
+import { fetchLegDelay } from "@/lib/leg-delay";
 
 export interface LeaveInfo {
   leaveTime: Date;
@@ -41,12 +42,6 @@ const RESCHEDULE_THRESHOLD_MS = 60_000;
 const ADAPTIVE_POLL_MS = 20_000;
 const DELAY_NOTIFY_THRESHOLD_S = 120;
 const DELAY_NOTIFY_COOLDOWN_MS = 5 * 60_000;
-
-function parseDurationSeconds(duration?: string): number {
-  if (!duration) return 0;
-  const match = duration.match(/(\d+)s/);
-  return match ? parseInt(match[1], 10) : 0;
-}
 
 function formatTime(dateMs: number): string {
   return new Date(dateMs).toLocaleTimeString([], {
@@ -107,24 +102,6 @@ function getReminderBaseInfo(route: PlannedRoute): ReminderBaseInfo | null {
   };
 }
 
-async function fetchLegDelay(leg: RouteLeg): Promise<DelayInfo | null> {
-  try {
-    return await getLegDelay({
-      line: leg.lineNumber,
-      type: leg.mode,
-      depStop: leg.departureStop,
-      depLat: leg.departureStopLat,
-      depLng: leg.departureStopLng,
-      arrStop: leg.arrivalStop,
-      arrLat: leg.arrivalStopLat,
-      arrLng: leg.arrivalStopLng,
-      scheduledDep: leg.scheduledDeparture,
-    });
-  } catch {
-    return null;
-  }
-}
-
 function computeNotifyAtMs(
   baseInfo: ReminderBaseInfo,
   delaySeconds: number,
@@ -175,7 +152,7 @@ async function schedulePush(
   jobKey: string,
   endpoint: string,
 ) {
-  await fetch("/api/push", {
+  const response = await fetch("/api/push", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -191,6 +168,10 @@ async function schedulePush(
       jobKey,
     }),
   });
+
+  if (!response.ok) {
+    throw new Error("Failed to schedule push notification");
+  }
 }
 
 function saveReminder(data: StoredReminder) {
@@ -216,6 +197,13 @@ function clearStoredReminder() {
   try {
     localStorage.removeItem(STORAGE_KEY);
   } catch {}
+}
+
+function hasMatchingRoute(
+  stored: StoredReminder | null,
+  routeKey: string,
+): stored is StoredReminder & { routeKey: string } {
+  return !!stored && !!routeKey && stored.routeKey === routeKey;
 }
 
 function saveRouteSnapshot(route: PlannedRoute) {
@@ -256,25 +244,51 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
   return bytes;
 }
 
-async function getPushSubscription(): Promise<PushSubscription | null> {
+async function getPushSubscription(): Promise<{
+  subscription: PushSubscription | null;
+  error: string | null;
+}> {
   if (
     typeof navigator === "undefined" ||
     !("serviceWorker" in navigator) ||
     !("PushManager" in window)
   )
-    return null;
+    return {
+      subscription: null,
+      error: "Push is not available in this browser context.",
+    };
   try {
     const reg = await navigator.serviceWorker.ready;
     const existing = await reg.pushManager.getSubscription();
-    if (existing) return existing;
-    const pubKey = await fetch("/api/push").then((r) => r.text());
-    if (!pubKey) return null;
-    return reg.pushManager.subscribe({
+    if (existing) return { subscription: existing, error: null };
+
+    const keyResp = await fetch("/api/push");
+    if (!keyResp.ok) {
+      return {
+        subscription: null,
+        error: "Push service is not configured on the server.",
+      };
+    }
+
+    const pubKey = await keyResp.text();
+    if (!pubKey) {
+      return {
+        subscription: null,
+        error: "Missing push public key.",
+      };
+    }
+
+    const subscription = await reg.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(pubKey),
     });
+    return { subscription, error: null };
   } catch {
-    return null;
+    return {
+      subscription: null,
+      error:
+        "Could not enable push notifications. Private/incognito mode may block this.",
+    };
   }
 }
 
@@ -285,6 +299,7 @@ export function useLeaveReminder(route: PlannedRoute | null) {
   const [minutesUntil, setMinutesUntil] = useState<number | null>(null);
   const [notifyAtMs, setNotifyAtMs] = useState<number | null>(null);
   const [isLiveAdjusted, setIsLiveAdjusted] = useState(false);
+  const [lastError, setLastError] = useState<string | null>(null);
 
   const baseInfo = useMemo(
     () => (route ? getReminderBaseInfo(route) : null),
@@ -322,15 +337,29 @@ export function useLeaveReminder(route: PlannedRoute | null) {
   useEffect(() => {
     Promise.resolve().then(() => {
       const stored = loadStoredReminder();
-      if (stored) {
+      if (hasMatchingRoute(stored, routeKey)) {
         setIsSet(true);
         setNotifyAtMs(stored.notifyAt);
+        if (baseInfo) {
+          setIsLiveAdjusted(
+            Math.abs(stored.notifyAt - baseInfo.baseLeaveTimeMs) >=
+              RESCHEDULE_THRESHOLD_MS,
+          );
+        } else {
+          setIsLiveAdjusted(false);
+        }
+      } else {
+        setIsSet(false);
+        setNotifyAtMs(null);
+        setIsLiveAdjusted(false);
       }
     });
-  }, []);
+  }, [routeKey, baseInfo]);
 
   useEffect(() => {
-    const targetMs = notifyAtMs ?? baseInfo?.baseLeaveTimeMs ?? null;
+    const targetMs = isSet
+      ? (notifyAtMs ?? null)
+      : (baseInfo?.baseLeaveTimeMs ?? null);
     if (!targetMs) {
       Promise.resolve().then(() => setMinutesUntil(null));
       return;
@@ -340,7 +369,7 @@ export function useLeaveReminder(route: PlannedRoute | null) {
     update();
     const tick = setInterval(update, 30_000);
     return () => clearInterval(tick);
-  }, [notifyAtMs, baseInfo?.baseLeaveTimeMs]);
+  }, [isSet, notifyAtMs, baseInfo?.baseLeaveTimeMs]);
 
   const scheduleReminder = useCallback(async () => {
     if (
@@ -351,49 +380,65 @@ export function useLeaveReminder(route: PlannedRoute | null) {
     )
       return;
 
-    let perm = permission;
-    if (perm === "default") {
-      perm = await Notification.requestPermission();
-      setPermission(perm);
+    try {
+      let perm = permission;
+      if (perm === "default") {
+        perm = await Notification.requestPermission();
+        setPermission(perm);
+      }
+      if (perm !== "granted") {
+        setLastError("Notification permission is blocked.");
+        return;
+      }
+
+      const { subscription: sub, error } = await getPushSubscription();
+      if (!sub) {
+        setLastError(error ?? "Unable to create push subscription.");
+        return;
+      }
+
+      let delaySeconds = 0;
+      if (baseInfo.firstTransitLeg) {
+        const liveDelay = await fetchLegDelay(baseInfo.firstTransitLeg);
+        delaySeconds = liveDelay?.estimatedDelaySeconds ?? 0;
+      }
+
+      let nextNotifyAt = computeNotifyAtMs(baseInfo, delaySeconds);
+      if (nextNotifyAt < Date.now() + 5_000) nextNotifyAt = Date.now() + 5_000;
+
+      const reminderText = buildLeaveReminderText(
+        baseInfo,
+        nextNotifyAt,
+        delaySeconds,
+      );
+      await schedulePush(
+        sub,
+        nextNotifyAt,
+        reminderText.title,
+        reminderText.body,
+        "leave-main",
+        sub.endpoint,
+      );
+
+      saveReminder({
+        endpoint: sub.endpoint,
+        notifyAt: nextNotifyAt,
+        routeKey,
+        lastDelaySeconds: delaySeconds,
+        lastDelayPushAt: 0,
+      });
+      saveRouteSnapshot(route);
+
+      setIsSet(true);
+      setNotifyAtMs(nextNotifyAt);
+      setIsLiveAdjusted(
+        Math.abs(nextNotifyAt - baseInfo.baseLeaveTimeMs) >=
+          RESCHEDULE_THRESHOLD_MS,
+      );
+      setLastError(null);
+    } catch {
+      setLastError("Failed to schedule reminder. Please try again.");
     }
-    if (perm !== "granted") return;
-
-    const sub = await getPushSubscription();
-    if (!sub) return;
-
-    let delaySeconds = 0;
-    if (baseInfo.firstTransitLeg) {
-      const liveDelay = await fetchLegDelay(baseInfo.firstTransitLeg);
-      delaySeconds = liveDelay?.estimatedDelaySeconds ?? 0;
-    }
-
-    let nextNotifyAt = computeNotifyAtMs(baseInfo, delaySeconds);
-    if (nextNotifyAt < Date.now() + 5_000) nextNotifyAt = Date.now() + 5_000;
-
-    const reminderText = buildLeaveReminderText(baseInfo, nextNotifyAt, delaySeconds);
-    await schedulePush(
-      sub,
-      nextNotifyAt,
-      reminderText.title,
-      reminderText.body,
-      "leave-main",
-      sub.endpoint,
-    );
-
-    saveReminder({
-      endpoint: sub.endpoint,
-      notifyAt: nextNotifyAt,
-      routeKey,
-      lastDelaySeconds: delaySeconds,
-      lastDelayPushAt: 0,
-    });
-    saveRouteSnapshot(route);
-
-    setIsSet(true);
-    setNotifyAtMs(nextNotifyAt);
-    setIsLiveAdjusted(
-      Math.abs(nextNotifyAt - baseInfo.baseLeaveTimeMs) >= RESCHEDULE_THRESHOLD_MS,
-    );
   }, [route, baseInfo, permission, routeKey]);
 
   // Adaptive mode: keep one main reminder updated and only push delay updates sparingly.
@@ -409,7 +454,7 @@ export function useLeaveReminder(route: PlannedRoute | null) {
         if (!sub || cancelled) return;
 
         const stored = loadStoredReminder();
-        if (!stored) return;
+        if (!hasMatchingRoute(stored, routeKey)) return;
 
         const liveDelay = await fetchLegDelay(baseInfo.firstTransitLeg!);
         if (cancelled) return;
@@ -490,6 +535,7 @@ export function useLeaveReminder(route: PlannedRoute | null) {
 
   const clearReminder = useCallback(async () => {
     const stored = loadStoredReminder();
+    if (!hasMatchingRoute(stored, routeKey)) return;
     clearStoredReminder();
     if (!hasFreshRouteSnapshot()) {
       clearRouteSnapshot();
@@ -498,6 +544,7 @@ export function useLeaveReminder(route: PlannedRoute | null) {
     setIsSet(false);
     setNotifyAtMs(null);
     setIsLiveAdjusted(false);
+    setLastError(null);
 
     try {
       const reg = await navigator.serviceWorker.ready;
@@ -524,7 +571,7 @@ export function useLeaveReminder(route: PlannedRoute | null) {
         });
       }
     } catch {}
-  }, []);
+  }, [routeKey]);
 
   return {
     leaveInfo,
@@ -532,6 +579,7 @@ export function useLeaveReminder(route: PlannedRoute | null) {
     isLiveAdjusted,
     permission,
     minutesUntil,
+    lastError,
     scheduleReminder,
     clearReminder,
   };

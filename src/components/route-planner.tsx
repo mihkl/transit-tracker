@@ -152,6 +152,7 @@ interface ReminderProps {
   isSet: boolean;
   minutesUntil: number | null;
   isLiveAdjusted: boolean;
+  error: string | null;
   onSchedule: () => void;
   onClear: () => void;
 }
@@ -202,35 +203,42 @@ function RouteCard({
       {isExpanded && (
         <div className="px-3 pb-3 pt-1 border-t border-foreground/6 space-y-1.5">
           {reminderProps && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                if (reminderProps.isSet) {
-                  reminderProps.onClear();
-                } else {
-                  reminderProps.onSchedule();
-                }
-              }}
-              className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-xl border transition-colors text-left ${
-                reminderProps.isSet
-                  ? "bg-primary/6 border-primary/20 text-primary"
-                  : "bg-foreground/2 border-foreground/8 text-foreground/60 hover:text-foreground/80"
-              }`}
-            >
-              <Bell
-                size={14}
-                fill={reminderProps.isSet ? "currentColor" : "none"}
-                className="shrink-0"
-              />
-              <span className="text-xs font-semibold">
-                {reminderProps.isSet
-                  ? reminderProps.minutesUntil !== null &&
-                    reminderProps.minutesUntil > 0
-                    ? `Leave in ${reminderProps.minutesUntil} min${reminderProps.isLiveAdjusted ? " · auto-adjusting" : ""}`
-                    : "Reminder active · tap to cancel"
-                  : "Set smart leave reminder"}
-              </span>
-            </button>
+            <>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (reminderProps.isSet) {
+                    reminderProps.onClear();
+                  } else {
+                    reminderProps.onSchedule();
+                  }
+                }}
+                className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-xl border transition-colors text-left cursor-pointer ${
+                  reminderProps.isSet
+                    ? "bg-primary/6 border-primary/20 text-primary"
+                    : "bg-foreground/2 border-foreground/8 text-foreground/60 hover:text-foreground/80"
+                }`}
+              >
+                <Bell
+                  size={14}
+                  fill={reminderProps.isSet ? "currentColor" : "none"}
+                  className="shrink-0"
+                />
+                <span className="text-xs font-semibold">
+                  {reminderProps.isSet
+                    ? reminderProps.minutesUntil !== null &&
+                      reminderProps.minutesUntil > 0
+                      ? `Leave in ${reminderProps.minutesUntil} min${reminderProps.isLiveAdjusted ? " · auto-adjusting" : ""}`
+                      : "Reminder active · tap to cancel"
+                    : "Set smart leave reminder"}
+                </span>
+              </button>
+              {!reminderProps.isSet && reminderProps.error && (
+                <div className="px-1 text-[11px] text-amber-700 font-medium">
+                  {reminderProps.error}
+                </div>
+              )}
+            </>
           )}
           <LegList
             route={route}
@@ -312,6 +320,7 @@ export function RoutePlanner({
     isSet: isReminderSet,
     isLiveAdjusted,
     minutesUntil,
+    lastError,
     scheduleReminder,
     clearReminder,
   } = useLeaveReminder(selectedRoute);
@@ -321,6 +330,7 @@ export function RoutePlanner({
         isSet: isReminderSet,
         minutesUntil,
         isLiveAdjusted,
+        error: lastError,
         onSchedule: scheduleReminder,
         onClear: clearReminder,
       }
@@ -494,7 +504,7 @@ export function RoutePlanner({
                     ? reminderProps.onClear()
                     : reminderProps.onSchedule()
                 }
-                className={`p-2.5 rounded-xl transition-colors active:scale-95 shrink-0 ${
+                className={`p-2.5 rounded-xl transition-colors active:scale-95 shrink-0 cursor-pointer ${
                   reminderProps.isSet
                     ? "bg-primary/10 text-primary"
                     : "text-foreground/40 hover:text-foreground/70"

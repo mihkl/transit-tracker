@@ -12,9 +12,12 @@ if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY && VAPID_SUBJECT) {
 }
 
 interface ScheduledEntry {
-  timeoutId: ReturnType<typeof setTimeout>;
+  timeoutId: ReturnType<typeof setTimeout> | null;
   endpoint: string;
   jobKey: string;
+  notifyAt: number;
+  subscription: PushSubscription;
+  payload: PushPayload;
 }
 
 interface PushPayload {
@@ -28,6 +31,9 @@ interface PushPayload {
 
 const scheduled = new Map<string, ScheduledEntry>();
 const endpointIndex = new Map<string, Set<string>>();
+const MAX_TOTAL_SCHEDULED = 5_000;
+const MAX_PER_ENDPOINT = 50;
+const MAX_TIMER_DELAY_MS = 2_147_483_647;
 
 function toScheduleKey(endpoint: string, jobKey: string): string {
   return `${endpoint}::${jobKey}`;
@@ -52,7 +58,7 @@ function unindexKey(endpoint: string, scheduleKey: string) {
 function clearScheduleKey(scheduleKey: string) {
   const entry = scheduled.get(scheduleKey);
   if (!entry) return;
-  clearTimeout(entry.timeoutId);
+  if (entry.timeoutId) clearTimeout(entry.timeoutId);
   scheduled.delete(scheduleKey);
   unindexKey(entry.endpoint, scheduleKey);
 }
@@ -69,6 +75,41 @@ async function sendPush(subscription: PushSubscription, payload: PushPayload) {
   }
 }
 
+function getEndpointCount(endpoint: string): number {
+  return endpointIndex.get(endpoint)?.size ?? 0;
+}
+
+function assertSchedulingCapacity(endpoint: string, scheduleKey: string) {
+  const isExisting = scheduled.has(scheduleKey);
+  if (!isExisting && scheduled.size >= MAX_TOTAL_SCHEDULED) {
+    throw new Error("Push scheduler capacity exceeded");
+  }
+
+  if (!isExisting && getEndpointCount(endpoint) >= MAX_PER_ENDPOINT) {
+    throw new Error("Push scheduler per-endpoint limit exceeded");
+  }
+}
+
+function armTimer(entry: ScheduledEntry, scheduleKey: string): void {
+  const delay = entry.notifyAt - Date.now();
+
+  if (delay <= 0) {
+    // Invariant: the entry has already been inserted into `scheduled` and
+    // `endpointIndex` by the caller before armTimer is invoked, so
+    // clearScheduleKey will find and clean it up correctly.
+    sendPush(entry.subscription, entry.payload);
+    clearScheduleKey(scheduleKey);
+    return;
+  }
+
+  const nextDelay = Math.min(delay, MAX_TIMER_DELAY_MS);
+  entry.timeoutId = setTimeout(() => {
+    const current = scheduled.get(scheduleKey);
+    if (!current) return;
+    armTimer(current, scheduleKey);
+  }, nextDelay);
+}
+
 export function scheduleNotification(
   subscription: PushSubscription,
   notifyAt: number,
@@ -77,24 +118,25 @@ export function scheduleNotification(
 ) {
   const scheduleKey = toScheduleKey(subscription.endpoint, jobKey);
   clearScheduleKey(scheduleKey);
+  assertSchedulingCapacity(subscription.endpoint, scheduleKey);
 
-  const delay = notifyAt - Date.now();
-  if (delay <= 0) {
+  if (notifyAt <= Date.now()) {
     sendPush(subscription, payload);
     return;
   }
 
-  const timeoutId = setTimeout(() => {
-    sendPush(subscription, payload);
-    clearScheduleKey(scheduleKey);
-  }, delay);
-
-  scheduled.set(scheduleKey, {
-    timeoutId,
+  const entry: ScheduledEntry = {
+    timeoutId: null,
     endpoint: subscription.endpoint,
     jobKey,
-  });
+    notifyAt,
+    subscription,
+    payload,
+  };
+
+  scheduled.set(scheduleKey, entry);
   indexKey(subscription.endpoint, scheduleKey);
+  armTimer(entry, scheduleKey);
 }
 
 export function cancelNotification(endpoint: string, jobPrefix?: string) {
