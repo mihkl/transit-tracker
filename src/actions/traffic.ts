@@ -120,10 +120,7 @@ export async function getTrafficIncidents(bounds: {
     let coordinates: number[];
     if (incident.geometry.type === "Point") {
       coordinates = incident.geometry.coordinates as number[];
-    } else if (
-      incident.geometry.type === "LineString" ||
-      incident.geometry.type === "MultiPoint"
-    ) {
+    } else if (incident.geometry.type === "LineString" || incident.geometry.type === "MultiPoint") {
       coordinates = (incident.geometry.coordinates as number[][])[0];
     } else {
       continue;

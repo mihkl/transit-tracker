@@ -119,9 +119,7 @@ export function FilterPanel({
 
         <div className="flex items-center gap-1.5 px-2">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-live shrink-0" />
-          <span className="text-[11px] text-foreground/45 font-medium">
-            live
-          </span>
+          <span className="text-[11px] text-foreground/45 font-medium">live</span>
         </div>
       </div>
     </>

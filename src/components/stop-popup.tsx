@@ -28,13 +28,9 @@ export function StopPopup({ stop, departures, loading }: StopPopupProps) {
   return (
     <div className="min-w-52 p-1">
       <div className="mb-3">
-        <div className="font-bold text-sm text-foreground/90">
-          {stop.stopName}
-        </div>
+        <div className="font-bold text-sm text-foreground/90">{stop.stopName}</div>
         {stop.stopDesc && (
-          <div className="text-xs text-foreground/55 font-medium mt-0.5">
-            {stop.stopDesc}
-          </div>
+          <div className="text-xs text-foreground/55 font-medium mt-0.5">{stop.stopDesc}</div>
         )}
       </div>
 

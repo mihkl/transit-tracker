@@ -17,9 +17,9 @@ interface VehicleTransition {
 
 export function useAnimatedVehicles(rawVehicles: VehicleDto[]): VehicleDto[] {
   const transitionsRef = useRef<Map<number, VehicleTransition>>(new Map());
-  const prevPositionsRef = useRef<
-    Map<number, { lat: number; lng: number; bearing: number }>
-  >(new Map());
+  const prevPositionsRef = useRef<Map<number, { lat: number; lng: number; bearing: number }>>(
+    new Map(),
+  );
   const rawRef = useRef<VehicleDto[]>(rawVehicles);
   const frameIdRef = useRef<number | null>(null);
   const [animated, setAnimated] = useState<VehicleDto[]>([]);
@@ -59,8 +59,7 @@ export function useAnimatedVehicles(rawVehicles: VehicleDto[]): VehicleDto[] {
           let bearingDiff = t.toBearing - t.fromBearing;
           if (bearingDiff > 180) bearingDiff -= 360;
           if (bearingDiff < -180) bearingDiff += 360;
-          interpolatedBearing =
-            (t.fromBearing + bearingDiff * eased + 360) % 360;
+          interpolatedBearing = (t.fromBearing + bearingDiff * eased + 360) % 360;
         }
 
         return {

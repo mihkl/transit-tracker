@@ -13,25 +13,12 @@ export const INCIDENT_LABELS: Record<number, string> = {
   14: "Breakdown",
 };
 
-export function IncidentIcon({
-  category,
-  size = 28,
-}: {
-  category: number;
-  size?: number;
-}) {
+export function IncidentIcon({ category, size = 28 }: { category: number; size?: number }) {
   const label = INCIDENT_LABELS[category] || "Incident";
-  const iconFile = INCIDENT_LABELS[category]
-    ? `incident-${category}`
-    : "incident-default";
+  const iconFile = INCIDENT_LABELS[category] ? `incident-${category}` : "incident-default";
   return (
     // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={`/icons/${iconFile}.svg`}
-      width={size}
-      height={size}
-      alt={label}
-    />
+    <img src={`/icons/${iconFile}.svg`} width={size} height={size} alt={label} />
   );
 }
 
@@ -118,16 +105,7 @@ export function StopIcon({ size = 12 }: { size?: number }) {
       role="img"
       aria-label="Stop"
     >
-      <rect
-        x={2}
-        y={2}
-        width={8}
-        height={8}
-        rx={2}
-        fill="#fff"
-        stroke="#666"
-        strokeWidth={1.5}
-      />
+      <rect x={2} y={2} width={8} height={8} rx={2} fill="#fff" stroke="#666" strokeWidth={1.5} />
     </svg>
   );
 }
@@ -167,14 +145,7 @@ export function BoardingStopIcon({
       role="img"
       aria-label={`Line ${lineNumber}`}
     >
-      <circle
-        cx={10}
-        cy={10}
-        r={8}
-        fill={color}
-        stroke="#fff"
-        strokeWidth={2}
-      />
+      <circle cx={10} cy={10} r={8} fill={color} stroke="#fff" strokeWidth={2} />
       <text
         x={10}
         y={14}

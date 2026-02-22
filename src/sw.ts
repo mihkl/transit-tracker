@@ -110,9 +110,7 @@ async function rescheduleByMinutes(
         category: "leave-reminder",
         endpoint: data.endpoint,
         jobPrefix: data.jobPrefix,
-        jobKey: data.jobPrefix
-          ? `${data.jobPrefix}snooze-${notifyAt}`
-          : `snooze-${notifyAt}`,
+        jobKey: data.jobPrefix ? `${data.jobPrefix}snooze-${notifyAt}` : `snooze-${notifyAt}`,
       }),
     });
 
@@ -122,10 +120,7 @@ async function rescheduleByMinutes(
   }
 }
 
-async function cancelScheduledUpdates(
-  endpoint?: string,
-  jobPrefix?: string,
-): Promise<void> {
+async function cancelScheduledUpdates(endpoint?: string, jobPrefix?: string): Promise<void> {
   if (!endpoint || !jobPrefix) return;
   try {
     await fetch("/api/push", {
@@ -199,7 +194,7 @@ self.addEventListener("install", (event) => {
     caches
       .open(CACHE_NAME)
       .then((cache) => cache.addAll(PRECACHE_URLS))
-      .then(() => self.skipWaiting())
+      .then(() => self.skipWaiting()),
   );
 });
 
@@ -208,11 +203,9 @@ self.addEventListener("activate", (event) => {
     caches
       .keys()
       .then((keys) =>
-        Promise.all(
-          keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))
-        )
+        Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))),
       )
-      .then(() => self.clients.claim())
+      .then(() => self.clients.claim()),
   );
 });
 
@@ -243,8 +236,8 @@ self.addEventListener("fetch", (event) => {
             const clone = response.clone();
             caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
             return response;
-          })
-      )
+          }),
+      ),
     );
     return;
   }
@@ -257,6 +250,6 @@ self.addEventListener("fetch", (event) => {
         caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
         return response;
       })
-      .catch(() => caches.match(request) as Promise<Response>)
+      .catch(() => caches.match(request) as Promise<Response>),
   );
 });

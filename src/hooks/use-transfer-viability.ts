@@ -61,16 +61,11 @@ function computeTransfers(
     const d1 = delay1?.estimatedDelaySeconds ?? 0;
     const d2 = delay2?.estimatedDelaySeconds ?? 0;
     const arrMs = new Date(leg.scheduledArrival).getTime() + d1 * 1000;
-    const depMs =
-      new Date(nextTransitLeg.scheduledDeparture).getTime() + d2 * 1000;
+    const depMs = new Date(nextTransitLeg.scheduledDeparture).getTime() + d2 * 1000;
     const bufferSeconds = Math.round((depMs - arrMs) / 1000) - walkSeconds;
 
     const status: TransferStatus =
-      bufferSeconds < 0
-        ? "missed"
-        : bufferSeconds < TIGHT_THRESHOLD_S
-          ? "tight"
-          : "safe";
+      bufferSeconds < 0 ? "missed" : bufferSeconds < TIGHT_THRESHOLD_S ? "tight" : "safe";
 
     result.push({
       arrivingLeg: leg,
@@ -84,9 +79,7 @@ function computeTransfers(
   return result;
 }
 
-export function useTransferViability(
-  route: PlannedRoute | null,
-): TransferInfo[] {
+export function useTransferViability(route: PlannedRoute | null): TransferInfo[] {
   const [transfers, setTransfers] = useState<TransferInfo[]>([]);
   const pollRef = useRef<(() => Promise<void>) | null>(null);
 

@@ -87,15 +87,10 @@ async function matchTransitLegAsync(
     if (!siriStopId) return null;
     const departures = await fetchStopDepartures(siriStopId);
 
-    const sameLine = departures.filter((d) =>
-      routeMatches(d.route, lineNumber),
-    );
+    const sameLine = departures.filter((d) => routeMatches(d.route, lineNumber));
     if (sameLine.length === 0) return null;
 
-    const directionFiltered = filterByDirection(
-      sameLine,
-      stopInfo.terminalStopName,
-    );
+    const directionFiltered = filterByDirection(sameLine, stopInfo.terminalStopName);
     const target = buildTimeTarget(scheduledDepartureTime, directionFiltered);
     const match = pickBestDeparture(directionFiltered, target);
     if (!match) return null;
@@ -155,12 +150,7 @@ function findDepartureStopInfo(
     const stops = transitState.getPatternStops(key);
     if (!stops || stops.length === 0) continue;
 
-    const depIdx = findStopInPattern(
-      stops,
-      departureStopName,
-      departureStopLat,
-      departureStopLng,
-    );
+    const depIdx = findStopInPattern(stops, departureStopName, departureStopLat, departureStopLng);
     if (depIdx < 0) continue;
 
     const candidate: MatchedStopInfo = {
@@ -172,12 +162,7 @@ function findDepartureStopInfo(
     if (!fallback) fallback = candidate;
 
     if (arrivalStopName || arrivalStopLat != null) {
-      const arrIdx = findStopInPattern(
-        stops,
-        arrivalStopName,
-        arrivalStopLat,
-        arrivalStopLng,
-      );
+      const arrIdx = findStopInPattern(stops, arrivalStopName, arrivalStopLat, arrivalStopLng);
       if (arrIdx > depIdx) return candidate;
     } else {
       return candidate;
@@ -187,10 +172,7 @@ function findDepartureStopInfo(
   if (fallback) return fallback;
 
   if (departureStopLat != null && departureStopLng != null) {
-    const stopId = transitState.getStopIdByCoords(
-      departureStopLat,
-      departureStopLng,
-    );
+    const stopId = transitState.getStopIdByCoords(departureStopLat, departureStopLng);
     if (stopId) {
       return {
         stopId,
@@ -223,12 +205,7 @@ function findStopInPattern(
     }
 
     if (lat != null && lng != null) {
-      const dist = haversineDistance(
-        lat,
-        lng,
-        stops[i].latitude,
-        stops[i].longitude,
-      );
+      const dist = haversineDistance(lat, lng, stops[i].latitude, stops[i].longitude);
       if (dist < 100) {
         geoMatch = true;
         if (dist < bestDist && (nameMatch || !stopName)) {
@@ -288,9 +265,7 @@ function buildTimeTarget<T extends { scheduleTime: number }>(
   const date = new Date(scheduledDepartureTime);
   if (Number.isNaN(date.getTime())) return null;
 
-  const usesSecondsOfDay = departures.some((d) =>
-    isSecondsOfDay(d.scheduleTime),
-  );
+  const usesSecondsOfDay = departures.some((d) => isSecondsOfDay(d.scheduleTime));
 
   if (usesSecondsOfDay) {
     return {
@@ -341,10 +316,7 @@ function pickBestDeparture<T extends { scheduleTime: number }>(
   return sorted[0];
 }
 
-function departureDistance(
-  scheduleTime: number,
-  target: DepartureTimeTarget,
-): number {
+function departureDistance(scheduleTime: number, target: DepartureTimeTarget): number {
   if (!Number.isFinite(scheduleTime)) return Number.POSITIVE_INFINITY;
 
   if (target.kind === "seconds_of_day" && isSecondsOfDay(scheduleTime)) {

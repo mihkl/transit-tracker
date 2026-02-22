@@ -80,9 +80,7 @@ function getReminderBaseInfo(route: PlannedRoute): ReminderBaseInfo | null {
   if (!firstTransitDep) return null;
 
   const leaveMs =
-    firstTransitDep.getTime() -
-    walkBeforeSeconds * 1000 -
-    SAFETY_BUFFER_SECONDS * 1000;
+    firstTransitDep.getTime() - walkBeforeSeconds * 1000 - SAFETY_BUFFER_SECONDS * 1000;
 
   if (leaveMs < Date.now() - 60_000) return null;
 
@@ -102,10 +100,7 @@ function getReminderBaseInfo(route: PlannedRoute): ReminderBaseInfo | null {
   };
 }
 
-function computeNotifyAtMs(
-  baseInfo: ReminderBaseInfo,
-  delaySeconds: number,
-): number {
+function computeNotifyAtMs(baseInfo: ReminderBaseInfo, delaySeconds: number): number {
   return (
     baseInfo.scheduledDepartureMs +
     delaySeconds * 1000 -
@@ -123,8 +118,7 @@ function buildLeaveReminderText(
   const leaveAt = formatTime(notifyAtMs);
   const depTime = formatTime(baseInfo.scheduledDepartureMs + delaySeconds * 1000);
   const stopText = baseInfo.departureStop || "your stop";
-  const walkText =
-    baseInfo.walkMinutes > 0 ? `${baseInfo.walkMinutes} min walk` : "Head there";
+  const walkText = baseInfo.walkMinutes > 0 ? `${baseInfo.walkMinutes} min walk` : "Head there";
 
   return {
     title: `Leave ${leaveAt} · Line ${line}`,
@@ -286,25 +280,20 @@ async function getPushSubscription(): Promise<{
   } catch {
     return {
       subscription: null,
-      error:
-        "Could not enable push notifications. Private/incognito mode may block this.",
+      error: "Could not enable push notifications. Private/incognito mode may block this.",
     };
   }
 }
 
 export function useLeaveReminder(route: PlannedRoute | null) {
   const [isSet, setIsSet] = useState(false);
-  const [permission, setPermission] =
-    useState<NotificationPermission>("default");
+  const [permission, setPermission] = useState<NotificationPermission>("default");
   const [minutesUntil, setMinutesUntil] = useState<number | null>(null);
   const [notifyAtMs, setNotifyAtMs] = useState<number | null>(null);
   const [isLiveAdjusted, setIsLiveAdjusted] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
 
-  const baseInfo = useMemo(
-    () => (route ? getReminderBaseInfo(route) : null),
-    [route],
-  );
+  const baseInfo = useMemo(() => (route ? getReminderBaseInfo(route) : null), [route]);
 
   const routeKey = useMemo(
     () =>
@@ -342,8 +331,7 @@ export function useLeaveReminder(route: PlannedRoute | null) {
         setNotifyAtMs(stored.notifyAt);
         if (baseInfo) {
           setIsLiveAdjusted(
-            Math.abs(stored.notifyAt - baseInfo.baseLeaveTimeMs) >=
-              RESCHEDULE_THRESHOLD_MS,
+            Math.abs(stored.notifyAt - baseInfo.baseLeaveTimeMs) >= RESCHEDULE_THRESHOLD_MS,
           );
         } else {
           setIsLiveAdjusted(false);
@@ -357,28 +345,19 @@ export function useLeaveReminder(route: PlannedRoute | null) {
   }, [routeKey, baseInfo]);
 
   useEffect(() => {
-    const targetMs = isSet
-      ? (notifyAtMs ?? null)
-      : (baseInfo?.baseLeaveTimeMs ?? null);
+    const targetMs = isSet ? (notifyAtMs ?? null) : (baseInfo?.baseLeaveTimeMs ?? null);
     if (!targetMs) {
       Promise.resolve().then(() => setMinutesUntil(null));
       return;
     }
-    const update = () =>
-      setMinutesUntil(Math.round((targetMs - Date.now()) / 60_000));
+    const update = () => setMinutesUntil(Math.round((targetMs - Date.now()) / 60_000));
     update();
     const tick = setInterval(update, 30_000);
     return () => clearInterval(tick);
   }, [isSet, notifyAtMs, baseInfo?.baseLeaveTimeMs]);
 
   const scheduleReminder = useCallback(async () => {
-    if (
-      !route ||
-      !baseInfo ||
-      typeof window === "undefined" ||
-      !("Notification" in window)
-    )
-      return;
+    if (!route || !baseInfo || typeof window === "undefined" || !("Notification" in window)) return;
 
     try {
       let perm = permission;
@@ -406,11 +385,7 @@ export function useLeaveReminder(route: PlannedRoute | null) {
       let nextNotifyAt = computeNotifyAtMs(baseInfo, delaySeconds);
       if (nextNotifyAt < Date.now() + 5_000) nextNotifyAt = Date.now() + 5_000;
 
-      const reminderText = buildLeaveReminderText(
-        baseInfo,
-        nextNotifyAt,
-        delaySeconds,
-      );
+      const reminderText = buildLeaveReminderText(baseInfo, nextNotifyAt, delaySeconds);
       await schedulePush(
         sub,
         nextNotifyAt,
@@ -432,8 +407,7 @@ export function useLeaveReminder(route: PlannedRoute | null) {
       setIsSet(true);
       setNotifyAtMs(nextNotifyAt);
       setIsLiveAdjusted(
-        Math.abs(nextNotifyAt - baseInfo.baseLeaveTimeMs) >=
-          RESCHEDULE_THRESHOLD_MS,
+        Math.abs(nextNotifyAt - baseInfo.baseLeaveTimeMs) >= RESCHEDULE_THRESHOLD_MS,
       );
       setLastError(null);
     } catch {
@@ -464,19 +438,11 @@ export function useLeaveReminder(route: PlannedRoute | null) {
         if (nextNotifyAt < Date.now() + 5_000) nextNotifyAt = Date.now() + 5_000;
 
         const prevNotifyAt = stored.notifyAt;
-        const needsReschedule =
-          Math.abs(nextNotifyAt - prevNotifyAt) >= RESCHEDULE_THRESHOLD_MS;
+        const needsReschedule = Math.abs(nextNotifyAt - prevNotifyAt) >= RESCHEDULE_THRESHOLD_MS;
 
         if (needsReschedule) {
           const text = buildLeaveReminderText(baseInfo, nextNotifyAt, delaySeconds);
-          await schedulePush(
-            sub,
-            nextNotifyAt,
-            text.title,
-            text.body,
-            "leave-main",
-            sub.endpoint,
-          );
+          await schedulePush(sub, nextNotifyAt, text.title, text.body, "leave-main", sub.endpoint);
           if (cancelled) return;
           setNotifyAtMs(nextNotifyAt);
         }
@@ -512,8 +478,7 @@ export function useLeaveReminder(route: PlannedRoute | null) {
         });
 
         setIsLiveAdjusted(
-          Math.abs(nextNotifyAt - baseInfo.baseLeaveTimeMs) >=
-            RESCHEDULE_THRESHOLD_MS,
+          Math.abs(nextNotifyAt - baseInfo.baseLeaveTimeMs) >= RESCHEDULE_THRESHOLD_MS,
         );
       } catch {
         // Ignore transient failures.

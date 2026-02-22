@@ -1,9 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  scheduleNotification,
-  cancelNotification,
-  vapidPublicKey,
-} from "@/server/push-scheduler";
+import { scheduleNotification, cancelNotification, vapidPublicKey } from "@/server/push-scheduler";
 
 export const dynamic = "force-dynamic";
 
@@ -100,10 +96,7 @@ function parseScheduleBody(value: unknown): PushScheduleBody | null {
 
 export function GET() {
   if (!vapidPublicKey) {
-    return NextResponse.json(
-      { error: "Push notifications are not configured" },
-      { status: 503 },
-    );
+    return NextResponse.json({ error: "Push notifications are not configured" }, { status: 503 });
   }
 
   return new NextResponse(vapidPublicKey, {
@@ -113,10 +106,7 @@ export function GET() {
 
 export async function POST(req: NextRequest) {
   if (!vapidPublicKey) {
-    return NextResponse.json(
-      { error: "Push notifications are not configured" },
-      { status: 503 },
-    );
+    return NextResponse.json({ error: "Push notifications are not configured" }, { status: 503 });
   }
 
   let rawBody: unknown;

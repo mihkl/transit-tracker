@@ -30,9 +30,7 @@ export function StopSearchInput({ value, onSelect }: StopSearchInputProps) {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return [];
-    return stops
-      .filter((s) => s.stopName.toLowerCase().includes(q))
-      .slice(0, 20);
+    return stops.filter((s) => s.stopName.toLowerCase().includes(q)).slice(0, 20);
   }, [stops, query]);
 
   const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -99,19 +97,12 @@ export function StopSearchInput({ value, onSelect }: StopSearchInputProps) {
                       onSelect={() => handleSelect(stop)}
                       className="cursor-pointer py-2 px-3 hover:bg-foreground/[0.04] rounded-lg mx-1 transition-colors"
                     >
-                      <MapPin
-                        size={14}
-                        className="shrink-0 mr-2 text-foreground/25 mt-0.5"
-                      />
+                      <MapPin size={14} className="shrink-0 mr-2 text-foreground/25 mt-0.5" />
                       <div className="flex flex-col min-w-0 flex-1">
                         <div className="flex items-center gap-1">
-                          <span className="text-sm font-medium truncate">
-                            {stop.stopName}
-                          </span>
+                          <span className="text-sm font-medium truncate">{stop.stopName}</span>
                           {stop.stopArea && stop.stopArea !== "Kesklinn" && (
-                            <span className="text-xs text-foreground/30">
-                              ({stop.stopArea})
-                            </span>
+                            <span className="text-xs text-foreground/30">({stop.stopArea})</span>
                           )}
                         </div>
                         {stop.stopDesc && (
@@ -124,8 +115,7 @@ export function StopSearchInput({ value, onSelect }: StopSearchInputProps) {
                             {stop.lines.slice(0, 8).map((line) => {
                               const typeCode = line[0];
                               const lineNum = line.slice(2);
-                              const color =
-                                STOP_TYPE_COLORS[typeCode] || "#666";
+                              const color = STOP_TYPE_COLORS[typeCode] || "#666";
                               return (
                                 <span
                                   key={line}

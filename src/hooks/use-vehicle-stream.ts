@@ -9,11 +9,7 @@ interface StreamData {
   timestamp: string;
 }
 
-export function useVehicleStream(
-  lineFilter: string,
-  typeFilter: string,
-  enabled: boolean = true,
-) {
+export function useVehicleStream(lineFilter: string, typeFilter: string, enabled: boolean = true) {
   const [allVehicles, setAllVehicles] = useState<VehicleDto[]>([]);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [loading, setLoading] = useState(false);
@@ -31,7 +27,9 @@ export function useVehicleStream(
           setLoading(false);
         }
       });
-      return () => { cancelled = true; };
+      return () => {
+        cancelled = true;
+      };
     }
 
     function connect() {
@@ -80,8 +78,7 @@ export function useVehicleStream(
       if (typeFilter && typeFilter !== "all") {
         if (typeFilter === "bus" && v.transportType !== "bus") return false;
         if (typeFilter === "tram" && v.transportType !== "tram") return false;
-        if (typeFilter === "trolleybus" && v.transportType !== "trolleybus")
-          return false;
+        if (typeFilter === "trolleybus" && v.transportType !== "trolleybus") return false;
         if (typeFilter === "train" && v.transportType !== "train") return false;
       }
       if (lineFilter && v.lineNumber !== lineFilter) return false;

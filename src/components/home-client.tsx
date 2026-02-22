@@ -60,20 +60,15 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
     lng: number;
     name?: string;
   } | null>(null);
-  const [pickingPoint, setPickingPoint] = useState<
-    "origin" | "destination" | null
-  >(null);
+  const [pickingPoint, setPickingPoint] = useState<"origin" | "destination" | null>(null);
   const [routePlan, setRoutePlan] = useState<RoutePlanResponse | null>(null);
   const [planLoading, setPlanLoading] = useState(false);
   const [selectedRouteIndex, setSelectedRouteIndex] = useState(0);
   const [focusedVehicleId, setFocusedVehicleId] = useState<number | null>(null);
-  const [openSelectedRouteDetails, setOpenSelectedRouteDetails] =
-    useState(false);
+  const [openSelectedRouteDetails, setOpenSelectedRouteDetails] = useState(false);
 
   const [timeOption, setTimeOption] = useState<TimeOption>("now");
-  const [selectedDateTime, setSelectedDateTime] = useState(() =>
-    toLocalDateTimeString(new Date()),
-  );
+  const [selectedDateTime, setSelectedDateTime] = useState(() => toLocalDateTimeString(new Date()));
   const userLocation = useUserLocation();
 
   useEffect(() => {
@@ -85,8 +80,7 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
       const raw = localStorage.getItem(ROUTE_SNAPSHOT_KEY);
       if (!raw) return;
       const snapshot = JSON.parse(raw) as StoredRouteSnapshot;
-      const isFresh =
-        snapshot?.savedAt && Date.now() - snapshot.savedAt <= SNAPSHOT_MAX_AGE_MS;
+      const isFresh = snapshot?.savedAt && Date.now() - snapshot.savedAt <= SNAPSHOT_MAX_AGE_MS;
       const hasLegs = Array.isArray(snapshot?.route?.legs);
       if (!isFresh || !hasLegs) return;
 
@@ -116,8 +110,7 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
       }
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () =>
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, []);
 
   const pickingFromPlannerRef = useRef(false);
@@ -132,11 +125,7 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
   const lineFilter = selectedLine?.lineNumber ?? "";
   const typeFilter = selectedLine?.type ?? "all";
 
-  const { vehicles: rawVehicles, loading } = useVehicleStream(
-    lineFilter,
-    typeFilter,
-    showVehicles,
-  );
+  const { vehicles: rawVehicles, loading } = useVehicleStream(lineFilter, typeFilter, showVehicles);
 
   const vehicles = useAnimatedVehicles(rawVehicles);
 
@@ -175,12 +164,8 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
         destinationLng: destination.lng,
       };
 
-      if (
-        (timeOption === "depart" && selectedDateTime) ||
-        timeOption === "now"
-      ) {
-        const dt =
-          timeOption === "now" ? new Date() : new Date(selectedDateTime);
+      if ((timeOption === "depart" && selectedDateTime) || timeOption === "now") {
+        const dt = timeOption === "now" ? new Date() : new Date(selectedDateTime);
         req.departureTime = dt.toISOString();
       } else if (timeOption === "arrive" && selectedDateTime) {
         req.arrivalTime = new Date(selectedDateTime).toISOString();
@@ -312,8 +297,7 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
             destination={destination}
             pickingPoint={pickingPoint}
             onStartPicking={(pt) => {
-              const isMobile =
-                typeof window !== "undefined" && window.innerWidth < 768;
+              const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
               if (pt && isMobile) {
                 pickingFromPlannerRef.current = true;
                 setShowPlanner(false);
@@ -338,9 +322,7 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
             onSwap={handleSwap}
             onClear={handleClearPlanner}
             openSelectedRouteDetails={openSelectedRouteDetails}
-            onConsumeOpenSelectedRouteDetails={() =>
-              setOpenSelectedRouteDetails(false)
-            }
+            onConsumeOpenSelectedRouteDetails={() => setOpenSelectedRouteDetails(false)}
           />
         )}
         <div className="flex-1 relative">
@@ -369,9 +351,7 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
               <button
                 onClick={handleToggleVehicles}
                 className={`w-11 h-11 rounded-xl flex items-center justify-center shadow-fab transition-all duration-150 active:scale-95 ${
-                  showVehicles
-                    ? "bg-foreground text-white"
-                    : "bg-white text-foreground/50"
+                  showVehicles ? "bg-foreground text-white" : "bg-white text-foreground/50"
                 }`}
                 title="Toggle vehicles"
               >
@@ -380,9 +360,7 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
               <button
                 onClick={() => setShowTraffic((t) => !t)}
                 className={`w-11 h-11 rounded-xl flex items-center justify-center shadow-fab transition-all duration-150 active:scale-95 ${
-                  showTraffic
-                    ? "bg-foreground text-white"
-                    : "bg-white text-foreground/50"
+                  showTraffic ? "bg-foreground text-white" : "bg-white text-foreground/50"
                 }`}
                 title="Toggle traffic"
               >
@@ -391,9 +369,7 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
               <button
                 onClick={() => setShowStops((s) => !s)}
                 className={`w-11 h-11 rounded-xl flex items-center justify-center shadow-fab transition-all duration-150 active:scale-95 ${
-                  showStops
-                    ? "bg-foreground text-white"
-                    : "bg-white text-foreground/50"
+                  showStops ? "bg-foreground text-white" : "bg-white text-foreground/50"
                 }`}
                 title="Toggle stops"
               >

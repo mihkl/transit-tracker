@@ -60,9 +60,7 @@ function parseCsvLine(line: string): string[] {
   return fields;
 }
 
-async function* readCsv(
-  filePath: string,
-): AsyncGenerator<Record<string, string>> {
+async function* readCsv(filePath: string): AsyncGenerator<Record<string, string>> {
   const stream = fs.createReadStream(filePath, { encoding: "utf-8" });
   const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
 
@@ -89,13 +87,10 @@ async function* readCsv(
 
 export async function loadGtfs(gtfsDir: string): Promise<GtfsData> {
   const preprocessedDir =
-    process.env.GTFS_PREPROCESSED_DIR ||
-    path.join(process.cwd(), "public", "gtfs-preprocessed");
+    process.env.GTFS_PREPROCESSED_DIR || path.join(process.cwd(), "public", "gtfs-preprocessed");
 
   if (fs.existsSync(path.join(preprocessedDir, "routes.json"))) {
-    console.log(
-      `Loading preprocessed GTFS from ${path.resolve(preprocessedDir)}...`,
-    );
+    console.log(`Loading preprocessed GTFS from ${path.resolve(preprocessedDir)}...`);
 
     const routesArr = JSON.parse(
       fs.readFileSync(path.join(preprocessedDir, "routes.json"), "utf-8"),
@@ -108,10 +103,7 @@ export async function loadGtfs(gtfsDir: string): Promise<GtfsData> {
     ) as RoutePattern[];
     const shapesObj = JSON.parse(
       fs.readFileSync(path.join(preprocessedDir, "shapes.json"), "utf-8"),
-    ) as Record<
-      string,
-      { latitude: number; longitude: number; distTraveled: number }[]
-    >;
+    ) as Record<string, { latitude: number; longitude: number; distTraveled: number }[]>;
     const gpsMapObj = JSON.parse(
       fs.readFileSync(path.join(preprocessedDir, "gpsMap.json"), "utf-8"),
     ) as Record<string, string>;
@@ -119,9 +111,7 @@ export async function loadGtfs(gtfsDir: string): Promise<GtfsData> {
       fs.readFileSync(path.join(preprocessedDir, "schedule.json"), "utf-8"),
     ) as Record<string, ScheduleEntry[]>;
 
-    const routes = new Map<string, GtfsRoute>(
-      routesArr.map((r) => [r.routeId, r]),
-    );
+    const routes = new Map<string, GtfsRoute>(routesArr.map((r) => [r.routeId, r]));
     const stops = new Map<string, GtfsStop>(stopsArr.map((s) => [s.stopId, s]));
     const trips = new Map<string, GtfsTrip>();
     const stopTimesByTrip = new Map<string, GtfsStopTime[]>();
@@ -257,12 +247,7 @@ export async function loadGtfs(gtfsDir: string): Promise<GtfsData> {
   console.log(`  ${shapePointCount} shape points`);
 
   console.log("Building route patterns...");
-  const patterns = buildRoutePatterns(
-    trips,
-    stopTimesByTrip,
-    stops,
-    shapesByShapeId,
-  );
+  const patterns = buildRoutePatterns(trips, stopTimesByTrip, stops, shapesByShapeId);
   console.log(`  ${patterns.size} patterns`);
 
   console.log("Building GPS→route map...");
@@ -392,9 +377,7 @@ function buildScheduleIndex(
   return index;
 }
 
-function buildGpsToRouteMap(
-  routes: Map<string, GtfsRoute>,
-): Map<string, string> {
+function buildGpsToRouteMap(routes: Map<string, GtfsRoute>): Map<string, string> {
   const map = new Map<string, string>();
 
   for (const route of routes.values()) {
@@ -405,10 +388,7 @@ function buildGpsToRouteMap(
       map.set(`1_${lineNumber}`, route.routeId);
     } else if (route.routeId.includes("_tram_")) {
       map.set(`3_${lineNumber}`, route.routeId);
-    } else if (
-      route.routeId.includes("_train_") ||
-      route.routeId.includes("_rail_")
-    ) {
+    } else if (route.routeId.includes("_train_") || route.routeId.includes("_rail_")) {
       map.set(`10_${lineNumber}`, route.routeId);
     }
   }

@@ -1,27 +1,11 @@
 "use client";
 
 import { useMemo, useCallback, useRef, useState, useEffect } from "react";
-import Map, {
-  Marker,
-  Source,
-  Layer,
-  Popup,
-  type MapRef,
-} from "react-map-gl/maplibre";
+import Map, { Marker, Source, Layer, Popup, type MapRef } from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { LngLatBoundsLike, Map as MaplibreMap } from "maplibre-gl";
-import type {
-  VehicleDto,
-  RoutePlanResponse,
-  StopDeparture,
-  StopDto,
-} from "@/lib/types";
-import {
-  TALLINN_CENTER,
-  DEFAULT_ZOOM,
-  TYPE_COLORS,
-  LEG_COLORS,
-} from "@/lib/constants";
+import type { VehicleDto, RoutePlanResponse, StopDeparture, StopDto } from "@/lib/types";
+import { TALLINN_CENTER, DEFAULT_ZOOM, TYPE_COLORS, LEG_COLORS } from "@/lib/constants";
 import { BottomSheet } from "@/components/bottom-sheet";
 import type { MapLayerMouseEvent } from "maplibre-gl";
 import {
@@ -224,8 +208,7 @@ export function MapViewInner({
   useEffect(() => {
     if (focusedVehicle) {
       // Only center on vehicle if it has no route shape (fitBounds handles that case)
-      const hasRouteShape =
-        shapes && focusedVehicle.routeKey && shapes[focusedVehicle.routeKey];
+      const hasRouteShape = shapes && focusedVehicle.routeKey && shapes[focusedVehicle.routeKey];
       if (!hasRouteShape) {
         setViewState((prev) => ({
           ...prev,
@@ -265,9 +248,7 @@ export function MapViewInner({
         return;
       }
 
-      const vehicleFeature = e.features?.find(
-        (f) => f.layer?.id === "vehicles",
-      );
+      const vehicleFeature = e.features?.find((f) => f.layer?.id === "vehicles");
       if (vehicleFeature) {
         const vehicleId = vehicleFeature.properties?.id as number | undefined;
         const vehicle = vehiclesRef.current.find((v) => v.id === vehicleId);
@@ -295,14 +276,7 @@ export function MapViewInner({
       setPopupVehicle(null);
       setPopupStop(null);
     },
-    [
-      pickingPoint,
-      onMapClick,
-      onDeselectVehicle,
-      onVehicleClick,
-      allStops,
-      handleStopClick,
-    ],
+    [pickingPoint, onMapClick, onDeselectVehicle, onVehicleClick, allStops, handleStopClick],
   );
 
   useEffect(() => {
@@ -386,18 +360,15 @@ export function MapViewInner({
     }
   }, []);
 
-  const handleMouseMove = useCallback(
-    (e: MapLayerMouseEvent) => {
-      const hasInteractiveFeature = !!e.features?.some(
-        (f) =>
-          f.layer?.id === "vehicles" ||
-          f.layer?.id === "all-stops" ||
-          f.layer?.id === "all-stops-hit",
-      );
-      setHoveringInteractive(hasInteractiveFeature);
-    },
-    [],
-  );
+  const handleMouseMove = useCallback((e: MapLayerMouseEvent) => {
+    const hasInteractiveFeature = !!e.features?.some(
+      (f) =>
+        f.layer?.id === "vehicles" ||
+        f.layer?.id === "all-stops" ||
+        f.layer?.id === "all-stops-hit",
+    );
+    setHoveringInteractive(hasInteractiveFeature);
+  }, []);
 
   const routeLegsGeoJson = useMemo(() => {
     if (!routePlan || !routePlan.routes[selectedRouteIndex]) return null;
@@ -416,12 +387,7 @@ export function MapViewInner({
   }, [routePlan, selectedRouteIndex]);
 
   const vehicleRouteGeoJson = useMemo(() => {
-    if (
-      !focusedVehicle ||
-      !shapes ||
-      !focusedVehicle.routeKey ||
-      !shapes[focusedVehicle.routeKey]
-    )
+    if (!focusedVehicle || !shapes || !focusedVehicle.routeKey || !shapes[focusedVehicle.routeKey])
       return null;
     const shape = shapes[focusedVehicle.routeKey];
     return {
@@ -532,9 +498,7 @@ export function MapViewInner({
         onDragStart={() => setIsDragging(true)}
         onDragEnd={() => setIsDragging(false)}
         cursor={isDragging ? "grabbing" : hoveringInteractive ? "pointer" : "grab"}
-        interactiveLayerIds={
-          showStops ? ["vehicles", "all-stops-hit", "all-stops"] : ["vehicles"]
-        }
+        interactiveLayerIds={showStops ? ["vehicles", "all-stops-hit", "all-stops"] : ["vehicles"]}
         onClick={handleMapClick}
         onLoad={handleMapLoad}
         style={{ width: "100%", height: "100%" }}
@@ -617,10 +581,7 @@ export function MapViewInner({
               latitude={feature.geometry.coordinates[1]}
               anchor="center"
             >
-              <IncidentIcon
-                category={feature.properties.iconCategory}
-                size={32}
-              />
+              <IncidentIcon category={feature.properties.iconCategory} size={32} />
             </Marker>
           ))}
 
@@ -631,11 +592,7 @@ export function MapViewInner({
         )}
 
         {destination && (
-          <Marker
-            longitude={destination.lng}
-            latitude={destination.lat}
-            anchor="bottom"
-          >
+          <Marker longitude={destination.lng} latitude={destination.lat} anchor="bottom">
             <PinIcon color="#ef4444" label="B" />
           </Marker>
         )}
@@ -645,12 +602,7 @@ export function MapViewInner({
             ? TYPE_COLORS[stop.transportType] || TYPE_COLORS.bus
             : "#22c55e";
           return (
-            <Marker
-              key={`boarding-${i}`}
-              longitude={stop.lng}
-              latitude={stop.lat}
-              anchor="center"
-            >
+            <Marker key={`boarding-${i}`} longitude={stop.lng} latitude={stop.lat} anchor="center">
               {stop.lineNumber ? (
                 <BoardingStopIcon lineNumber={stop.lineNumber} color={color} />
               ) : (
@@ -681,17 +633,7 @@ export function MapViewInner({
               type="circle"
               minzoom={12}
               paint={{
-                "circle-radius": [
-                  "interpolate",
-                  ["linear"],
-                  ["zoom"],
-                  12,
-                  8,
-                  13,
-                  10,
-                  16,
-                  12,
-                ],
+                "circle-radius": ["interpolate", ["linear"], ["zoom"], 12, 8, 13, 10, 16, 12],
                 "circle-color": "#000000",
                 "circle-opacity": 0.01,
               }}
@@ -701,17 +643,7 @@ export function MapViewInner({
               type="circle"
               minzoom={12}
               paint={{
-                "circle-radius": [
-                  "interpolate",
-                  ["linear"],
-                  ["zoom"],
-                  12,
-                  2,
-                  13,
-                  3,
-                  16,
-                  5,
-                ],
+                "circle-radius": ["interpolate", ["linear"], ["zoom"], 12, 2, 13, 3, 16, 5],
                 "circle-color": "#ffffff",
                 "circle-stroke-color": "#4b5563",
                 "circle-stroke-width": 1,
@@ -722,11 +654,7 @@ export function MapViewInner({
         )}
 
         {userLocation && (
-          <Marker
-            longitude={userLocation.lng}
-            latitude={userLocation.lat}
-            anchor="center"
-          >
+          <Marker longitude={userLocation.lng} latitude={userLocation.lat} anchor="center">
             <UserLocationDot />
           </Marker>
         )}
@@ -742,26 +670,11 @@ export function MapViewInner({
                 "icon-rotate": ["get", "bearing"],
                 "icon-allow-overlap": true,
                 "icon-ignore-placement": true,
-                "icon-size": [
-                  "case",
-                  ["==", ["get", "focused"], 1],
-                  1.0,
-                  0.75,
-                ],
-                "symbol-sort-key": [
-                  "case",
-                  ["==", ["get", "focused"], 1],
-                  1,
-                  0,
-                ],
+                "icon-size": ["case", ["==", ["get", "focused"], 1], 1.0, 0.75],
+                "symbol-sort-key": ["case", ["==", ["get", "focused"], 1], 1, 0],
               }}
               paint={{
-                "icon-color": [
-                  "case",
-                  ["==", ["get", "focused"], 1],
-                  "#FF9800",
-                  ["get", "color"],
-                ],
+                "icon-color": ["case", ["==", ["get", "focused"], 1], "#FF9800", ["get", "color"]],
                 "icon-halo-color": "#fff",
                 "icon-halo-width": 1,
               }}
@@ -794,11 +707,7 @@ export function MapViewInner({
             onClose={() => setPopupStop(null)}
             maxWidth="280px"
           >
-            <StopPopup
-              stop={popupStop}
-              departures={stopDepartures}
-              loading={departuresLoading}
-            />
+            <StopPopup stop={popupStop} departures={stopDepartures} loading={departuresLoading} />
           </Popup>
         )}
       </Map>
@@ -814,17 +723,10 @@ export function MapViewInner({
       )}
 
       {/* Mobile bottom sheet */}
-      <BottomSheet
-        open={!!(popupVehicle || popupStop)}
-        onClose={handleBottomSheetClose}
-      >
+      <BottomSheet open={!!(popupVehicle || popupStop)} onClose={handleBottomSheetClose}>
         {popupVehicle && <VehiclePopup vehicle={popupVehicle} />}
         {popupStop && (
-          <StopPopup
-            stop={popupStop}
-            departures={stopDepartures}
-            loading={departuresLoading}
-          />
+          <StopPopup stop={popupStop} departures={stopDepartures} loading={departuresLoading} />
         )}
       </BottomSheet>
     </>

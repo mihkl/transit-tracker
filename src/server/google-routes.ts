@@ -147,8 +147,7 @@ async function fetchPlaceDetailsNew(
 
   const data = JSON.parse(body) as PlacesNewDetailsResponse;
   const hasMoved =
-    data.businessStatus === "CLOSED_PERMANENTLY" &&
-    (data.movedPlaceId || data.movedPlace);
+    data.businessStatus === "CLOSED_PERMANENTLY" && (data.movedPlaceId || data.movedPlace);
 
   if (hasMoved && depth < 3) {
     const nextPlaceId = data.movedPlaceId || data.movedPlace!;
@@ -161,8 +160,7 @@ async function fetchPlaceDetailsNew(
 function buildPlaceNameFromComponents(
   components: GoogleGeocodingResult["address_components"],
 ): string {
-  const find = (type: string) =>
-    components.find((c) => c.types.includes(type))?.long_name;
+  const find = (type: string) => components.find((c) => c.types.includes(type))?.long_name;
 
   const poi =
     find("point_of_interest") ||
@@ -186,37 +184,32 @@ function buildPlaceNameFromComponents(
   return components[0]?.long_name || "";
 }
 
-export async function searchPlaces(
-  query: string,
-): Promise<PlaceSearchResult[]> {
+export async function searchPlaces(query: string): Promise<PlaceSearchResult[]> {
   const placesApiKey = getApiKey();
 
   try {
     if (placesApiKey) {
-      const searchRes = await fetch(
-        "https://places.googleapis.com/v1/places:searchText",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Goog-Api-Key": placesApiKey,
-            "X-Goog-FieldMask":
-              "places.id,places.displayName,places.formattedAddress,places.location",
-          },
-          body: JSON.stringify({
-            textQuery: query,
-            languageCode: "et",
-            regionCode: "EE",
-            pageSize: 5,
-            locationBias: {
-              rectangle: {
-                low: { latitude: 59.35, longitude: 24.5 },
-                high: { latitude: 59.5, longitude: 25.0 },
-              },
-            },
-          }),
+      const searchRes = await fetch("https://places.googleapis.com/v1/places:searchText", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Goog-Api-Key": placesApiKey,
+          "X-Goog-FieldMask":
+            "places.id,places.displayName,places.formattedAddress,places.location",
         },
-      );
+        body: JSON.stringify({
+          textQuery: query,
+          languageCode: "et",
+          regionCode: "EE",
+          pageSize: 5,
+          locationBias: {
+            rectangle: {
+              low: { latitude: 59.35, longitude: 24.5 },
+              high: { latitude: 59.5, longitude: 25.0 },
+            },
+          },
+        }),
+      });
 
       const searchBody = await searchRes.text();
       if (!searchRes.ok) {
@@ -237,9 +230,7 @@ export async function searchPlaces(
             .map(({ search, details }) => {
               const location = details?.location || search.location;
               const name =
-                details?.displayName?.text?.trim() ||
-                search.displayName?.text?.trim() ||
-                "";
+                details?.displayName?.text?.trim() || search.displayName?.text?.trim() || "";
               const address = details?.formattedAddress || search.formattedAddress || "";
 
               if (!location || !name || !address) return null;

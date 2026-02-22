@@ -43,9 +43,7 @@ class TransitState {
     this.initializing = true;
 
     try {
-      const gtfsDir =
-        process.env.GTFS_DATA_DIR ||
-        path.join(process.cwd(), "data", "tallinn");
+      const gtfsDir = process.env.GTFS_DATA_DIR || path.join(process.cwd(), "data", "tallinn");
       console.log(`Loading GTFS from ${path.resolve(gtfsDir)}...`);
 
       this.gtfs = await loadGtfs(gtfsDir);
@@ -204,11 +202,7 @@ class TransitState {
           : null,
     };
 
-    if (
-      v.matchedRouteId !== null &&
-      v.matchedDirectionId !== null &&
-      this.gtfs
-    ) {
+    if (v.matchedRouteId !== null && v.matchedDirectionId !== null && this.gtfs) {
       const key = `${v.matchedRouteId}_${v.matchedDirectionId}`;
       const pattern = this.gtfs.patterns.get(key);
       if (pattern) {

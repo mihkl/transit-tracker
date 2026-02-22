@@ -176,9 +176,7 @@ export function PlaceSearchInput({
                     className="cursor-pointer px-3 py-2.5 hover:bg-blue-50 rounded-lg mx-1 transition-colors"
                   >
                     <Crosshair size={15} className="mr-2.5 text-blue-500 shrink-0" />
-                    <span className="text-sm font-semibold text-blue-600">
-                      Use my location
-                    </span>
+                    <span className="text-sm font-semibold text-blue-600">Use my location</span>
                   </CommandItem>
                 </CommandGroup>
               )}
@@ -190,17 +188,12 @@ export function PlaceSearchInput({
                       onSelect={() => handleSelect(place)}
                       className="cursor-pointer px-3 py-2.5 hover:bg-foreground/[0.04] rounded-lg mx-1 transition-colors"
                     >
-                      <MapPin
-                        size={15}
-                        className="mr-2.5 text-foreground/40 shrink-0"
-                      />
+                      <MapPin size={15} className="mr-2.5 text-foreground/40 shrink-0" />
                       <div className="min-w-0">
                         <div className="text-sm font-medium text-foreground/85 truncate">
                           {place.name}
                         </div>
-                        <div className="text-xs text-foreground/50 truncate">
-                          {place.address}
-                        </div>
+                        <div className="text-xs text-foreground/50 truncate">{place.address}</div>
                       </div>
                     </CommandItem>
                   ))}

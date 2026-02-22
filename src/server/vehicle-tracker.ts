@@ -82,10 +82,7 @@ export class VehicleTracker {
       this.vehicles.set(reading.id, state);
     }
 
-    if (
-      state.lineNumber !== reading.lineNumber ||
-      state.transportType !== reading.transportType
-    ) {
+    if (state.lineNumber !== reading.lineNumber || state.transportType !== reading.transportType) {
       state.matchedRouteId = null;
       state.matchedDirectionId = null;
       state.lastStopIndex = -1;
@@ -136,10 +133,7 @@ export class VehicleTracker {
 
     if (bestDirection < 0) return;
 
-    if (
-      state.matchedDirectionId !== null &&
-      state.matchedDirectionId !== bestDirection
-    ) {
+    if (state.matchedDirectionId !== null && state.matchedDirectionId !== bestDirection) {
       if (bestPerpDist > 200) return;
 
       const currentKey = `${state.matchedRouteId}_${state.matchedDirectionId}`;
@@ -165,21 +159,13 @@ export class VehicleTracker {
     state.matchedDirectionId = bestDirection;
     state.distanceAlongRoute = bestDistAlong;
 
-    const pattern = this.gtfs.patterns.get(
-      `${state.matchedRouteId}_${bestDirection}`,
-    );
+    const pattern = this.gtfs.patterns.get(`${state.matchedRouteId}_${bestDirection}`);
     if (pattern) {
-      state.lastStopIndex = this.findLastStopIndex(
-        pattern.orderedStops,
-        bestDistAlong,
-      );
+      state.lastStopIndex = this.findLastStopIndex(pattern.orderedStops, bestDistAlong);
     }
   }
 
-  private findLastStopIndex(
-    stops: { distAlongRoute: number }[],
-    distAlong: number,
-  ): number {
+  private findLastStopIndex(stops: { distAlongRoute: number }[], distAlong: number): number {
     for (let i = stops.length - 1; i >= 0; i--) {
       if (stops[i].distAlongRoute <= distAlong) {
         return i;

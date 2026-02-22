@@ -3,23 +3,13 @@
 import { Fragment, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Footprints,
-  X,
-  ChevronLeft,
-  ArrowUpDown,
-  Search,
-  Bell,
-} from "lucide-react";
+import { Footprints, X, ChevronLeft, ArrowUpDown, Search, Bell } from "lucide-react";
 import { Icon } from "@/components/icon";
 import { PlaceSearchInput } from "./place-search-input";
 import { RouteLegCard, TransferBadge } from "./route-leg-card";
 import { formatDuration, formatTime } from "@/lib/format-utils";
 import { getTransportColor } from "@/lib/constants";
-import {
-  useTransferViability,
-  type TransferInfo,
-} from "@/hooks/use-transfer-viability";
+import { useTransferViability, type TransferInfo } from "@/hooks/use-transfer-viability";
 import { useLeaveReminder } from "@/hooks/use-leave-reminder";
 import type { RoutePlanResponse, PlannedRoute, RouteLeg } from "@/lib/types";
 
@@ -59,15 +49,11 @@ function getRouteTimeRange(route: PlannedRoute) {
 
   if (firstTransitDepTime && walkBeforeSeconds > 0) {
     dep = formatTime(
-      new Date(
-        firstTransitDepTime.getTime() - walkBeforeSeconds * 1000,
-      ).toISOString(),
+      new Date(firstTransitDepTime.getTime() - walkBeforeSeconds * 1000).toISOString(),
     );
   }
   if (arrTime && walkAfterSeconds > 0) {
-    arr = formatTime(
-      new Date(arrTime.getTime() + walkAfterSeconds * 1000).toISOString(),
-    );
+    arr = formatTime(new Date(arrTime.getTime() + walkAfterSeconds * 1000).toISOString());
   }
 
   return {
@@ -90,18 +76,12 @@ function LegChain({ legs }: { legs: RouteLeg[] }) {
       {visible.map((leg, i) => (
         <div key={i} className="flex items-center gap-1">
           {i > 0 && (
-            <Icon
-              name="chevron-right-sm"
-              size={8}
-              className="text-foreground/20 shrink-0"
-            />
+            <Icon name="chevron-right-sm" size={8} className="text-foreground/20 shrink-0" />
           )}
           {leg.mode === "WALK" ? (
             <div className="flex items-center gap-1 text-foreground/60">
               <Footprints size={12} className="shrink-0" />
-              <span className="text-[10px] font-semibold">
-                {formatDuration(leg.duration)}
-              </span>
+              <span className="text-[10px] font-semibold">{formatDuration(leg.duration)}</span>
             </div>
           ) : (
             <Badge
@@ -226,8 +206,7 @@ function RouteCard({
                 />
                 <span className="text-xs font-semibold">
                   {reminderProps.isSet
-                    ? reminderProps.minutesUntil !== null &&
-                      reminderProps.minutesUntil > 0
+                    ? reminderProps.minutesUntil !== null && reminderProps.minutesUntil > 0
                       ? `Leave in ${reminderProps.minutesUntil} min${reminderProps.isLiveAdjusted ? " · auto-adjusting" : ""}`
                       : "Reminder active · tap to cancel"
                     : "Set smart leave reminder"}
@@ -305,14 +284,12 @@ export function RoutePlanner({
   const [expandedRoute, setExpandedRoute] = useState<number | null>(null);
   const [mobileDetail, setMobileDetail] = useState<number | null>(null);
 
-  const hasRoutes = !!(routePlan?.routes?.length);
+  const hasRoutes = !!routePlan?.routes?.length;
   const selectedRoute = routePlan?.routes[selectedRouteIndex] ?? null;
 
   // Live transfer viability for the selected route
   const transfers = useTransferViability(selectedRoute);
-  const transfersByArrivingLeg = new Map(
-    transfers.map((t) => [t.arrivingLeg, t]),
-  );
+  const transfersByArrivingLeg = new Map(transfers.map((t) => [t.arrivingLeg, t]));
 
   // Leave reminder for the selected route
   const {
@@ -448,9 +425,7 @@ export function RoutePlanner({
 
   /* ── Mobile detail view ────────────────────────────── */
   const mobileDetailRoute =
-    mobileDetail !== null && hasRoutes
-      ? routePlan.routes[mobileDetail]
-      : null;
+    mobileDetail !== null && hasRoutes ? routePlan.routes[mobileDetail] : null;
 
   if (mobileDetailRoute) {
     const { dep, arr } = getRouteTimeRange(mobileDetailRoute);
@@ -500,23 +475,16 @@ export function RoutePlanner({
             {reminderProps && (
               <button
                 onClick={() =>
-                  reminderProps.isSet
-                    ? reminderProps.onClear()
-                    : reminderProps.onSchedule()
+                  reminderProps.isSet ? reminderProps.onClear() : reminderProps.onSchedule()
                 }
                 className={`p-2.5 rounded-xl transition-colors active:scale-95 shrink-0 cursor-pointer ${
                   reminderProps.isSet
                     ? "bg-primary/10 text-primary"
                     : "text-foreground/40 hover:text-foreground/70"
                 }`}
-                title={
-                  reminderProps.isSet ? "Cancel reminder" : "Remind me to leave"
-                }
+                title={reminderProps.isSet ? "Cancel reminder" : "Remind me to leave"}
               >
-                <Bell
-                  size={20}
-                  fill={reminderProps.isSet ? "currentColor" : "none"}
-                />
+                <Bell size={20} fill={reminderProps.isSet ? "currentColor" : "none"} />
               </button>
             )}
           </div>
@@ -692,12 +660,8 @@ function desktopSidebar({
               isExpanded={expandedRoute === i}
               onClick={() => handleRouteClick(i)}
               onLocateVehicle={onLocateVehicle}
-              reminderProps={
-                i === selectedRouteIndex ? reminderProps : undefined
-              }
-              transfersByArrivingLeg={
-                i === selectedRouteIndex ? transfersByArrivingLeg : undefined
-              }
+              reminderProps={i === selectedRouteIndex ? reminderProps : undefined}
+              transfersByArrivingLeg={i === selectedRouteIndex ? transfersByArrivingLeg : undefined}
             />
           ))}
         </div>

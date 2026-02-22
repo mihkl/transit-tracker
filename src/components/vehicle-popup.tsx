@@ -6,9 +6,7 @@ import { Badge } from "@/components/ui/badge";
 export function VehiclePopup({ vehicle }: { vehicle: VehicleDto }) {
   const color = getTransportColor(vehicle.transportType);
   const progress =
-    vehicle.totalStops > 0
-      ? ((vehicle.stopIndex + 1) / vehicle.totalStops) * 100
-      : 0;
+    vehicle.totalStops > 0 ? ((vehicle.stopIndex + 1) / vehicle.totalStops) * 100 : 0;
 
   return (
     <div className="min-w-48 p-1">
@@ -27,17 +25,13 @@ export function VehiclePopup({ vehicle }: { vehicle: VehicleDto }) {
       {vehicle.destination && (
         <div className="text-sm mb-3">
           <span className="text-foreground/55">To </span>
-          <span className="font-semibold text-foreground/90">
-            {vehicle.destination}
-          </span>
+          <span className="font-semibold text-foreground/90">{vehicle.destination}</span>
         </div>
       )}
 
       {vehicle.nextStop && (
         <div className="rounded-xl bg-foreground/[0.04] px-3 py-2.5 mb-3">
-          <div className="text-xs text-foreground/55 font-medium mb-0.5">
-            Next stop
-          </div>
+          <div className="text-xs text-foreground/55 font-medium mb-0.5">Next stop</div>
           <div className="text-sm font-semibold text-foreground/90 mb-1">
             {vehicle.nextStop.name}
           </div>

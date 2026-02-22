@@ -16,12 +16,7 @@ async function loadStops(): Promise<StopDto[]> {
     return cache.stops;
   }
 
-  const filePath = path.join(
-    process.cwd(),
-    "public",
-    "gtfs-preprocessed",
-    "stops.json",
-  );
+  const filePath = path.join(process.cwd(), "public", "gtfs-preprocessed", "stops.json");
   const raw = await fs.readFile(filePath, "utf8");
   const parsed = JSON.parse(raw) as Array<{
     stopId: string;
@@ -35,10 +30,7 @@ async function loadStops(): Promise<StopDto[]> {
   const stops: StopDto[] = parsed
     .filter(
       (s) =>
-        !!s.stopId &&
-        !!s.stopName &&
-        Number.isFinite(s.latitude) &&
-        Number.isFinite(s.longitude),
+        !!s.stopId && !!s.stopName && Number.isFinite(s.latitude) && Number.isFinite(s.longitude),
     )
     .map((s) => ({
       stopId: String(s.stopId),

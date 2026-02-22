@@ -66,9 +66,7 @@ export function UnifiedSearch({
   const filteredStops = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return [];
-    return stops
-      .filter((s) => s.stopName.toLowerCase().includes(q))
-      .slice(0, 8);
+    return stops.filter((s) => s.stopName.toLowerCase().includes(q)).slice(0, 8);
   }, [stops, query]);
 
   // Show "All Trains" option
@@ -113,43 +111,32 @@ export function UnifiedSearch({
   const closeDropdown = useCallback(() => setShowDropdown(false), []);
   useClickOutside(wrapperRef, closeDropdown);
 
-  const hasLineResults = TYPE_ORDER.some(
-    (type) => type !== "train" && groupedLines[type]?.length,
-  );
+  const hasLineResults = TYPE_ORDER.some((type) => type !== "train" && groupedLines[type]?.length);
   const hasStopResults = filteredStops.length > 0;
   const hasAnyResults = hasLineResults || hasStopResults || showAllTrains;
 
   // Active filter pill
   if (hasActiveFilter) {
-    const color = selectedLine
-      ? TYPE_COLORS[selectedLine.type] || TYPE_COLORS.unknown
-      : undefined;
+    const color = selectedLine ? TYPE_COLORS[selectedLine.type] || TYPE_COLORS.unknown : undefined;
     const label = selectedLine
       ? selectedLine.lineNumber
         ? `${TYPE_LABELS[selectedLine.type] ?? selectedLine.type} ${selectedLine.lineNumber}`
         : "All Trains"
-      : selectedStop?.stopName ?? "";
+      : (selectedStop?.stopName ?? "");
 
     return (
       <div
         className={`flex items-center gap-2 h-10 px-3 rounded-2xl cursor-default min-w-0 ${
-          embedded
-            ? "bg-foreground/6"
-            : "bg-white shadow-panel"
+          embedded ? "bg-foreground/6" : "bg-white shadow-panel"
         }`}
         ref={wrapperRef}
       >
         {selectedLine ? (
-          <span
-            className="w-2.5 h-2.5 rounded-full shrink-0"
-            style={{ backgroundColor: color }}
-          />
+          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
         ) : (
           <MapPin size={14} className="text-foreground/50 shrink-0" />
         )}
-        <span className="text-sm font-semibold text-foreground/85 truncate">
-          {label}
-        </span>
+        <span className="text-sm font-semibold text-foreground/85 truncate">{label}</span>
         {selectedLine && (
           <>
             <span className="text-foreground/25 font-medium">·</span>
@@ -171,15 +158,12 @@ export function UnifiedSearch({
   // Search input
   return (
     <div className="relative" ref={wrapperRef}>
-      <div className={`relative flex items-center h-10 rounded-2xl ${
-        embedded
-          ? "bg-foreground/6"
-          : "bg-white shadow-panel"
-      }`}>
-        <Search
-          size={15}
-          className="absolute left-3.5 text-foreground/40 pointer-events-none"
-        />
+      <div
+        className={`relative flex items-center h-10 rounded-2xl ${
+          embedded ? "bg-foreground/6" : "bg-white shadow-panel"
+        }`}
+      >
+        <Search size={15} className="absolute left-3.5 text-foreground/40 pointer-events-none" />
         <input
           ref={inputRef}
           className="w-full h-full pl-10 pr-4 text-sm font-medium bg-transparent rounded-2xl outline-none placeholder:text-foreground/45 text-foreground/85"
@@ -207,29 +191,29 @@ export function UnifiedSearch({
             )}
 
             {/* Line results */}
-            {TYPE_ORDER.filter(
-              (type) => type !== "train" && groupedLines[type]?.length,
-            ).map((type) => (
-              <div key={type}>
-                <div className="px-4 py-1.5 text-[11px] font-semibold text-foreground/40 uppercase tracking-wider">
-                  {TYPE_LABELS[type] ?? type}
+            {TYPE_ORDER.filter((type) => type !== "train" && groupedLines[type]?.length).map(
+              (type) => (
+                <div key={type}>
+                  <div className="px-4 py-1.5 text-[11px] font-semibold text-foreground/40 uppercase tracking-wider">
+                    {TYPE_LABELS[type] ?? type}
+                  </div>
+                  <div className="px-2 pb-1 flex flex-wrap gap-1">
+                    {groupedLines[type].map((line) => (
+                      <button
+                        key={`${line.type}_${line.lineNumber}`}
+                        onClick={() => handleSelectLine(line)}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-foreground/6 active:bg-foreground/10 transition-colors"
+                      >
+                        <TypeIcon type={line.type} className="shrink-0" />
+                        <span className="text-sm font-medium text-foreground/80">
+                          {line.lineNumber}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <div className="px-2 pb-1 flex flex-wrap gap-1">
-                  {groupedLines[type].map((line) => (
-                    <button
-                      key={`${line.type}_${line.lineNumber}`}
-                      onClick={() => handleSelectLine(line)}
-                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-foreground/6 active:bg-foreground/10 transition-colors"
-                    >
-                      <TypeIcon type={line.type} className="shrink-0" />
-                      <span className="text-sm font-medium text-foreground/80">
-                        {line.lineNumber}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
+              ),
+            )}
 
             {showAllTrains && (
               <div>
@@ -242,9 +226,7 @@ export function UnifiedSearch({
                     className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-foreground/6 active:bg-foreground/10 transition-colors"
                   >
                     <TypeIcon type="train" className="shrink-0" />
-                    <span className="text-sm font-medium text-foreground/80">
-                      All Trains
-                    </span>
+                    <span className="text-sm font-medium text-foreground/80">All Trains</span>
                   </button>
                 </div>
               </div>
@@ -263,10 +245,7 @@ export function UnifiedSearch({
                       onClick={() => handleSelectStop(stop)}
                       className="w-full flex items-start gap-2.5 px-3 py-2 rounded-lg hover:bg-foreground/6 active:bg-foreground/10 transition-colors text-left"
                     >
-                      <MapPin
-                        size={14}
-                        className="shrink-0 text-foreground/35 mt-0.5"
-                      />
+                      <MapPin size={14} className="shrink-0 text-foreground/35 mt-0.5" />
                       <div className="flex flex-col min-w-0 flex-1">
                         <div className="flex items-center gap-1.5">
                           <span className="text-sm font-medium text-foreground/85 truncate">

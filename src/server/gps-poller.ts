@@ -92,10 +92,7 @@ export class GpsPollerService {
       const readings = await pollGps();
       this.onData(readings);
     } catch (err) {
-      console.error(
-        "GPS poll error:",
-        err instanceof Error ? err.message : err,
-      );
+      console.error("GPS poll error:", err instanceof Error ? err.message : err);
     } finally {
       this.isPolling = false;
     }

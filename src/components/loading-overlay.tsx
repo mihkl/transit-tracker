@@ -8,9 +8,7 @@ export function LoadingOverlay() {
           <div className="absolute inset-0 rounded-full border-2 border-foreground/8" />
           <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-primary animate-spin" />
         </div>
-        <span className="text-sm font-medium text-foreground/55">
-          Connecting to live feed...
-        </span>
+        <span className="text-sm font-medium text-foreground/55">Connecting to live feed...</span>
       </div>
     </div>
   );

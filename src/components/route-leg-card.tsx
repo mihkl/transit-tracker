@@ -32,9 +32,7 @@ export function RouteLegCard({ leg, onLocateVehicle }: RouteLegCardProps) {
   return (
     <div
       className={`rounded-xl border border-foreground/8 bg-white px-3 py-3 transition-all duration-150 ${
-        isTransit
-          ? "cursor-pointer hover:bg-foreground/[0.02] active:scale-[0.99]"
-          : ""
+        isTransit ? "cursor-pointer hover:bg-foreground/[0.02] active:scale-[0.99]" : ""
       }`}
       style={{ borderLeftWidth: 3, borderLeftColor: color }}
       onClick={() => {
@@ -66,18 +64,12 @@ export function RouteLegCard({ leg, onLocateVehicle }: RouteLegCardProps) {
 
       <div className="mt-2.5 ml-0.5 flex gap-2.5">
         <div className="flex flex-col items-center w-3 shrink-0 py-0.5">
-          <div
-            className="w-2 h-2 rounded-full border-2 shrink-0"
-            style={{ borderColor: color }}
-          />
+          <div className="w-2 h-2 rounded-full border-2 shrink-0" style={{ borderColor: color }} />
           <div
             className="flex-1 w-0.5 my-0.5 rounded-full"
             style={{ backgroundColor: color, opacity: 0.3 }}
           />
-          <div
-            className="w-2 h-2 rounded-full shrink-0"
-            style={{ backgroundColor: color }}
-          />
+          <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
         </div>
 
         <div className="flex-1 min-w-0 flex flex-col justify-between gap-1.5">
@@ -109,9 +101,7 @@ export function RouteLegCard({ leg, onLocateVehicle }: RouteLegCardProps) {
       </div>
 
       {isTransit && (
-        <div className="mt-2 text-[11px] text-foreground/45 font-medium">
-          Tap to locate on map
-        </div>
+        <div className="mt-2 text-[11px] text-foreground/45 font-medium">Tap to locate on map</div>
       )}
     </div>
   );
@@ -153,18 +143,12 @@ export function TransferBadge({ transfer }: { transfer: TransferInfo }) {
 
   const bufferMins = Math.abs(Math.round(bufferSeconds / 60));
   const bufferText =
-    transfer.status === "missed"
-      ? `${bufferMins} min late`
-      : `${bufferMins} min buffer`;
+    transfer.status === "missed" ? `${bufferMins} min late` : `${bufferMins} min buffer`;
 
   return (
-    <div
-      className={`flex items-center gap-2 px-3 py-2 rounded-xl border ${cfg.bg} ${cfg.border}`}
-    >
+    <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border ${cfg.bg} ${cfg.border}`}>
       <div className="flex-1 min-w-0 flex items-center gap-1.5 flex-wrap">
-        <span className={`text-xs font-semibold ${cfg.text}`}>
-          {cfg.label}
-        </span>
+        <span className={`text-xs font-semibold ${cfg.text}`}>{cfg.label}</span>
         {departingLeg.lineNumber && (
           <span
             className="inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[10px] font-bold text-white shrink-0"
@@ -179,9 +163,7 @@ export function TransferBadge({ transfer }: { transfer: TransferInfo }) {
           </span>
         )}
       </div>
-      <span className={`text-xs font-bold tabular-nums shrink-0 ${cfg.text}`}>
-        {bufferText}
-      </span>
+      <span className={`text-xs font-bold tabular-nums shrink-0 ${cfg.text}`}>{bufferText}</span>
     </div>
   );
 }

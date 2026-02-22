@@ -12,17 +12,14 @@ interface CacheEntry {
 const cache = new Map<string, CacheEntry>();
 
 function toRawStopId(stopId: string): string {
-  return stopId.includes(":") ? stopId.split(":").pop() ?? stopId : stopId;
+  return stopId.includes(":") ? (stopId.split(":").pop() ?? stopId) : stopId;
 }
 
 function toSecondsSinceMidnight(now: Date): number {
   return now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
 }
 
-function computeSecondsUntilFromClock(
-  nowSeconds: number,
-  targetSeconds: number,
-): number {
+function computeSecondsUntilFromClock(nowSeconds: number, targetSeconds: number): number {
   let delta = targetSeconds - nowSeconds;
   if (delta < 0) delta += 24 * 60 * 60;
   return delta;
@@ -131,7 +128,8 @@ async function fetchFromSiri(stopId: string): Promise<StopDeparture[]> {
     const parsed = parseSiriLine(lines[i]);
     if (!parsed) continue;
 
-    const { transportType, route, expectedTime, scheduleTime, destination, realtimeMarker } = parsed;
+    const { transportType, route, expectedTime, scheduleTime, destination, realtimeMarker } =
+      parsed;
     const delaySeconds = expectedTime - scheduleTime;
     // A departure is realtime when the API includes a realtime marker, or when
     // it reports a non-zero delay. Exactly-on-time live vehicles may show as
@@ -155,9 +153,7 @@ async function fetchFromSiri(stopId: string): Promise<StopDeparture[]> {
   return departures;
 }
 
-export async function fetchStopDepartures(
-  stopId: string,
-): Promise<StopDeparture[]> {
+export async function fetchStopDepartures(stopId: string): Promise<StopDeparture[]> {
   const cached = cache.get(stopId);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
     return cached.data;

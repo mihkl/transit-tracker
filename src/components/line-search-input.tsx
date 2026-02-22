@@ -14,11 +14,7 @@ import {
 } from "@/components/ui/command";
 import { TYPE_COLORS, TYPE_LABELS } from "@/lib/constants";
 import type { LineDto } from "@/lib/types";
-import {
-  TYPE_ORDER,
-  groupAndSortLines,
-  uniqueLines as buildUniqueLines,
-} from "@/lib/search-utils";
+import { TYPE_ORDER, groupAndSortLines, uniqueLines as buildUniqueLines } from "@/lib/search-utils";
 
 interface LineSearchInputProps {
   value: { lineNumber: string; type: string } | null;
@@ -50,11 +46,7 @@ function displayLabel(line: { lineNumber: string; type: string }) {
 
 export { TypeIcon };
 
-export function LineSearchInput({
-  value,
-  onSelect,
-  lines,
-}: LineSearchInputProps) {
+export function LineSearchInput({ value, onSelect, lines }: LineSearchInputProps) {
   const [query, setQuery] = useState(() => (value ? displayLabel(value) : ""));
   const [showDropdown, setShowDropdown] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -145,24 +137,22 @@ export function LineSearchInput({
           >
             <CommandList>
               <CommandEmpty>No matching lines.</CommandEmpty>
-              {TYPE_ORDER.filter(
-                (type) => type !== "train" && grouped[type]?.length,
-              ).map((type) => (
-                <CommandGroup key={type} heading={TYPE_LABELS[type] ?? type}>
-                  {grouped[type].map((line) => (
-                    <CommandItem
-                      key={`${line.type}_${line.lineNumber}`}
-                      onSelect={() => handleSelect(line)}
-                      className="cursor-pointer px-3 py-1.5 hover:bg-foreground/[0.04] rounded-lg mx-1 transition-colors"
-                    >
-                      <TypeIcon type={line.type} className="shrink-0" />
-                      <span className="text-sm font-medium">
-                        {line.lineNumber}
-                      </span>
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              ))}
+              {TYPE_ORDER.filter((type) => type !== "train" && grouped[type]?.length).map(
+                (type) => (
+                  <CommandGroup key={type} heading={TYPE_LABELS[type] ?? type}>
+                    {grouped[type].map((line) => (
+                      <CommandItem
+                        key={`${line.type}_${line.lineNumber}`}
+                        onSelect={() => handleSelect(line)}
+                        className="cursor-pointer px-3 py-1.5 hover:bg-foreground/[0.04] rounded-lg mx-1 transition-colors"
+                      >
+                        <TypeIcon type={line.type} className="shrink-0" />
+                        <span className="text-sm font-medium">{line.lineNumber}</span>
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                ),
+              )}
               {showAllTrains && (
                 <CommandGroup heading="Train">
                   <CommandItem
