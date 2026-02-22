@@ -17,6 +17,8 @@ interface FilterPanelProps {
   onToggleTraffic?: () => void;
   showVehicles?: boolean;
   onToggleVehicles?: () => void;
+  showStops?: boolean;
+  onToggleStops?: () => void;
   lines: LineDto[];
 }
 
@@ -31,12 +33,14 @@ export function FilterPanel({
   onToggleTraffic,
   showVehicles = false,
   onToggleVehicles,
+  showStops = false,
+  onToggleStops,
   lines,
 }: FilterPanelProps) {
   return (
     <>
       {/* Mobile — just the search bar, clean and minimal */}
-      <div className="absolute top-3 left-3 right-3 z-1000 md:hidden">
+      <div className="absolute top-3 left-3 right-3 z-[1000] md:hidden">
         <UnifiedSearch
           lines={lines}
           selectedLine={selectedLine}
@@ -48,7 +52,7 @@ export function FilterPanel({
       </div>
 
       {/* Desktop — search bar + controls in one row */}
-      <div className="hidden md:flex absolute top-3 right-3 z-1000 items-center gap-2 px-2 py-1.5 bg-white rounded-2xl shadow-panel">
+      <div className="hidden md:flex absolute top-3 right-3 z-[1000] items-center gap-2 px-2 py-1.5 bg-white rounded-2xl shadow-panel">
         <div className="w-64">
           <UnifiedSearch
             lines={lines}
@@ -89,6 +93,18 @@ export function FilterPanel({
           </Button>
         )}
 
+        {onToggleStops && (
+          <Button
+            variant={showStops ? "default" : "ghost"}
+            size="sm"
+            className="h-8 px-2.5 rounded-xl text-sm font-medium"
+            onClick={onToggleStops}
+            title="Toggle all stops"
+          >
+            <Icon name="map-pin" className="w-4 h-4 mr-1.5" />
+            Stops
+          </Button>
+        )}
         <Button
           variant="ghost"
           size="sm"

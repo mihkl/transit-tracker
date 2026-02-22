@@ -268,6 +268,11 @@ export interface StopDeparture {
   destination: string;
   secondsUntilArrival: number;
   delaySeconds: number;
+  realtime?: boolean;
+  realtimeState?: string;
+  stopSequence?: number;
+  totalStops?: number;
+  alertsCount?: number;
 }
 
 export interface VehicleStopEta {

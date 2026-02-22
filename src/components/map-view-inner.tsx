@@ -36,7 +36,8 @@ import { StopPopup } from "@/components/stop-popup";
 import { useIsDesktop } from "@/hooks/use-is-desktop";
 import { useTrafficData } from "@/hooks/use-traffic-data";
 import { Icon } from "@/components/icon";
-import { isReliableUserLocation } from "@/lib/location-quality";
+import { useUserLocation } from "@/hooks/use-user-location";
+import { useStops } from "@/hooks/use-stops";
 
 function fitMapToPoints(map: MapRef, points: number[][]) {
   let minLat = Infinity,
@@ -65,8 +66,7 @@ function fitMapToPoints(map: MapRef, points: number[][]) {
 import { getStopDepartures } from "@/actions";
 
 async function fetchDepartures(stopId: string): Promise<StopDeparture[]> {
-  const data = await getStopDepartures(stopId);
-  return data.slice(0, 5);
+  return getStopDepartures(stopId);
 }
 
 function addVehicleArrowImage(map: MaplibreMap) {
@@ -113,6 +113,7 @@ export interface MapViewInnerProps {
   onDeselectVehicle: () => void;
   selectedStop: StopDto | null;
   showTraffic?: boolean;
+  showStops?: boolean;
 }
 
 export function MapViewInner({
@@ -129,6 +130,7 @@ export function MapViewInner({
   onDeselectVehicle,
   selectedStop,
   showTraffic = false,
+  showStops = false,
 }: MapViewInnerProps) {
   const mapRef = useRef<MapRef>(null);
   const [viewState, setViewState] = useState(INITIAL_VIEW_STATE);
@@ -137,6 +139,8 @@ export function MapViewInner({
   const [stopDepartures, setStopDepartures] = useState<StopDeparture[]>([]);
   const [departuresLoading, setDeparturesLoading] = useState(false);
   const followingRef = useRef(false);
+  const [hoveringInteractive, setHoveringInteractive] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const isDesktop = useIsDesktop();
   const [webglLost, setWebglLost] = useState(false);
   const webglCleanupRef = useRef<(() => void) | null>(null);
@@ -154,43 +158,26 @@ export function MapViewInner({
     minZoom: 11,
     debounceMs: 400,
   });
+  const { stops: allStops } = useStops();
 
-  // User location
-  const [userLocation, setUserLocation] = useState<{
-    lat: number;
-    lng: number;
-  } | null>(null);
+  const userLocation = useUserLocation();
   const hasInitiallyLocated = useRef(false);
 
   useEffect(() => {
-    if (typeof navigator === "undefined" || !navigator.geolocation) return;
+    if (!userLocation || hasInitiallyLocated.current) return;
+    hasInitiallyLocated.current = true;
 
-    const watchId = navigator.geolocation.watchPosition(
-      ({ coords }) => {
-        if (!isReliableUserLocation(coords)) return;
-
-        const { latitude, longitude } = coords;
-        setUserLocation({ lat: latitude, lng: longitude });
-
-        if (!hasInitiallyLocated.current) {
-          hasInitiallyLocated.current = true;
-          // Only auto-pan if the map hasn't been moved from the default center
-          setViewState((prev) => {
-            const atDefault =
-              Math.abs(prev.latitude - TALLINN_CENTER[0]) < 0.02 &&
-              Math.abs(prev.longitude - TALLINN_CENTER[1]) < 0.02 &&
-              prev.zoom === DEFAULT_ZOOM;
-            if (!atDefault) return prev;
-            return { ...prev, latitude, longitude, zoom: 14 };
-          });
-        }
-      },
-      (err) => console.warn("Geolocation error:", err.message),
-      { enableHighAccuracy: true, maximumAge: 30_000, timeout: 15_000 },
-    );
-
-    return () => navigator.geolocation.clearWatch(watchId);
-  }, []);
+    const { lat: latitude, lng: longitude } = userLocation;
+    // Only auto-pan if the map hasn't been moved from the default center
+    setViewState((prev) => {
+      const atDefault =
+        Math.abs(prev.latitude - TALLINN_CENTER[0]) < 0.02 &&
+        Math.abs(prev.longitude - TALLINN_CENTER[1]) < 0.02 &&
+        prev.zoom === DEFAULT_ZOOM;
+      if (!atDefault) return prev;
+      return { ...prev, latitude, longitude, zoom: 14 };
+    });
+  }, [userLocation]);
 
   const handleMapLoad = useCallback(() => {
     const map = mapRef.current?.getMap();
@@ -256,6 +243,21 @@ export function MapViewInner({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusedVehicleId]);
 
+  const handleStopClick = useCallback(async (stop: StopDto) => {
+    setPopupStop(stop);
+    setPopupVehicle(null);
+    setDeparturesLoading(true);
+    setStopDepartures([]);
+
+    try {
+      setStopDepartures(await fetchDepartures(stop.stopId));
+    } catch (err) {
+      console.error("Failed to fetch departures:", err);
+    } finally {
+      setDeparturesLoading(false);
+    }
+  }, []);
+
   const handleMapClick = useCallback(
     (e: MapLayerMouseEvent) => {
       if (pickingPoint) {
@@ -277,27 +279,31 @@ export function MapViewInner({
         }
       }
 
+      const stopFeature = e.features?.find(
+        (f) => f.layer?.id === "all-stops" || f.layer?.id === "all-stops-hit",
+      );
+      if (stopFeature) {
+        const stopId = String(stopFeature.properties?.stopId ?? "");
+        const stop = allStops.find((s) => s.stopId === stopId);
+        if (stop) {
+          void handleStopClick(stop);
+          return;
+        }
+      }
+
       onDeselectVehicle();
       setPopupVehicle(null);
       setPopupStop(null);
     },
-    [pickingPoint, onMapClick, onDeselectVehicle, onVehicleClick],
+    [
+      pickingPoint,
+      onMapClick,
+      onDeselectVehicle,
+      onVehicleClick,
+      allStops,
+      handleStopClick,
+    ],
   );
-
-  const handleStopClick = useCallback(async (stop: StopDto) => {
-    setPopupStop(stop);
-    setPopupVehicle(null);
-    setDeparturesLoading(true);
-    setStopDepartures([]);
-
-    try {
-      setStopDepartures(await fetchDepartures(stop.stopId));
-    } catch (err) {
-      console.error("Failed to fetch departures:", err);
-    } finally {
-      setDeparturesLoading(false);
-    }
-  }, []);
 
   useEffect(() => {
     if (selectedStop) {
@@ -380,6 +386,19 @@ export function MapViewInner({
     }
   }, []);
 
+  const handleMouseMove = useCallback(
+    (e: MapLayerMouseEvent) => {
+      const hasInteractiveFeature = !!e.features?.some(
+        (f) =>
+          f.layer?.id === "vehicles" ||
+          f.layer?.id === "all-stops" ||
+          f.layer?.id === "all-stops-hit",
+      );
+      setHoveringInteractive(hasInteractiveFeature);
+    },
+    [],
+  );
+
   const routeLegsGeoJson = useMemo(() => {
     if (!routePlan || !routePlan.routes[selectedRouteIndex]) return null;
     const route = routePlan.routes[selectedRouteIndex];
@@ -435,6 +454,24 @@ export function MapViewInner({
     [vehicles, focusedVehicleId],
   );
 
+  const allStopsGeoJson = useMemo(
+    () => ({
+      type: "FeatureCollection" as const,
+      features: allStops.map((s) => ({
+        type: "Feature" as const,
+        geometry: {
+          type: "Point" as const,
+          coordinates: [s.longitude, s.latitude],
+        },
+        properties: {
+          stopId: s.stopId,
+          name: s.stopName,
+        },
+      })),
+    }),
+    [allStops],
+  );
+
   const boardingStops = useMemo(() => {
     if (!routePlan || !routePlan.routes[selectedRouteIndex]) return [];
     const route = routePlan.routes[selectedRouteIndex];
@@ -482,17 +519,22 @@ export function MapViewInner({
         ref={mapRef}
         {...viewState}
         onMove={(evt) => {
-          setViewState(evt.viewState);
-          if (followingRef.current && focusedVehicleId) {
-            const v = vehicles.find((v) => v.id === focusedVehicleId);
-            if (v) {
-              evt.viewState.longitude = v.longitude;
-              evt.viewState.latitude = v.latitude;
-            }
+          const next = { ...evt.viewState };
+          if (followingRef.current && focusedVehicle) {
+            next.longitude = focusedVehicle.longitude;
+            next.latitude = focusedVehicle.latitude;
           }
+          setViewState(next);
         }}
         onMoveEnd={handleMoveEnd}
-        interactiveLayerIds={["vehicles"]}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={() => setHoveringInteractive(false)}
+        onDragStart={() => setIsDragging(true)}
+        onDragEnd={() => setIsDragging(false)}
+        cursor={isDragging ? "grabbing" : hoveringInteractive ? "pointer" : "grab"}
+        interactiveLayerIds={
+          showStops ? ["vehicles", "all-stops-hit", "all-stops"] : ["vehicles"]
+        }
         onClick={handleMapClick}
         onLoad={handleMapLoad}
         style={{ width: "100%", height: "100%" }}
@@ -630,6 +672,53 @@ export function MapViewInner({
           >
             <StopIcon />
           </Marker>
+        )}
+
+        {!webglLost && showStops && (
+          <Source id="all-stops-source" type="geojson" data={allStopsGeoJson}>
+            <Layer
+              id="all-stops-hit"
+              type="circle"
+              minzoom={12}
+              paint={{
+                "circle-radius": [
+                  "interpolate",
+                  ["linear"],
+                  ["zoom"],
+                  12,
+                  8,
+                  13,
+                  10,
+                  16,
+                  12,
+                ],
+                "circle-color": "#000000",
+                "circle-opacity": 0.01,
+              }}
+            />
+            <Layer
+              id="all-stops"
+              type="circle"
+              minzoom={12}
+              paint={{
+                "circle-radius": [
+                  "interpolate",
+                  ["linear"],
+                  ["zoom"],
+                  12,
+                  2,
+                  13,
+                  3,
+                  16,
+                  5,
+                ],
+                "circle-color": "#ffffff",
+                "circle-stroke-color": "#4b5563",
+                "circle-stroke-width": 1,
+                "circle-opacity": 0.85,
+              }}
+            />
+          </Source>
         )}
 
         {userLocation && (

@@ -9,7 +9,7 @@ import { Car, Bus } from "lucide-react";
 import { Icon } from "@/components/icon";
 import { useVehicleStream } from "@/hooks/use-vehicle-stream";
 import { useAnimatedVehicles } from "@/hooks/use-animated-vehicles";
-import { isReliableUserLocation } from "@/lib/location-quality";
+import { useUserLocation } from "@/hooks/use-user-location";
 import type {
   RoutePlanResponse,
   RoutePlanRequest,
@@ -47,6 +47,7 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
   const [selectedStop, setSelectedStop] = useState<StopDto | null>(null);
   const [showTraffic, setShowTraffic] = useState(false);
   const [showVehicles, setShowVehicles] = useState(false);
+  const [showStops, setShowStops] = useState(false);
 
   const [showPlanner, setShowPlanner] = useState(false);
   const [origin, setOrigin] = useState<{
@@ -73,10 +74,7 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
   const [selectedDateTime, setSelectedDateTime] = useState(() =>
     toLocalDateTimeString(new Date()),
   );
-  const [userLocation, setUserLocation] = useState<{
-    lat: number;
-    lng: number;
-  } | null>(null);
+  const userLocation = useUserLocation();
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -104,19 +102,6 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
       const nextUrl = `${window.location.pathname}${next ? `?${next}` : ""}${window.location.hash}`;
       window.history.replaceState({}, "", nextUrl);
     }
-  }, []);
-
-  useEffect(() => {
-    if (typeof navigator === "undefined" || !navigator.geolocation) return;
-    const watchId = navigator.geolocation.watchPosition(
-      ({ coords }) => {
-        if (!isReliableUserLocation(coords)) return;
-        setUserLocation({ lat: coords.latitude, lng: coords.longitude });
-      },
-      (err) => console.warn("Geolocation error:", err.message),
-      { enableHighAccuracy: true, maximumAge: 30_000, timeout: 15_000 },
-    );
-    return () => navigator.geolocation.clearWatch(watchId);
   }, []);
 
   const [mapKey, setMapKey] = useState(0);
@@ -315,6 +300,8 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
         onToggleTraffic={() => setShowTraffic((t) => !t)}
         showVehicles={showVehicles}
         onToggleVehicles={handleToggleVehicles}
+        showStops={showStops}
+        onToggleStops={() => setShowStops((s) => !s)}
         lines={lines}
       />
       <div className="flex-1 flex relative overflow-hidden">
@@ -373,11 +360,12 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
             onDeselectVehicle={handleDeselectVehicle}
             selectedStop={selectedStop}
             showTraffic={showTraffic}
+            showStops={showStops}
           />
 
           {/* Mobile-only map overlay controls */}
           {!showPlanner && !pickingPoint && !focusedVehicleId && !selectedStop && (
-            <div className="absolute bottom-6 right-3 flex flex-col gap-2 z-1000 md:hidden">
+            <div className="absolute bottom-6 right-3 flex flex-col gap-2 z-[900] md:hidden">
               <button
                 onClick={handleToggleVehicles}
                 className={`w-11 h-11 rounded-xl flex items-center justify-center shadow-fab transition-all duration-150 active:scale-95 ${
@@ -399,6 +387,17 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
                 title="Toggle traffic"
               >
                 <Car size={18} />
+              </button>
+              <button
+                onClick={() => setShowStops((s) => !s)}
+                className={`w-11 h-11 rounded-xl flex items-center justify-center shadow-fab transition-all duration-150 active:scale-95 ${
+                  showStops
+                    ? "bg-foreground text-white"
+                    : "bg-white text-foreground/50"
+                }`}
+                title="Toggle stops"
+              >
+                <Icon name="map-pin" className="w-5 h-5" />
               </button>
               <button
                 onClick={() => setShowPlanner(true)}

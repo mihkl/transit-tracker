@@ -1,6 +1,8 @@
 const fs = require("fs");
 const path = require("path");
 
+const SIRI_STOPS_URL = "https://transport.tallinn.ee/data/stops.txt";
+
 function ensureDir(p) {
   if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
 }
@@ -44,6 +46,81 @@ async function parseCsvRows(filePath) {
   return records;
 }
 
+async function fetchSiriStopsRows() {
+  console.log(`Fetching stops from ${SIRI_STOPS_URL} ...`);
+  const res = await fetch(SIRI_STOPS_URL);
+  if (!res.ok) {
+    throw new Error(`Failed to fetch SIRI stops: ${res.status}`);
+  }
+
+  const text = await res.text();
+  const lines = text.split(/\r?\n/).filter(Boolean);
+  if (lines.length <= 1) return [];
+
+  const headers = lines[0].replace(/^\uFEFF/, "").split(";");
+  const idx = {
+    id: headers.indexOf("ID"),
+    siriId: headers.indexOf("SiriID"),
+    lat: headers.indexOf("Lat"),
+    lng: headers.indexOf("Lng"),
+    name: headers.indexOf("Name"),
+    info: headers.indexOf("Info"),
+    area: headers.indexOf("Area"),
+  };
+
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const values = lines[i].split(";");
+    const siriId = (values[idx.siriId] || "").trim();
+    const rawId = (values[idx.id] || "").trim();
+    if (!siriId) continue;
+    const latRaw = parseFloat(values[idx.lat] || "");
+    const lngRaw = parseFloat(values[idx.lng] || "");
+    if (!Number.isFinite(latRaw) || !Number.isFinite(lngRaw)) continue;
+
+    rows.push({
+      // GTFS stop_times uses numeric ids matching SIRI's SiriID column.
+      stop_id: siriId,
+      source_id: rawId,
+      stop_name: (values[idx.name] || "").trim(),
+      // SIRI file stores coords as fixed-point integers.
+      stop_lat: String(latRaw / 100000),
+      stop_lon: String(lngRaw / 100000),
+      stop_desc: (values[idx.info] || "").trim(),
+      stop_area: (values[idx.area] || "").trim(),
+    });
+  }
+
+  return rows;
+}
+
+function distanceMeters(lat1, lng1, lat2, lng2) {
+  const toRad = (v) => (v * Math.PI) / 180;
+  const R = 6371000;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+function findNearestStopName(gtfsStops, lat, lng, maxDistanceMeters = 40) {
+  let best = null;
+  let bestDist = Infinity;
+  for (const stop of gtfsStops) {
+    if (!stop.stopName) continue;
+    const d = distanceMeters(lat, lng, stop.latitude, stop.longitude);
+    if (d < bestDist) {
+      bestDist = d;
+      best = stop;
+    }
+  }
+  if (!best || bestDist > maxDistanceMeters) return null;
+  return best.stopName;
+}
+
 async function build(gtfsDir, outDir) {
   ensureDir(outDir);
 
@@ -56,14 +133,41 @@ async function build(gtfsDir, outDir) {
   }));
   console.log(`  ${routes.length} routes`);
 
-console.log("Loading GTFS stops...");
-  const stopsRows = await parseCsvRows(path.join(gtfsDir, "stops.txt"));
+  console.log("Loading GTFS ZIP stops for name fallback...");
+  const zipStopsRows = await parseCsvRows(path.join(gtfsDir, "stops.txt"));
+  const zipStops = zipStopsRows
+    .map((s) => ({
+      stopId: s.stop_id,
+      stopCode: s.stop_code,
+      stopName: s.stop_name,
+      stopDesc: (s.stop_desc || "").trim(),
+      latitude: parseFloat(s.stop_lat),
+      longitude: parseFloat(s.stop_lon),
+    }))
+    .filter((s) => Number.isFinite(s.latitude) && Number.isFinite(s.longitude));
+  const zipStopsById = new Map(zipStops.map((s) => [String(s.stopId), s]));
+  const zipStopsByCode = new Map(zipStops.map((s) => [String(s.stopCode), s]));
+  console.log(`  ${zipStops.length} ZIP stops`);
+
+  console.log("Loading GTFS stops...");
+  const stopsRows = await fetchSiriStopsRows();
   const stops = stopsRows.map((s) => ({
     stopId: s.stop_id,
-    stopName: s.stop_name,
+    stopName:
+      (s.stop_name || "").trim() ||
+      findNearestStopName(
+        zipStops,
+        parseFloat(s.stop_lat),
+        parseFloat(s.stop_lon),
+      ) ||
+      s.stop_id,
     latitude: parseFloat(s.stop_lat),
     longitude: parseFloat(s.stop_lon),
-    stopDesc: s.stop_desc || undefined,
+    // Use actual GTFS stop_desc; leave blank when absent.
+    stopDesc:
+      zipStopsById.get(String(s.stop_id))?.stopDesc ||
+      zipStopsByCode.get(String(s.source_id || ""))?.stopDesc ||
+      undefined,
     stopArea: s.stop_area || undefined,
   }));
   console.log(`  ${stops.length} stops`);

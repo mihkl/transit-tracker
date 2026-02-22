@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { useState, useRef, useMemo, useCallback } from "react";
 import { useClickOutside } from "@/hooks/use-click-outside";
 import { MapPin } from "lucide-react";
 import { Icon } from "@/components/icon";
@@ -13,31 +13,19 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import type { StopDto } from "@/lib/types";
-import { getAllStops } from "@/actions";
+import { useStops } from "@/hooks/use-stops";
+import { STOP_TYPE_COLORS } from "@/lib/search-utils";
 
 interface StopSearchInputProps {
   value: StopDto | null;
   onSelect: (stop: StopDto | null) => void;
 }
 
-const STOP_TYPE_COLORS: Record<string, string> = {
-  B: "#2196F3",
-  T: "#F44336",
-  t: "#4CAF50",
-  K: "#FF9800",
-};
-
 export function StopSearchInput({ value, onSelect }: StopSearchInputProps) {
   const [query, setQuery] = useState(() => (value ? value.stopName : ""));
-  const [stops, setStops] = useState<StopDto[]>([]);
+  const { stops } = useStops();
   const [showDropdown, setShowDropdown] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    getAllStops()
-      .then(setStops)
-      .catch((err) => console.error("Failed to load stops:", err));
-  }, []);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();

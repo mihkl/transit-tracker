@@ -1,21 +1,18 @@
 "use client";
 
-import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { useState, useRef, useMemo, useCallback } from "react";
 import { useClickOutside } from "@/hooks/use-click-outside";
 import { Search, MapPin, X } from "lucide-react";
 import { TypeIcon } from "@/components/line-search-input";
 import { TYPE_LABELS, TYPE_COLORS } from "@/lib/constants";
 import type { LineDto, StopDto } from "@/lib/types";
-import { getAllStops } from "@/actions";
-
-const TYPE_ORDER = ["train", "tram", "trolleybus", "bus"];
-
-const STOP_TYPE_COLORS: Record<string, string> = {
-  B: "#2196F3",
-  T: "#F44336",
-  t: "#4CAF50",
-  K: "#FF9800",
-};
+import {
+  STOP_TYPE_COLORS,
+  TYPE_ORDER,
+  groupAndSortLines,
+  uniqueLines as buildUniqueLines,
+} from "@/lib/search-utils";
+import { useStops } from "@/hooks/use-stops";
 
 interface UnifiedSearchProps {
   lines: LineDto[];
@@ -38,28 +35,15 @@ export function UnifiedSearch({
 }: UnifiedSearchProps) {
   const [query, setQuery] = useState("");
   const [showDropdown, setShowDropdown] = useState(false);
-  const [stops, setStops] = useState<StopDto[]>([]);
+  const { stops } = useStops();
   const wrapperRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const hasActiveFilter = !!(selectedLine || selectedStop);
 
-  // Load stops on mount
-  useEffect(() => {
-    getAllStops()
-      .then(setStops)
-      .catch((err) => console.error("Failed to load stops:", err));
-  }, []);
-
   // Unique lines
   const uniqueLines = useMemo(() => {
-    const seen = new Set<string>();
-    return lines.filter((l) => {
-      const key = `${l.type}_${l.lineNumber}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+    return buildUniqueLines(lines);
   }, [lines]);
 
   // Filtered lines
@@ -75,20 +59,7 @@ export function UnifiedSearch({
 
   // Grouped lines
   const groupedLines = useMemo(() => {
-    const groups: Record<string, LineDto[]> = {};
-    for (const line of filteredLines) {
-      if (!groups[line.type]) groups[line.type] = [];
-      groups[line.type].push(line);
-    }
-    for (const type of Object.keys(groups)) {
-      groups[type].sort((a, b) => {
-        const na = parseInt(a.lineNumber, 10);
-        const nb = parseInt(b.lineNumber, 10);
-        if (!isNaN(na) && !isNaN(nb)) return na - nb;
-        return a.lineNumber.localeCompare(b.lineNumber);
-      });
-    }
-    return groups;
+    return groupAndSortLines(filteredLines);
   }, [filteredLines]);
 
   // Filtered stops
@@ -221,7 +192,7 @@ export function UnifiedSearch({
       </div>
 
       {showDropdown && (
-        <div className="fixed left-3 right-3 top-15 z-1100 md:absolute md:top-full md:left-0 md:right-auto md:mt-2 md:w-72 animate-scale-in pointer-events-auto bg-white rounded-xl shadow-dropdown max-h-[60vh] overflow-hidden">
+        <div className="fixed left-3 right-3 top-[3.75rem] z-[1100] md:absolute md:top-full md:left-0 md:right-auto md:mt-2 md:w-72 animate-scale-in pointer-events-auto bg-white rounded-xl shadow-dropdown max-h-[60vh] overflow-hidden">
           <div className="max-h-[inherit] overflow-y-auto overscroll-contain">
             {!hasAnyResults && query.trim() && (
               <div className="px-4 py-6 text-center text-sm text-foreground/50 font-medium">
