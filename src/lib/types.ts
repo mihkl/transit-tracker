@@ -260,7 +260,7 @@ export interface GtfsData {
   scheduleByRouteStop: Map<string, ScheduleEntry[]>;
 }
 
-export interface StopDeparture {
+export interface StopArrival {
   transportType: string;
   route: string;
   expectedTime: number;

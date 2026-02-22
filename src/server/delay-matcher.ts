@@ -1,7 +1,7 @@
 import type { DelayInfo, PatternStop } from "@/lib/types";
 import { haversineDistance } from "./geo-utils";
 import { transitState } from "./transit-state";
-import { fetchStopDepartures } from "./siri-client";
+import { fetchStopArrivals } from "./siri-client";
 import { getSecondsOfDayInTallinn } from "./time-utils";
 
 interface MatchedStopInfo {
@@ -86,7 +86,7 @@ async function matchTransitLegAsync(
   try {
     const siriStopId = resolveSiriStopId(stopInfo.stopId);
     if (!siriStopId) return null;
-    const departures = await fetchStopDepartures(siriStopId);
+    const departures = await fetchStopArrivals(siriStopId);
 
     const sameLine = departures.filter((d) => routeMatches(d.route, lineNumber));
     if (sameLine.length === 0) return null;

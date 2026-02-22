@@ -4,7 +4,7 @@ import { useMemo, useCallback, useRef, useState, useEffect } from "react";
 import Map, { Marker, Source, Layer, Popup, type MapRef } from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { LngLatBoundsLike, Map as MaplibreMap } from "maplibre-gl";
-import type { VehicleDto, RoutePlanResponse, StopDeparture, StopDto } from "@/lib/types";
+import type { VehicleDto, RoutePlanResponse, StopArrival, StopDto } from "@/lib/types";
 import { TALLINN_CENTER, DEFAULT_ZOOM, TYPE_COLORS, LEG_COLORS } from "@/lib/constants";
 import { BottomSheet } from "@/components/bottom-sheet";
 import type { MapLayerMouseEvent } from "maplibre-gl";
@@ -47,10 +47,10 @@ function fitMapToPoints(map: MapRef, points: number[][]) {
   }
 }
 
-import { getStopDepartures } from "@/actions";
+import { getStopArrivals } from "@/actions";
 
-async function fetchDepartures(stopId: string): Promise<StopDeparture[]> {
-  return getStopDepartures(stopId);
+async function fetchArrivals(stopId: string): Promise<StopArrival[]> {
+  return getStopArrivals(stopId);
 }
 
 function addVehicleArrowImage(map: MaplibreMap) {
@@ -120,8 +120,8 @@ export function MapViewInner({
   const [viewState, setViewState] = useState(INITIAL_VIEW_STATE);
   const [popupVehicle, setPopupVehicle] = useState<VehicleDto | null>(null);
   const [popupStop, setPopupStop] = useState<StopDto | null>(null);
-  const [stopDepartures, setStopDepartures] = useState<StopDeparture[]>([]);
-  const [departuresLoading, setDeparturesLoading] = useState(false);
+  const [stopArrivals, setStopArrivals] = useState<StopArrival[]>([]);
+  const [arrivalsLoading, setArrivalsLoading] = useState(false);
   const followingRef = useRef(false);
   const [hoveringInteractive, setHoveringInteractive] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -130,6 +130,7 @@ export function MapViewInner({
   const webglCleanupRef = useRef<(() => void) | null>(null);
   const vehiclesRef = useRef(vehicles);
   vehiclesRef.current = vehicles;
+  const popupVehicleKeyRef = useRef<string>("");
   const [mapBounds, setMapBounds] = useState<{
     minLat: number;
     minLng: number;
@@ -204,6 +205,8 @@ export function MapViewInner({
     if (focusedVehicleId == null) return null;
     return vehicles.find((v) => v.id === focusedVehicleId) ?? null;
   }, [vehicles, focusedVehicleId]);
+  const focusedVehicleRef = useRef(focusedVehicle);
+  focusedVehicleRef.current = focusedVehicle;
 
   useEffect(() => {
     if (focusedVehicle) {
@@ -229,15 +232,15 @@ export function MapViewInner({
   const handleStopClick = useCallback(async (stop: StopDto) => {
     setPopupStop(stop);
     setPopupVehicle(null);
-    setDeparturesLoading(true);
-    setStopDepartures([]);
+    setArrivalsLoading(true);
+    setStopArrivals([]);
 
     try {
-      setStopDepartures(await fetchDepartures(stop.stopId));
+      setStopArrivals(await fetchArrivals(stop.stopId));
     } catch (err) {
       console.error("Failed to fetch departures:", err);
     } finally {
-      setDeparturesLoading(false);
+      setArrivalsLoading(false);
     }
   }, []);
 
@@ -290,16 +293,20 @@ export function MapViewInner({
       handleStopClick(selectedStop);
     } else {
       setPopupStop(null);
-      setStopDepartures([]);
+      setStopArrivals([]);
     }
   }, [selectedStop, handleStopClick]);
 
   useEffect(() => {
     if (!popupVehicle) return;
     const updated = vehicles.find((v) => v.id === popupVehicle.id);
-    if (updated) {
-      setPopupVehicle(updated);
-    }
+    if (!updated) return;
+    // Only update popup when API data changes, not on every animation frame.
+    // Exclude lat/lng/bearing because those are animated and change at 60fps.
+    const key = `${popupVehicle.id}:${updated.stopIndex}:${updated.distanceAlongRoute}:${updated.speedMs}:${updated.nextStop?.name ?? ""}:${updated.nextStop?.etaSeconds ?? ""}`;
+    if (key === popupVehicleKeyRef.current) return;
+    popupVehicleKeyRef.current = key;
+    setPopupVehicle(updated);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vehicles, popupVehicle?.id]);
 
@@ -308,7 +315,7 @@ export function MapViewInner({
 
     const refresh = async () => {
       try {
-        setStopDepartures(await fetchDepartures(popupStop.stopId));
+        setStopArrivals(await fetchArrivals(popupStop.stopId));
       } catch (err) {
         console.error("Failed to refresh departures:", err);
       }
@@ -358,6 +365,15 @@ export function MapViewInner({
         maxLng: bounds.getEast(),
       });
     }
+  }, []);
+
+  const handleMove = useCallback((evt: { viewState: typeof INITIAL_VIEW_STATE }) => {
+    const next = { ...evt.viewState };
+    if (followingRef.current && focusedVehicleRef.current) {
+      next.longitude = focusedVehicleRef.current.longitude;
+      next.latitude = focusedVehicleRef.current.latitude;
+    }
+    setViewState(next);
   }, []);
 
   const handleMouseMove = useCallback((e: MapLayerMouseEvent) => {
@@ -484,14 +500,7 @@ export function MapViewInner({
       <Map
         ref={mapRef}
         {...viewState}
-        onMove={(evt) => {
-          const next = { ...evt.viewState };
-          if (followingRef.current && focusedVehicle) {
-            next.longitude = focusedVehicle.longitude;
-            next.latitude = focusedVehicle.latitude;
-          }
-          setViewState(next);
-        }}
+        onMove={handleMove}
         onMoveEnd={handleMoveEnd}
         onMouseMove={handleMouseMove}
         onMouseLeave={() => setHoveringInteractive(false)}
@@ -707,7 +716,7 @@ export function MapViewInner({
             onClose={() => setPopupStop(null)}
             maxWidth="280px"
           >
-            <StopPopup stop={popupStop} departures={stopDepartures} loading={departuresLoading} />
+            <StopPopup stop={popupStop} arrivals={stopArrivals} loading={arrivalsLoading} />
           </Popup>
         )}
       </Map>
@@ -726,7 +735,7 @@ export function MapViewInner({
       <BottomSheet open={!!(popupVehicle || popupStop)} onClose={handleBottomSheetClose}>
         {popupVehicle && <VehiclePopup vehicle={popupVehicle} />}
         {popupStop && (
-          <StopPopup stop={popupStop} departures={stopDepartures} loading={departuresLoading} />
+          <StopPopup stop={popupStop} arrivals={stopArrivals} loading={arrivalsLoading} />
         )}
       </BottomSheet>
     </>

@@ -1,8 +1,8 @@
 "use server";
 
 import { getAllSiriStops } from "@/server/siri-stops";
-import { fetchStopDepartures } from "@/server/siri-client";
-import type { StopDto, StopDeparture } from "@/lib/types";
+import { fetchStopArrivals } from "@/server/siri-client";
+import type { StopDto, StopArrival } from "@/lib/types";
 
 let allStopsCache: StopDto[] | null = null;
 
@@ -12,6 +12,6 @@ export async function getAllStops(): Promise<StopDto[]> {
   return allStopsCache;
 }
 
-export async function getStopDepartures(stopId: string): Promise<StopDeparture[]> {
-  return fetchStopDepartures(stopId);
+export async function getStopArrivals(stopId: string): Promise<StopArrival[]> {
+  return fetchStopArrivals(stopId);
 }

@@ -1,4 +1,4 @@
-import type { StopDeparture } from "@/lib/types";
+import type { StopArrival } from "@/lib/types";
 import { fetchWithTimeout } from "./fetch-with-timeout";
 import { getSecondsOfDayInTallinn } from "./time-utils";
 
@@ -6,7 +6,7 @@ const SIRI_URL = "https://transport.tallinn.ee/siri-stop-departures.php";
 const CACHE_TTL_MS = 5_000;
 
 interface CacheEntry {
-  data: StopDeparture[];
+  data: StopArrival[];
   timestamp: number;
 }
 
@@ -105,7 +105,7 @@ function parseSiriLine(line: string): {
   };
 }
 
-async function fetchFromSiri(stopId: string): Promise<StopDeparture[]> {
+async function fetchFromSiri(stopId: string): Promise<StopArrival[]> {
   const rawStopId = toRawStopId(stopId);
   const url = `${SIRI_URL}?stopid=${encodeURIComponent(rawStopId)}`;
   const res = await fetchWithTimeout(url, 10_000);
@@ -123,7 +123,7 @@ async function fetchFromSiri(stopId: string): Promise<StopDeparture[]> {
   if (lines[0].startsWith("ERROR:")) return [];
 
   const nowSeconds = toSecondsSinceMidnight(new Date());
-  const departures: StopDeparture[] = [];
+  const departures: StopArrival[] = [];
 
   for (let i = 2; i < lines.length; i += 1) {
     const parsed = parseSiriLine(lines[i]);
@@ -148,7 +148,7 @@ async function fetchFromSiri(stopId: string): Promise<StopDeparture[]> {
   return departures;
 }
 
-export async function fetchStopDepartures(stopId: string): Promise<StopDeparture[]> {
+export async function fetchStopArrivals(stopId: string): Promise<StopArrival[]> {
   const cached = cache.get(stopId);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
     return cached.data;
