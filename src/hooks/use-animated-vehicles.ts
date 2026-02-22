@@ -97,6 +97,14 @@ export function useAnimatedVehicles(rawVehicles: VehicleDto[]): VehicleDto[] {
     const prev = prevPositionsRef.current;
     const transitions = transitionsRef.current;
     let hasNewTransitions = false;
+    const activeIds = new Set(rawVehicles.map((v) => v.id));
+
+    for (const id of Array.from(prev.keys())) {
+      if (!activeIds.has(id)) prev.delete(id);
+    }
+    for (const id of Array.from(transitions.keys())) {
+      if (!activeIds.has(id)) transitions.delete(id);
+    }
 
     for (const v of rawVehicles) {
       const old = prev.get(v.id);

@@ -61,6 +61,7 @@ export class GpsPollerService {
   private intervalId: ReturnType<typeof setInterval> | null = null;
   private onData: (readings: GpsReading[]) => void;
   private intervalMs: number;
+  private isPolling = false;
 
   constructor(onData: (readings: GpsReading[]) => void, intervalMs = 6_000) {
     this.onData = onData;
@@ -85,6 +86,8 @@ export class GpsPollerService {
   }
 
   private async poll(): Promise<void> {
+    if (this.isPolling) return;
+    this.isPolling = true;
     try {
       const readings = await pollGps();
       this.onData(readings);
@@ -93,6 +96,8 @@ export class GpsPollerService {
         "GPS poll error:",
         err instanceof Error ? err.message : err,
       );
+    } finally {
+      this.isPolling = false;
     }
   }
 }

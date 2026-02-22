@@ -31,7 +31,7 @@ export function formatDuration(durationStr: string | undefined): string {
 
 export function formatDelay(seconds: number): string {
   const abs = Math.abs(seconds);
-  if (abs < 60) return "On time";
+  if (abs < 30) return "On time";
   const min = Math.round(abs / 60);
   if (seconds > 0) return `${min} min late`;
   return `${min} min early`;

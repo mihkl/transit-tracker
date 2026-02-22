@@ -3,6 +3,21 @@ import { haversineDistance } from "./geo-utils";
 import { transitState } from "./transit-state";
 import { fetchStopDepartures } from "./siri-client";
 
+interface MatchedStopInfo {
+  stopId: string;
+  directionId: number | null;
+  terminalStopName: string | null;
+}
+
+interface DepartureTimeTarget {
+  kind: "epoch" | "seconds_of_day";
+  value: number;
+}
+
+// Tallinn stop-board RT feed is short-horizon. Avoid claiming precise live delay
+// for far-future departures where data is typically unavailable.
+const LIVE_DELAY_LOOKAHEAD_MS = 60 * 60 * 1000;
+
 export function matchTransitLeg(
   lineNumber: string | undefined,
   vehicleType: string | undefined,
@@ -39,6 +54,7 @@ async function matchTransitLegAsync(
   arrivalStopLng?: number,
 ): Promise<DelayInfo | null> {
   if (!lineNumber) return null;
+  if (!isWithinLiveDelayWindow(scheduledDepartureTime)) return null;
 
   let typeFilter: string | undefined;
   switch (vehicleType?.toUpperCase()) {
@@ -53,7 +69,7 @@ async function matchTransitLegAsync(
       break;
   }
 
-  const stopId = findDepartureStopId(
+  const stopInfo = findDepartureStopInfo(
     lineNumber,
     typeFilter,
     departureStopName,
@@ -64,17 +80,29 @@ async function matchTransitLegAsync(
     arrivalStopLng,
   );
 
-  if (!stopId) return null;
+  if (!stopInfo) return null;
 
   try {
-    const departures = await fetchStopDepartures(stopId);
+    const siriStopId = resolveSiriStopId(stopInfo.stopId);
+    if (!siriStopId) return null;
+    const departures = await fetchStopDepartures(siriStopId);
 
-    const match = departures.find((d) => d.route === lineNumber);
+    const sameLine = departures.filter((d) =>
+      routeMatches(d.route, lineNumber),
+    );
+    if (sameLine.length === 0) return null;
+
+    const directionFiltered = filterByDirection(
+      sameLine,
+      stopInfo.terminalStopName,
+    );
+    const target = buildTimeTarget(scheduledDepartureTime, directionFiltered);
+    const match = pickBestDeparture(directionFiltered, target);
     if (!match) return null;
 
     const delaySeconds = match.delaySeconds;
     let status: string;
-    if (Math.abs(delaySeconds) < 90) status = "on_time";
+    if (Math.abs(delaySeconds) < 30) status = "on_time";
     else if (delaySeconds > 0) status = "delayed";
     else status = "early";
 
@@ -87,7 +115,27 @@ async function matchTransitLegAsync(
   }
 }
 
-function findDepartureStopId(
+// This function assumes that the stop IDs stored in the GTFS data (produced by
+// build-gtfs.js) match the numeric IDs expected by the SIRI stop-departures
+// endpoint. build-gtfs.js sets stop_id = SiriID from stops.txt, so the two ID
+// spaces are equivalent. The only normalization needed is stripping any
+// "feed:id" prefix that a GTFS feed loader may have prepended.
+function resolveSiriStopId(fallbackStopId: string): string | null {
+  const normalized = normalizeStopId(fallbackStopId);
+  return normalized.length > 0 ? normalized : null;
+}
+
+function normalizeStopId(stopId: string): string {
+  const value = String(stopId ?? "").trim();
+  if (!value) return "";
+  if (value.includes(":")) {
+    const tail = value.split(":").pop()?.trim();
+    return tail || value;
+  }
+  return value;
+}
+
+function findDepartureStopInfo(
   lineNumber: string,
   typeFilter: string | undefined,
   departureStopName: string | undefined,
@@ -96,9 +144,11 @@ function findDepartureStopId(
   arrivalStopName?: string,
   arrivalStopLat?: number,
   arrivalStopLng?: number,
-): string | null {
+): MatchedStopInfo | null {
   const routeId = transitState.getRouteIdForLine(lineNumber, typeFilter);
   if (!routeId) return null;
+
+  let fallback: MatchedStopInfo | null = null;
 
   for (let dir = 0; dir <= 1; dir++) {
     const key = `${routeId}_${dir}`;
@@ -113,6 +163,14 @@ function findDepartureStopId(
     );
     if (depIdx < 0) continue;
 
+    const candidate: MatchedStopInfo = {
+      stopId: stops[depIdx].stopId,
+      directionId: dir,
+      terminalStopName: stops[stops.length - 1]?.stopName ?? null,
+    };
+
+    if (!fallback) fallback = candidate;
+
     if (arrivalStopName || arrivalStopLat != null) {
       const arrIdx = findStopInPattern(
         stops,
@@ -120,14 +178,26 @@ function findDepartureStopId(
         arrivalStopLat,
         arrivalStopLng,
       );
-      if (arrIdx > depIdx) return stops[depIdx].stopId;
+      if (arrIdx > depIdx) return candidate;
     } else {
-      return stops[depIdx].stopId;
+      return candidate;
     }
   }
 
+  if (fallback) return fallback;
+
   if (departureStopLat != null && departureStopLng != null) {
-    return transitState.getStopIdByCoords(departureStopLat, departureStopLng);
+    const stopId = transitState.getStopIdByCoords(
+      departureStopLat,
+      departureStopLng,
+    );
+    if (stopId) {
+      return {
+        stopId,
+        directionId: null,
+        terminalStopName: null,
+      };
+    }
   }
 
   return null;
@@ -174,4 +244,120 @@ function findStopInPattern(
   }
 
   return bestIdx;
+}
+
+function routeMatches(route: string, lineNumber: string): boolean {
+  const a = normalizeRoute(route);
+  const b = normalizeRoute(lineNumber);
+  return a === b;
+}
+
+function normalizeRoute(value: string): string {
+  const clean = String(value).trim().toLowerCase().replace(/\s+/g, "");
+  return clean.replace(/^0+/, "");
+}
+
+function filterByDirection<T extends { destination: string }>(
+  departures: T[],
+  terminalStopName: string | null,
+): T[] {
+  if (!terminalStopName) return departures;
+  const terminal = normalizeText(terminalStopName);
+  const filtered = departures.filter((d) => {
+    const dest = normalizeText(d.destination);
+    return !!dest && (dest.includes(terminal) || terminal.includes(dest));
+  });
+  return filtered.length > 0 ? filtered : departures;
+}
+
+function normalizeText(value: string | undefined): string {
+  return String(value ?? "")
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function buildTimeTarget<T extends { scheduleTime: number }>(
+  scheduledDepartureTime: string | undefined,
+  departures: T[],
+): DepartureTimeTarget | null {
+  if (!scheduledDepartureTime) return null;
+
+  const date = new Date(scheduledDepartureTime);
+  if (Number.isNaN(date.getTime())) return null;
+
+  const usesSecondsOfDay = departures.some((d) =>
+    isSecondsOfDay(d.scheduleTime),
+  );
+
+  if (usesSecondsOfDay) {
+    return {
+      kind: "seconds_of_day",
+      value: getSecondsOfDayInTallinn(date),
+    };
+  }
+
+  return {
+    kind: "epoch",
+    value: Math.floor(date.getTime() / 1000),
+  };
+}
+
+function isSecondsOfDay(value: number): boolean {
+  return Number.isFinite(value) && value >= 0 && value < 172_800;
+}
+
+function getSecondsOfDayInTallinn(date: Date): number {
+  const fmt = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Tallinn",
+    hour12: false,
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+
+  const parts = fmt.formatToParts(date);
+  const hour = Number(parts.find((p) => p.type === "hour")?.value ?? "0");
+  const minute = Number(parts.find((p) => p.type === "minute")?.value ?? "0");
+  const second = Number(parts.find((p) => p.type === "second")?.value ?? "0");
+  return hour * 3600 + minute * 60 + second;
+}
+
+function pickBestDeparture<T extends { scheduleTime: number }>(
+  departures: T[],
+  target: DepartureTimeTarget | null,
+): T | null {
+  if (departures.length === 0) return null;
+  if (!target) return departures[0];
+
+  const sorted = [...departures].sort((a, b) => {
+    const da = departureDistance(a.scheduleTime, target);
+    const db = departureDistance(b.scheduleTime, target);
+    return da - db;
+  });
+
+  return sorted[0];
+}
+
+function departureDistance(
+  scheduleTime: number,
+  target: DepartureTimeTarget,
+): number {
+  if (!Number.isFinite(scheduleTime)) return Number.POSITIVE_INFINITY;
+
+  if (target.kind === "seconds_of_day" && isSecondsOfDay(scheduleTime)) {
+    const raw = Math.abs(scheduleTime - target.value);
+    return Math.min(raw, 86_400 - raw);
+  }
+
+  return Math.abs(scheduleTime - target.value);
+}
+
+function isWithinLiveDelayWindow(scheduledDepartureTime: string | undefined): boolean {
+  if (!scheduledDepartureTime) return true;
+  const scheduledMs = Date.parse(scheduledDepartureTime);
+  if (Number.isNaN(scheduledMs)) return true;
+  return scheduledMs - Date.now() <= LIVE_DELAY_LOOKAHEAD_MS;
 }
