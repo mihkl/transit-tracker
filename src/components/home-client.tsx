@@ -12,11 +12,13 @@ import { useAnimatedVehicles } from "@/hooks/use-animated-vehicles";
 import { isReliableUserLocation } from "@/lib/location-quality";
 import type {
   RoutePlanResponse,
+  RoutePlanRequest,
   PlannedRoute,
   RouteLeg,
   LineDto,
   StopDto,
 } from "@/lib/types";
+import { planRoute } from "@/actions";
 
 type ShapesMap = Record<string, number[][]>;
 const ROUTE_SNAPSHOT_KEY = "transit-reminder-route-snapshot";
@@ -181,7 +183,7 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
     setSelectedLine(null);
     setSelectedStop(null);
     try {
-      const body: Record<string, unknown> = {
+      const req: RoutePlanRequest = {
         originLat: origin.lat,
         originLng: origin.lng,
         destinationLat: destination.lat,
@@ -194,23 +196,13 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
       ) {
         const dt =
           timeOption === "now" ? new Date() : new Date(selectedDateTime);
-        body.departureTime = dt.toISOString();
+        req.departureTime = dt.toISOString();
       } else if (timeOption === "arrive" && selectedDateTime) {
-        body.arrivalTime = new Date(selectedDateTime).toISOString();
+        req.arrivalTime = new Date(selectedDateTime).toISOString();
       }
 
-      const res = await fetch("/api/routes/plan", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const data = await res.json();
-      if (!res.ok || data.error) {
-        console.error("Route plan API error:", data.error || res.statusText);
-        setRoutePlan({ routes: [] });
-      } else {
-        setRoutePlan(data);
-      }
+      const data = await planRoute(req);
+      setRoutePlan(data);
     } catch (err) {
       console.error("Failed to plan route:", err);
     } finally {

@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { transitState } from "@/lib/server/transit-state";
+import { transitState } from "@/server/transit-state";
 
 export const dynamic = "force-dynamic";
 

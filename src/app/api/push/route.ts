@@ -3,7 +3,7 @@ import {
   scheduleNotification,
   cancelNotification,
   vapidPublicKey,
-} from "@/lib/server/push-scheduler";
+} from "@/server/push-scheduler";
 
 export const dynamic = "force-dynamic";
 

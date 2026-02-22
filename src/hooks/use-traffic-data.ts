@@ -1,33 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import {
+  getTrafficFlow,
+  getTrafficIncidents,
+  type TrafficFlowTileInfo,
+  type TrafficIncidentCollection as TrafficIncidentData,
+} from "@/actions";
 
-export interface TrafficFlowTileInfo {
-  tileUrlTemplate: string;
-  attribution: string;
-  maxZoom: number;
-  minZoom: number;
-}
-
-export interface TrafficIncidentData {
-  type: "FeatureCollection";
-  features: Array<{
-    type: "Feature";
-    geometry: {
-      type: "Point";
-      coordinates: number[];
-    };
-    properties: {
-      id: string;
-      type: string;
-      iconCategory: number;
-      description: string;
-      delay: number | null;
-      magnitude: number;
-      startTime: string | null;
-      endTime: string | null;
-      roadNumbers: string[];
-    };
-  }>;
-}
+export type { TrafficFlowTileInfo, TrafficIncidentData };
 
 interface TrafficDataState {
   flowTileInfo: TrafficFlowTileInfo | null;
@@ -41,11 +20,6 @@ interface UseTrafficDataOptions {
   minZoom?: number;
   debounceMs?: number;
 }
-
-const EMPTY_FEATURE_COLLECTION = {
-  type: "FeatureCollection" as const,
-  features: [],
-};
 
 const DEFAULT_STATE: TrafficDataState = {
   flowTileInfo: null,
@@ -68,89 +42,42 @@ export function useTrafficData(
 
   const [state, setState] = useState<TrafficDataState>(DEFAULT_STATE);
 
-  const abortControllerRef = useRef<AbortController | null>(null);
+  const fetchGenRef = useRef(0);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const flowTileInfoRef = useRef<TrafficFlowTileInfo | null>(null);
 
   const fetchTrafficData = useCallback(async () => {
     if (!bounds || zoom < minZoom) {
-      setState((prev) => ({
-        ...prev,
-        incidents: null,
-        loading: false,
-      }));
+      setState((prev) => ({ ...prev, incidents: null, loading: false }));
       return;
     }
 
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-    abortControllerRef.current = new AbortController();
-
+    const gen = ++fetchGenRef.current;
     setState((prev) => ({ ...prev, loading: true, error: null }));
 
     try {
-      const signal = abortControllerRef.current.signal;
-
-      const promises: Promise<Response>[] = [];
       const needsFlow = !flowTileInfoRef.current;
+      const [flowResult, incidentsResult] = await Promise.all([
+        needsFlow ? getTrafficFlow() : Promise.resolve(null),
+        getTrafficIncidents(bounds),
+      ]);
 
-      if (needsFlow) {
-        promises.push(fetch("/api/traffic/flow", { signal }));
-      }
+      if (fetchGenRef.current !== gen) return;
 
-      promises.push(
-        fetch(
-          `/api/traffic/incidents?minLat=${bounds.minLat}&minLng=${bounds.minLng}&maxLat=${bounds.maxLat}&maxLng=${bounds.maxLng}`,
-          { signal },
-        ),
-      );
-
-      const responses = await Promise.all(promises);
-
-      if (signal.aborted) return;
-
-      let flowTileInfo = flowTileInfoRef.current;
-      let incidentsData = EMPTY_FEATURE_COLLECTION;
-
-      let responseIndex = 0;
-
-      if (needsFlow) {
-        const flowRes = responses[responseIndex++];
-        if (flowRes.ok) {
-          flowTileInfo = await flowRes.json();
-          flowTileInfoRef.current = flowTileInfo;
-        } else {
-          console.error("[useTrafficData] Flow API error:", flowRes.status);
-        }
-      }
-
-      const incidentsRes = responses[responseIndex];
-      if (incidentsRes.ok) {
-        incidentsData = await incidentsRes.json();
-      } else {
-        console.error(
-          "[useTrafficData] Incidents API error:",
-          incidentsRes.status,
-        );
+      if (needsFlow && flowResult) {
+        flowTileInfoRef.current = flowResult;
       }
 
       setState({
-        flowTileInfo,
-        incidents: incidentsData,
+        flowTileInfo: flowTileInfoRef.current,
+        incidents: incidentsResult,
         loading: false,
         error: null,
       });
     } catch (err) {
-      if (err instanceof Error && err.name === "AbortError") {
-        return;
-      }
+      if (fetchGenRef.current !== gen) return;
       console.error("Failed to fetch traffic data:", err);
-      setState((prev) => ({
-        ...prev,
-        loading: false,
-        error: "Failed to fetch traffic data",
-      }));
+      setState((prev) => ({ ...prev, loading: false, error: "Failed to fetch traffic data" }));
     }
   }, [bounds, zoom, minZoom]);
 
@@ -171,9 +98,6 @@ export function useTrafficData(
     return () => {
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
-      }
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
       }
     };
   }, [enabled, fetchTrafficData, debounceMs]);

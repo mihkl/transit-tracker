@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import type { PlannedRoute, RouteLeg, DelayInfo } from "@/lib/types";
+import { getLegDelay } from "@/actions";
 
 export interface LeaveInfo {
   leaveTime: Date;
@@ -107,26 +108,18 @@ function getReminderBaseInfo(route: PlannedRoute): ReminderBaseInfo | null {
 }
 
 async function fetchLegDelay(leg: RouteLeg): Promise<DelayInfo | null> {
-  const params = new URLSearchParams();
-  if (leg.lineNumber) params.set("line", leg.lineNumber);
-  if (leg.mode) params.set("type", leg.mode);
-  if (leg.departureStop) params.set("depStop", leg.departureStop);
-  if (leg.departureStopLat != null)
-    params.set("depLat", String(leg.departureStopLat));
-  if (leg.departureStopLng != null)
-    params.set("depLng", String(leg.departureStopLng));
-  if (leg.arrivalStop) params.set("arrStop", leg.arrivalStop);
-  if (leg.arrivalStopLat != null)
-    params.set("arrLat", String(leg.arrivalStopLat));
-  if (leg.arrivalStopLng != null)
-    params.set("arrLng", String(leg.arrivalStopLng));
-  if (leg.scheduledDeparture)
-    params.set("scheduledDep", leg.scheduledDeparture);
-
   try {
-    const res = await fetch(`/api/leg-delay?${params}`);
-    if (!res.ok) return null;
-    return await res.json();
+    return await getLegDelay({
+      line: leg.lineNumber,
+      type: leg.mode,
+      depStop: leg.departureStop,
+      depLat: leg.departureStopLat,
+      depLng: leg.departureStopLng,
+      arrStop: leg.arrivalStop,
+      arrLat: leg.arrivalStopLat,
+      arrLng: leg.arrivalStopLng,
+      scheduledDep: leg.scheduledDeparture,
+    });
   } catch {
     return null;
   }

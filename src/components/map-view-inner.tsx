@@ -62,9 +62,10 @@ function fitMapToPoints(map: MapRef, points: number[][]) {
   }
 }
 
+import { getStopDepartures } from "@/actions";
+
 async function fetchDepartures(stopId: string): Promise<StopDeparture[]> {
-  const res = await fetch(`/api/departures?stopId=${stopId}`);
-  const data = await res.json();
+  const data = await getStopDepartures(stopId);
   return data.slice(0, 5);
 }
 

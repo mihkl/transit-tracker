@@ -6,6 +6,7 @@ import { Search, MapPin, X } from "lucide-react";
 import { TypeIcon } from "@/components/line-search-input";
 import { TYPE_LABELS, TYPE_COLORS } from "@/lib/constants";
 import type { LineDto, StopDto } from "@/lib/types";
+import { getAllStops } from "@/actions";
 
 const TYPE_ORDER = ["train", "tram", "trolleybus", "bus"];
 
@@ -45,9 +46,8 @@ export function UnifiedSearch({
 
   // Load stops on mount
   useEffect(() => {
-    fetch("/api/all-stops")
-      .then((r) => r.json())
-      .then((data: StopDto[]) => setStops(data))
+    getAllStops()
+      .then(setStops)
       .catch((err) => console.error("Failed to load stops:", err));
   }, []);
 

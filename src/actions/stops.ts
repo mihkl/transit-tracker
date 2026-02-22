@@ -1,15 +1,15 @@
-import { NextResponse } from "next/server";
-import { transitState } from "@/lib/server/transit-state";
-import type { StopDto } from "@/lib/types";
+"use server";
 
-export const dynamic = "force-dynamic";
+import { transitState } from "@/server/transit-state";
+import { fetchStopDepartures } from "@/server/siri-client";
+import type { StopDto, StopDeparture } from "@/lib/types";
 
 const TALLINN_MIN_LAT = 59.35;
 const TALLINN_MAX_LAT = 59.55;
 const TALLINN_MIN_LNG = 24.55;
 const TALLINN_MAX_LNG = 25.05;
 
-let cachedResponse: StopDto[] | null = null;
+let allStopsCache: StopDto[] | null = null;
 
 function isInTallinnArea(lat: number, lng: number): boolean {
   return (
@@ -20,42 +20,30 @@ function isInTallinnArea(lat: number, lng: number): boolean {
   );
 }
 
-function getTypeName(routeId: string): string {
+function getStopTypeName(routeId: string): string {
   if (routeId.includes("_tram_")) return "tram";
   if (routeId.includes("_train_") || routeId.includes("_rail_")) return "train";
   return "bus";
 }
 
-export async function GET() {
-  if (cachedResponse) {
-    return NextResponse.json(cachedResponse);
-  }
+export async function getAllStops(): Promise<StopDto[]> {
+  if (allStopsCache) return allStopsCache;
 
   await transitState.initialize();
   const gtfs = transitState.getGtfs();
-  if (!gtfs) {
-    return NextResponse.json({ error: "GTFS not loaded" }, { status: 503 });
-  }
+  if (!gtfs) throw new Error("GTFS not loaded");
 
   const stopLines = new Map<string, Set<string>>();
-
   for (const [, pattern] of gtfs.patterns) {
     const routeId = pattern.routeId;
     const route = gtfs.routes.get(routeId);
     if (!route) continue;
     const lineNumber = route.shortName;
-    const type = getTypeName(routeId);
-    const lineKey = lineNumber
-      ? `${type[0].toUpperCase()}:${lineNumber}`
-      : null;
-
+    const type = getStopTypeName(routeId);
+    const lineKey = lineNumber ? `${type[0].toUpperCase()}:${lineNumber}` : null;
     for (const stop of pattern.orderedStops) {
-      if (!stopLines.has(stop.stopId)) {
-        stopLines.set(stop.stopId, new Set());
-      }
-      if (lineKey) {
-        stopLines.get(stop.stopId)!.add(lineKey);
-      }
+      if (!stopLines.has(stop.stopId)) stopLines.set(stop.stopId, new Set());
+      if (lineKey) stopLines.get(stop.stopId)!.add(lineKey);
     }
   }
 
@@ -76,7 +64,10 @@ export async function GET() {
   }
 
   stops.sort((a, b) => a.stopName.localeCompare(b.stopName));
-  cachedResponse = stops;
+  allStopsCache = stops;
+  return stops;
+}
 
-  return NextResponse.json(stops);
+export async function getStopDepartures(stopId: string): Promise<StopDeparture[]> {
+  return fetchStopDepartures(stopId);
 }

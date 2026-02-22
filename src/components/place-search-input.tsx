@@ -12,6 +12,7 @@ import {
 import { AlertCircle, Crosshair, MapPin, Navigation } from "lucide-react";
 import { formatCoord } from "@/lib/format-utils";
 import type { PlaceSearchResult } from "@/lib/types";
+import { searchPlacesAction } from "@/actions";
 
 interface PlaceSearchInputProps {
   value: { lat: number; lng: number; name?: string } | null;
@@ -56,12 +57,8 @@ export function PlaceSearchInput({
     setLoading(true);
     setErrorMessage(null);
     try {
-      const res = await fetch(`/api/places/search?q=${encodeURIComponent(q)}`);
-      if (!res.ok) {
-        throw new Error("Place search failed");
-      }
-      const data = await res.json();
-      setResults(data.results || []);
+      const results = await searchPlacesAction(q);
+      setResults(results);
       setShowDropdown(true);
     } catch (err) {
       console.error("Search failed:", err);

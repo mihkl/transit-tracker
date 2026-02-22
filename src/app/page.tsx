@@ -1,4 +1,4 @@
-import { transitState } from "@/lib/server/transit-state";
+import { transitState } from "@/server/transit-state";
 import { HomeClient } from "@/components/home-client";
 import type { LineDto } from "@/lib/types";
 

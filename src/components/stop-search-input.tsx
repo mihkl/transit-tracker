@@ -13,6 +13,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import type { StopDto } from "@/lib/types";
+import { getAllStops } from "@/actions";
 
 interface StopSearchInputProps {
   value: StopDto | null;
@@ -33,9 +34,8 @@ export function StopSearchInput({ value, onSelect }: StopSearchInputProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    fetch("/api/all-stops")
-      .then((r) => r.json())
-      .then((data: StopDto[]) => setStops(data))
+    getAllStops()
+      .then(setStops)
       .catch((err) => console.error("Failed to load stops:", err));
   }, []);
 

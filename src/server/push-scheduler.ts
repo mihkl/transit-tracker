@@ -3,9 +3,9 @@ import type { PushSubscription } from "web-push";
 
 const { VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT } = process.env;
 
-if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY && VAPID_SUBJECT) {
   webpush.setVapidDetails(
-    VAPID_SUBJECT || "mailto:admin@example.com",
+    VAPID_SUBJECT,
     VAPID_PUBLIC_KEY,
     VAPID_PRIVATE_KEY,
   );
@@ -112,4 +112,4 @@ export function cancelNotification(endpoint: string, jobPrefix?: string) {
   }
 }
 
-export const vapidPublicKey = VAPID_PUBLIC_KEY ?? "";
+export const vapidPublicKey = VAPID_PUBLIC_KEY;
