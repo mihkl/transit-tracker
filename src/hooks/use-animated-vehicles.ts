@@ -24,6 +24,7 @@ export function useAnimatedVehicles(rawVehicles: VehicleDto[]): VehicleDto[] {
   const frameIdRef = useRef<number | null>(null);
   const [animated, setAnimated] = useState<VehicleDto[]>([]);
   const isAnimatingRef = useRef(false);
+  const vehiclesKeyRef = useRef<string>("");
 
   const startAnimationLoop = useCallback(() => {
     function animate() {
@@ -92,6 +93,10 @@ export function useAnimatedVehicles(rawVehicles: VehicleDto[]): VehicleDto[] {
   }, []);
 
   useEffect(() => {
+    const key = rawVehicles.map((v) => `${v.id}:${v.latitude}:${v.longitude}`).join("|");
+    if (key === vehiclesKeyRef.current) return;
+    vehiclesKeyRef.current = key;
+
     const now = Date.now();
     const prev = prevPositionsRef.current;
     const transitions = transitionsRef.current;
