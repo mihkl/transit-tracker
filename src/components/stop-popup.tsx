@@ -71,12 +71,6 @@ export function StopPopup({ stop, arrivals, loading }: StopPopupProps) {
                   </div>
 
                   <div className="mt-1 flex items-center gap-1.5 flex-wrap">
-                    {dep.realtimeState === "CANCELED" && (
-                      <span className="px-1.5 py-0.5 rounded-md text-[10px] font-semibold text-red-700 bg-red-50">
-                        Canceled
-                      </span>
-                    )}
-
                     <span
                       className={`px-1.5 py-0.5 rounded-md text-[10px] font-semibold ${delayTone(dep.delaySeconds)}`}
                     >
