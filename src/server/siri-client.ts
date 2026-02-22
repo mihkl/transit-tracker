@@ -1,5 +1,6 @@
 import type { StopDeparture } from "@/lib/types";
 import { fetchWithTimeout } from "./fetch-with-timeout";
+import { getSecondsOfDayInTallinn } from "./time-utils";
 
 const SIRI_URL = "https://transport.tallinn.ee/siri-stop-departures.php";
 const CACHE_TTL_MS = 5_000;
@@ -16,7 +17,7 @@ function toRawStopId(stopId: string): string {
 }
 
 function toSecondsSinceMidnight(now: Date): number {
-  return now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+  return getSecondsOfDayInTallinn(now);
 }
 
 function computeSecondsUntilFromClock(nowSeconds: number, targetSeconds: number): number {
@@ -128,13 +129,9 @@ async function fetchFromSiri(stopId: string): Promise<StopDeparture[]> {
     const parsed = parseSiriLine(lines[i]);
     if (!parsed) continue;
 
-    const { transportType, route, expectedTime, scheduleTime, destination, realtimeMarker } =
+    const { transportType, route, expectedTime, scheduleTime, destination } =
       parsed;
     const delaySeconds = expectedTime - scheduleTime;
-    // A departure is realtime when the API includes a realtime marker, or when
-    // it reports a non-zero delay. Exactly-on-time live vehicles may show as
-    // "Scheduled" if the API omits the marker field for them.
-    const realtime = realtimeMarker.length > 0 || delaySeconds !== 0;
 
     departures.push({
       transportType,
@@ -144,8 +141,6 @@ async function fetchFromSiri(stopId: string): Promise<StopDeparture[]> {
       destination,
       secondsUntilArrival: computeSecondsUntilFromClock(nowSeconds, expectedTime),
       delaySeconds,
-      realtime,
-      realtimeState: realtime ? "UPDATED" : "SCHEDULED",
     });
   }
 
