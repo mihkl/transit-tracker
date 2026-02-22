@@ -14,14 +14,17 @@ import {
 } from "@/components/ui/command";
 import { TYPE_COLORS, TYPE_LABELS } from "@/lib/constants";
 import type { LineDto } from "@/lib/types";
+import {
+  TYPE_ORDER,
+  groupAndSortLines,
+  uniqueLines as buildUniqueLines,
+} from "@/lib/search-utils";
 
 interface LineSearchInputProps {
   value: { lineNumber: string; type: string } | null;
   onSelect: (line: { lineNumber: string; type: string } | null) => void;
   lines: LineDto[];
 }
-
-const TYPE_ORDER = ["train", "tram", "trolleybus", "bus"];
 
 function TypeIcon({ type, className }: { type: string; className?: string }) {
   const color = TYPE_COLORS[type] ?? TYPE_COLORS.unknown;
@@ -57,13 +60,7 @@ export function LineSearchInput({
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   const uniqueLines = useMemo(() => {
-    const seen = new Set<string>();
-    return lines.filter((l) => {
-      const key = `${l.type}_${l.lineNumber}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+    return buildUniqueLines(lines);
   }, [lines]);
 
   const filtered = useMemo(() => {
@@ -77,20 +74,7 @@ export function LineSearchInput({
   }, [uniqueLines, query]);
 
   const grouped = useMemo(() => {
-    const groups: Record<string, LineDto[]> = {};
-    for (const line of filtered) {
-      if (!groups[line.type]) groups[line.type] = [];
-      groups[line.type].push(line);
-    }
-    for (const type of Object.keys(groups)) {
-      groups[type].sort((a, b) => {
-        const na = parseInt(a.lineNumber, 10);
-        const nb = parseInt(b.lineNumber, 10);
-        if (!isNaN(na) && !isNaN(nb)) return na - nb;
-        return a.lineNumber.localeCompare(b.lineNumber);
-      });
-    }
-    return groups;
+    return groupAndSortLines(filtered);
   }, [filtered]);
 
   const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -154,7 +138,7 @@ export function LineSearchInput({
         )}
       </div>
       {showDropdown && (
-        <div className="fixed left-3 right-3 top-16 z-1100 md:absolute md:top-full md:left-0 md:right-auto md:mt-2 md:w-48 animate-scale-in">
+        <div className="fixed left-3 right-3 top-16 z-[1100] md:absolute md:top-full md:left-0 md:right-auto md:mt-2 md:w-48 animate-scale-in">
           <Command
             className="bg-white border border-foreground/5 rounded-xl shadow-dropdown"
             shouldFilter={false}

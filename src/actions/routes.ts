@@ -4,12 +4,7 @@ import { transitState } from "@/server/transit-state";
 import { isConfigured, computeRoutes, decodePolyline } from "@/server/google-routes";
 import { matchTransitLeg } from "@/server/delay-matcher";
 import type { RoutePlanRequest, RoutePlanResponse, PlannedRoute, RouteLeg } from "@/lib/types";
-
-function parseDurationSeconds(duration?: string): number {
-  if (!duration) return 0;
-  const match = duration.match(/(\d+)s/);
-  return match ? parseInt(match[1], 10) : 0;
-}
+import { parseDurationSeconds } from "@/lib/route-time";
 
 function normalizeVehicleType(type: string): string {
   switch (type) {

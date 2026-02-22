@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef } from "react";
 import type { PlannedRoute, RouteLeg, DelayInfo } from "@/lib/types";
-import { getLegDelay } from "@/actions";
+import { parseDurationSeconds } from "@/lib/route-time";
+import { fetchLegDelay } from "@/lib/leg-delay";
 
 export type TransferStatus = "safe" | "tight" | "missed" | "unknown";
 
@@ -16,30 +17,6 @@ export interface TransferInfo {
 
 const POLL_INTERVAL_MS = 20_000;
 const TIGHT_THRESHOLD_S = 180;
-
-function parseDurationSeconds(duration?: string): number {
-  if (!duration) return 0;
-  const match = duration.match(/(\d+)s/);
-  return match ? parseInt(match[1], 10) : 0;
-}
-
-async function fetchLegDelay(leg: RouteLeg): Promise<DelayInfo | null> {
-  try {
-    return await getLegDelay({
-      line: leg.lineNumber,
-      type: leg.mode,
-      depStop: leg.departureStop,
-      depLat: leg.departureStopLat,
-      depLng: leg.departureStopLng,
-      arrStop: leg.arrivalStop,
-      arrLat: leg.arrivalStopLat,
-      arrLng: leg.arrivalStopLng,
-      scheduledDep: leg.scheduledDeparture,
-    });
-  } catch {
-    return null;
-  }
-}
 
 function computeTransfers(
   route: PlannedRoute,
