@@ -94,6 +94,17 @@ function parseScheduleBody(value: unknown): PushScheduleBody | null {
   };
 }
 
+function isSameOrigin(req: NextRequest): boolean {
+  const origin = req.headers.get("origin");
+  if (!origin) return false;
+  const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? "";
+  try {
+    return new URL(origin).host === host;
+  } catch {
+    return false;
+  }
+}
+
 export function GET() {
   if (!vapidPublicKey) {
     return NextResponse.json({ error: "Push notifications are not configured" }, { status: 503 });
@@ -105,6 +116,10 @@ export function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  if (!isSameOrigin(req)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   if (!vapidPublicKey) {
     return NextResponse.json({ error: "Push notifications are not configured" }, { status: 503 });
   }
@@ -153,6 +168,10 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  if (!isSameOrigin(req)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   let rawBody: unknown;
   try {
     rawBody = await req.json();

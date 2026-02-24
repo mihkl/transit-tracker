@@ -1,10 +1,12 @@
 "use server";
 
+import { headers } from "next/headers";
 import { transitState } from "@/server/transit-state";
 import { isConfigured, computeRoutes, decodePolyline } from "@/server/google-routes";
 import { matchTransitLeg } from "@/server/delay-matcher";
 import type { RoutePlanRequest, RoutePlanResponse, PlannedRoute, RouteLeg } from "@/lib/types";
 import { parseDurationSeconds } from "@/lib/route-time";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 function normalizeVehicleType(type: string): string {
   switch (type) {
@@ -20,6 +22,12 @@ function normalizeVehicleType(type: string): string {
 }
 
 export async function planRoute(req: RoutePlanRequest): Promise<RoutePlanResponse> {
+  const forwarded = (await headers()).get("x-forwarded-for") ?? "";
+  const ip = forwarded.split(",").at(-1)?.trim() ?? "unknown";
+  if (!checkRateLimit(`planRoute:${ip}`, 20, 60_000)) {
+    throw new Error("Too many requests. Please wait a moment.");
+  }
+
   await transitState.initialize();
 
   if (!isConfigured()) {
