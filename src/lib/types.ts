@@ -243,12 +243,6 @@ export interface GoogleLocalizedValues {
   arrivalTime?: { time?: { text: string }; timeZone: string };
 }
 
-export interface ScheduleEntry {
-  tripId: string;
-  directionId: number;
-  departureTime: string;
-}
-
 export interface GtfsData {
   routes: Map<string, GtfsRoute>;
   stops: Map<string, GtfsStop>;
@@ -257,7 +251,6 @@ export interface GtfsData {
   shapesByShapeId: Map<string, GtfsShapePoint[]>;
   patterns: Map<string, RoutePattern>;
   gpsToRouteMap: Map<string, string>;
-  scheduleByRouteStop: Map<string, ScheduleEntry[]>;
 }
 
 export interface StopArrival {

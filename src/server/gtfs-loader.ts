@@ -11,7 +11,6 @@ import type {
   RoutePattern,
   PatternStop,
   ShapePoint,
-  ScheduleEntry,
 } from "@/lib/types";
 
 function parseCsvLine(line: string): string[] {
@@ -107,9 +106,6 @@ export async function loadGtfs(gtfsDir: string): Promise<GtfsData> {
     const gpsMapObj = JSON.parse(
       fs.readFileSync(path.join(preprocessedDir, "gpsMap.json"), "utf-8"),
     ) as Record<string, string>;
-    const scheduleObj = JSON.parse(
-      fs.readFileSync(path.join(preprocessedDir, "schedule.json"), "utf-8"),
-    ) as Record<string, ScheduleEntry[]>;
 
     const routes = new Map<string, GtfsRoute>(routesArr.map((r) => [r.routeId, r]));
     const stops = new Map<string, GtfsStop>(stopsArr.map((s) => [s.stopId, s]));
@@ -138,11 +134,6 @@ export async function loadGtfs(gtfsDir: string): Promise<GtfsData> {
 
     const gpsToRouteMap = new Map<string, string>(Object.entries(gpsMapObj));
 
-    const scheduleByRouteStop = new Map<string, ScheduleEntry[]>();
-    for (const [k, list] of Object.entries(scheduleObj)) {
-      scheduleByRouteStop.set(k, list as ScheduleEntry[]);
-    }
-
     console.log(`  ${routes.size} routes`);
     console.log(`  ${stops.size} stops`);
     console.log(`  ${patterns.size} patterns`);
@@ -156,7 +147,6 @@ export async function loadGtfs(gtfsDir: string): Promise<GtfsData> {
       shapesByShapeId,
       patterns,
       gpsToRouteMap,
-      scheduleByRouteStop,
     };
   }
 
@@ -254,10 +244,6 @@ export async function loadGtfs(gtfsDir: string): Promise<GtfsData> {
   const gpsToRouteMap = buildGpsToRouteMap(routes);
   console.log(`  ${gpsToRouteMap.size} mappings`);
 
-  console.log("Building schedule index...");
-  const scheduleByRouteStop = buildScheduleIndex(trips, stopTimesByTrip);
-  console.log(`  ${scheduleByRouteStop.size} route-stop combinations`);
-
   return {
     routes,
     stops,
@@ -266,7 +252,6 @@ export async function loadGtfs(gtfsDir: string): Promise<GtfsData> {
     shapesByShapeId,
     patterns,
     gpsToRouteMap,
-    scheduleByRouteStop,
   };
 }
 
@@ -342,39 +327,6 @@ function buildRoutePatterns(
   }
 
   return patterns;
-}
-
-function buildScheduleIndex(
-  trips: Map<string, GtfsTrip>,
-  stopTimesByTrip: Map<string, GtfsStopTime[]>,
-): Map<string, ScheduleEntry[]> {
-  const index = new Map<string, ScheduleEntry[]>();
-
-  for (const [tripId, stopTimes] of stopTimesByTrip) {
-    const trip = trips.get(tripId);
-    if (!trip) continue;
-
-    for (const st of stopTimes) {
-      if (!st.departureTime) continue;
-      const key = `${trip.routeId}_${st.stopId}`;
-      let list = index.get(key);
-      if (!list) {
-        list = [];
-        index.set(key, list);
-      }
-      list.push({
-        tripId,
-        directionId: trip.directionId,
-        departureTime: st.departureTime,
-      });
-    }
-  }
-
-  for (const list of index.values()) {
-    list.sort((a, b) => a.departureTime.localeCompare(b.departureTime));
-  }
-
-  return index;
 }
 
 function buildGpsToRouteMap(routes: Map<string, GtfsRoute>): Map<string, string> {

@@ -6,7 +6,6 @@ import type {
   GtfsData,
   PatternStop,
   VehicleState,
-  ScheduleEntry,
 } from "@/lib/types";
 import { loadGtfs } from "./gtfs-loader";
 import { VehicleTracker } from "./vehicle-tracker";
@@ -152,12 +151,6 @@ class TransitState {
 
     const pattern = this.gtfs.patterns.get(routeKey);
     return pattern?.orderedStops ?? null;
-  }
-
-  getScheduleForStop(routeId: string, stopId: string): ScheduleEntry[] | null {
-    if (!this.gtfs) return null;
-    const key = `${routeId}_${stopId}`;
-    return this.gtfs.scheduleByRouteStop.get(key) ?? null;
   }
 
   getRouteIdForLine(lineNumber: string, typeFilter?: string): string | null {
