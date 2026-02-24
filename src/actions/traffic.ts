@@ -94,7 +94,7 @@ export async function getTrafficIncidents(bounds: {
     return cached.data as TrafficIncidentCollection;
   }
 
-  const apiKey = process.env.TOMTOM_API_KEY;
+  const apiKey = process.env.TOMTOM_SERVER_API_KEY;
   if (!apiKey) throw new Error("TomTom API key not configured");
 
   const baseUrl = process.env.TOMTOM_BASE_URL || "https://api.tomtom.com";
