@@ -1,5 +1,3 @@
-# Tallinn Transit Tracker
-
 ## Why I built this
 
 One day my bus was 8 minutes late, I was standing outside with gloves on and checking updates on my phone was frustrating.
