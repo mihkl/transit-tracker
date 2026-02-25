@@ -3,9 +3,8 @@
 import { useMemo, useCallback, useRef, useState, useEffect } from "react";
 import Map, { Marker, Source, Layer, Popup, type MapRef } from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
-import type { LngLatBoundsLike, Map as MaplibreMap } from "maplibre-gl";
 import type { VehicleDto, RoutePlanResponse, StopArrival, StopDto } from "@/lib/types";
-import { TALLINN_CENTER, DEFAULT_ZOOM, TYPE_COLORS, LEG_COLORS } from "@/lib/constants";
+import { TALLINN_CENTER, DEFAULT_ZOOM, TYPE_COLORS } from "@/lib/constants";
 import { BottomSheet } from "@/components/bottom-sheet";
 import type { MapLayerMouseEvent } from "maplibre-gl";
 import {
@@ -22,88 +21,21 @@ import { useTrafficData } from "@/hooks/use-traffic-data";
 import { Icon } from "@/components/icon";
 import { useUserLocation } from "@/hooks/use-user-location";
 import { useStops } from "@/hooks/use-stops";
-
-function fitMapToPoints(
-  map: MapRef,
-  points: number[][],
-  options?: { isDesktop?: boolean; reserveBottomSpace?: boolean },
-) {
-  let minLat = Infinity,
-    maxLat = -Infinity,
-    minLng = Infinity,
-    maxLng = -Infinity;
-
-  for (const [lat, lng] of points) {
-    if (lat < minLat) minLat = lat;
-    if (lat > maxLat) maxLat = lat;
-    if (lng < minLng) minLng = lng;
-    if (lng > maxLng) maxLng = lng;
-  }
-
-  if (minLat !== Infinity) {
-    const isDesktop = options?.isDesktop ?? true;
-    const reserveBottomSpace = options?.reserveBottomSpace ?? false;
-    const viewportHeight =
-      typeof window !== "undefined" ? window.innerHeight : 720;
-    const cssSheetHeight =
-      typeof window !== "undefined"
-        ? Number.parseFloat(
-            getComputedStyle(document.documentElement)
-              .getPropertyValue("--mobile-route-sheet-height")
-              .trim(),
-          )
-        : NaN;
-    const dynamicSheetPadding =
-      Number.isFinite(cssSheetHeight) && cssSheetHeight > 0
-        ? Math.round(cssSheetHeight + 24)
-        : Math.max(240, Math.round(viewportHeight * 0.48));
-    const mobileBottomPadding = reserveBottomSpace
-      ? Math.min(dynamicSheetPadding, Math.round(viewportHeight * 0.82))
-      : 88;
-
-    map.fitBounds(
-      [
-        [minLng, minLat],
-        [maxLng, maxLat],
-      ] as LngLatBoundsLike,
-      {
-        padding: isDesktop
-          ? { top: 70, left: 70, right: 70, bottom: 70 }
-          : { top: 48, left: 36, right: 36, bottom: mobileBottomPadding },
-        duration: 550,
-      },
-    );
-  }
-}
+import {
+  addVehicleArrowImage,
+  buildBoardingStops,
+  buildRouteLegFeatures,
+  buildStopsFeatureCollection,
+  buildVehicleRouteFeature,
+  buildVehiclesFeatureCollection,
+  fitMapToPoints,
+  ROUTE_LEG_COLOR_EXPRESSION,
+} from "@/components/map/map-view-helpers";
 
 import { getStopArrivals } from "@/actions";
 
 async function fetchArrivals(stopId: string): Promise<StopArrival[]> {
   return getStopArrivals(stopId);
-}
-
-function addVehicleArrowImage(map: MaplibreMap) {
-  const size = 32;
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext("2d")!;
-
-  // Arrow shape matching VehicleIcon SVG (viewBox 0 0 24 24) scaled to 32×32
-  const s = size / 24;
-  ctx.beginPath();
-  ctx.moveTo(12 * s, 3 * s);
-  ctx.lineTo(20 * s, 21 * s);
-  ctx.lineTo(12 * s, 16 * s);
-  ctx.lineTo(4 * s, 21 * s);
-  ctx.closePath();
-  ctx.lineJoin = "round";
-  ctx.fillStyle = "#fff";
-  ctx.fill();
-
-  const imageData = ctx.getImageData(0, 0, size, size);
-  if (map.hasImage("vehicle-arrow")) map.removeImage("vehicle-arrow");
-  map.addImage("vehicle-arrow", imageData, { sdf: true });
 }
 
 const INITIAL_VIEW_STATE = {
@@ -401,96 +333,25 @@ export function MapViewInner({
   }, []);
 
   const routeLegsGeoJson = useMemo(() => {
-    if (!routePlan || !routePlan.routes[selectedRouteIndex]) return null;
-    const route = routePlan.routes[selectedRouteIndex];
-    return route.legs.map((leg) => ({
-      type: "Feature" as const,
-      properties: {
-        mode: leg.mode,
-        lineNumber: leg.lineNumber,
-      },
-      geometry: {
-        type: "LineString" as const,
-        coordinates: leg.polyline.map((p) => [p[1], p[0]]),
-      },
-    }));
+    return buildRouteLegFeatures(routePlan, selectedRouteIndex);
   }, [routePlan, selectedRouteIndex]);
 
   const vehicleRouteGeoJson = useMemo(() => {
-    if (!focusedVehicle || !shapes || !focusedVehicle.routeKey || !shapes[focusedVehicle.routeKey])
-      return null;
-    const shape = shapes[focusedVehicle.routeKey];
-    return {
-      type: "Feature" as const,
-      properties: {},
-      geometry: {
-        type: "LineString" as const,
-        coordinates: shape.map((p) => [p[1], p[0]]),
-      },
-    };
+    return buildVehicleRouteFeature(focusedVehicle, shapes);
   }, [focusedVehicle, shapes]);
 
   const vehiclesGeoJson = useMemo(
-    () => ({
-      type: "FeatureCollection" as const,
-      features: vehicles.map((v) => ({
-        type: "Feature" as const,
-        geometry: {
-          type: "Point" as const,
-          coordinates: [v.longitude, v.latitude],
-        },
-        properties: {
-          id: v.id,
-          bearing: v.bearing ?? v.heading,
-          color: TYPE_COLORS[v.transportType] || TYPE_COLORS.unknown,
-          focused: focusedVehicleId === v.id ? 1 : 0,
-        },
-      })),
-    }),
+    () => buildVehiclesFeatureCollection(vehicles, focusedVehicleId),
     [vehicles, focusedVehicleId],
   );
 
   const allStopsGeoJson = useMemo(
-    () => ({
-      type: "FeatureCollection" as const,
-      features: allStops.map((s) => ({
-        type: "Feature" as const,
-        geometry: {
-          type: "Point" as const,
-          coordinates: [s.longitude, s.latitude],
-        },
-        properties: {
-          stopId: s.stopId,
-          name: s.stopName,
-        },
-      })),
-    }),
+    () => buildStopsFeatureCollection(allStops),
     [allStops],
   );
 
   const boardingStops = useMemo(() => {
-    if (!routePlan || !routePlan.routes[selectedRouteIndex]) return [];
-    const route = routePlan.routes[selectedRouteIndex];
-    const stops: {
-      lat: number;
-      lng: number;
-      name: string;
-      lineNumber?: string;
-      transportType?: string;
-    }[] = [];
-
-    for (const leg of route.legs) {
-      if (leg.mode !== "WALK" && leg.departureStopLat && leg.departureStopLng) {
-        stops.push({
-          lat: leg.departureStopLat,
-          lng: leg.departureStopLng,
-          name: leg.departureStop || "Boarding stop",
-          lineNumber: leg.lineNumber,
-          transportType: leg.mode.toLowerCase(),
-        });
-      }
-    }
-    return stops;
+    return buildBoardingStops(routePlan, selectedRouteIndex);
   }, [routePlan, selectedRouteIndex]);
 
   const handleBottomSheetClose = useCallback(() => {
@@ -552,51 +413,7 @@ export function MapViewInner({
               id="route-legs-line"
               type="line"
               paint={{
-                "line-color": [
-                  "match",
-                  ["get", "mode"],
-                  "WALK",
-                  LEG_COLORS.WALK,
-                  "walk",
-                  LEG_COLORS.WALK,
-                  "BUS",
-                  LEG_COLORS.BUS,
-                  "bus",
-                  LEG_COLORS.BUS,
-                  "TRAM",
-                  LEG_COLORS.TRAM,
-                  "tram",
-                  LEG_COLORS.TRAM,
-                  "LIGHT_RAIL",
-                  LEG_COLORS.TRAM,
-                  "TROLLEYBUS",
-                  LEG_COLORS.TROLLEYBUS,
-                  "trolleybus",
-                  LEG_COLORS.TROLLEYBUS,
-                  "TRAIN",
-                  LEG_COLORS.TRAIN,
-                  "train",
-                  LEG_COLORS.TRAIN,
-                  "RAIL",
-                  LEG_COLORS.TRAIN,
-                  "HEAVY_RAIL",
-                  LEG_COLORS.TRAIN,
-                  "COMMUTER_TRAIN",
-                  LEG_COLORS.TRAIN,
-                  "INTERCITY_TRAIN",
-                  LEG_COLORS.TRAIN,
-                  "HIGH_SPEED_TRAIN",
-                  LEG_COLORS.TRAIN,
-                  "LONG_DISTANCE_TRAIN",
-                  LEG_COLORS.TRAIN,
-                  "METRO_RAIL",
-                  LEG_COLORS.TRAIN,
-                  "SUBWAY",
-                  LEG_COLORS.TRAIN,
-                  "MONORAIL",
-                  LEG_COLORS.TRAIN,
-                  "#007bff",
-                ],
+                "line-color": ROUTE_LEG_COLOR_EXPRESSION,
                 "line-width": 4,
                 "line-opacity": 0.8,
               }}

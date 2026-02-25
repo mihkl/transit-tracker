@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useDragDismiss } from "@/hooks/use-drag-dismiss";
 
 interface BottomSheetProps {
   open: boolean;
@@ -9,37 +9,11 @@ interface BottomSheetProps {
 }
 
 export function BottomSheet({ open, onClose, children }: BottomSheetProps) {
-  const [dragY, setDragY] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
-  const startYRef = useRef<number | null>(null);
-  const startTimeRef = useRef<number>(0);
-
-  const beginDrag = (clientY: number) => {
-    startYRef.current = clientY;
-    startTimeRef.current = performance.now();
-    setIsDragging(true);
-  };
-
-  const updateDrag = (clientY: number) => {
-    if (startYRef.current === null) return;
-    const delta = Math.max(0, clientY - startYRef.current);
-    setDragY(delta);
-  };
-
-  const endDrag = () => {
-    if (startYRef.current === null) return;
-    const elapsed = Math.max(1, performance.now() - startTimeRef.current);
-    const velocity = dragY / elapsed; // px/ms
-    const shouldClose = dragY > 120 || velocity > 0.7;
-    setIsDragging(false);
-    startYRef.current = null;
-    if (shouldClose) {
-      setDragY(0);
-      onClose();
-    } else {
-      setDragY(0);
-    }
-  };
+  const { dragY, isDragging, beginDrag, updateDrag, endDrag } = useDragDismiss({
+    thresholdPx: 120,
+    velocityThreshold: 0.7,
+    onDismiss: onClose,
+  });
 
   return (
     <div className="md:hidden">

@@ -1,14 +1,7 @@
 "use client";
 
 import { Map, Compass, Search, Route, Layers } from "lucide-react";
-
-export type MobileTab = "map" | "nearby" | "search" | "directions" | "layers";
-
-interface BottomNavigationProps {
-  activeTab: MobileTab;
-  layersOpen?: boolean;
-  onTabChange: (tab: MobileTab) => void;
-}
+import { useTransitStore, type MobileTab } from "@/store/use-transit-store";
 
 const tabs: { id: MobileTab; label: string; icon: typeof Map }[] = [
   { id: "map", label: "Map", icon: Map },
@@ -18,20 +11,20 @@ const tabs: { id: MobileTab; label: string; icon: typeof Map }[] = [
   { id: "layers", label: "Layers", icon: Layers },
 ];
 
-export function BottomNavigation({
-  activeTab,
-  layersOpen = false,
-  onTabChange,
-}: BottomNavigationProps) {
+export function BottomNavigation() {
+  const mobileTab = useTransitStore((s) => s.mobileTab);
+  const showMobileLayers = useTransitStore((s) => s.showMobileLayers);
+  const handleMobileTabChange = useTransitStore((s) => s.handleMobileTabChange);
+
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-[1200] bg-white/95 backdrop-blur-lg border-t border-foreground/8 safe-bottom">
       <div className="h-16 flex items-stretch">
         {tabs.map(({ id, label, icon: IconComp }) => {
-          const active = id === "layers" ? layersOpen : activeTab === id;
+          const active = id === "layers" ? showMobileLayers : mobileTab === id;
           return (
             <button
               key={id}
-              onClick={() => onTabChange(id)}
+              onClick={() => handleMobileTabChange(id)}
               className={`flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors active:scale-[0.96] ${
                 active ? "text-primary" : "text-foreground/40"
               }`}

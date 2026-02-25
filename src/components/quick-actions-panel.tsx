@@ -6,6 +6,7 @@ import { requestUserLocation, useUserLocation } from "@/hooks/use-user-location"
 import { TYPE_COLORS } from "@/lib/constants";
 import { LocateFixed } from "lucide-react";
 import type { StopDto } from "@/lib/types";
+import { useTransitStore } from "@/store/use-transit-store";
 
 const STOP_TYPE_MAP: Record<string, string> = {
   B: "bus",
@@ -21,11 +22,10 @@ function stopAccentColor(stop: StopDto): string {
   return type ? TYPE_COLORS[type] || "#6b7280" : "#6b7280";
 }
 
-interface QuickActionsPanelProps {
-  onStopSelect: (stop: StopDto) => void;
-}
-
-export function QuickActionsPanel({ onStopSelect }: QuickActionsPanelProps) {
+export function QuickActionsPanel() {
+  const setSelectedLine = useTransitStore((s) => s.setSelectedLine);
+  const setSelectedStop = useTransitStore((s) => s.setSelectedStop);
+  const goToMapTab = useTransitStore((s) => s.goToMapTab);
   const [requestingLocation, setRequestingLocation] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
   const userLocation = useUserLocation();
@@ -95,7 +95,11 @@ export function QuickActionsPanel({ onStopSelect }: QuickActionsPanelProps) {
           return (
             <button
               key={stop.stopId}
-              onClick={() => onStopSelect(stop)}
+              onClick={() => {
+                setSelectedLine(null);
+                setSelectedStop(stop);
+                goToMapTab();
+              }}
               className="w-full text-left rounded-2xl border border-foreground/8 bg-white p-4 min-h-[80px] active:scale-[0.98] transition-all duration-150"
               style={{ borderLeftWidth: 4, borderLeftColor: color }}
             >

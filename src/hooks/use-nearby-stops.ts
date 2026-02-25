@@ -54,26 +54,41 @@ export function useNearbyStops(
   }, [userLocation, stops, count]);
 
   const refresh = useCallback(async () => {
-    if (nearest.length === 0) return;
+    if (nearest.length === 0) {
+      setResults([]);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
-    const fetched = await Promise.all(
-      nearest.map(async ({ stop, distanceMeters }) => {
-        try {
-          const arrivals = await getStopArrivals(stop.stopId);
-          return { stop, distanceMeters, arrivals, loading: false };
-        } catch {
-          return { stop, distanceMeters, arrivals: [] as StopArrival[], loading: false };
-        }
-      }),
-    );
-    setResults(fetched);
-    setLoading(false);
+    try {
+      const fetched = await Promise.all(
+        nearest.map(async ({ stop, distanceMeters }) => {
+          try {
+            const arrivals = await getStopArrivals(stop.stopId);
+            return { stop, distanceMeters, arrivals, loading: false };
+          } catch {
+            return { stop, distanceMeters, arrivals: [] as StopArrival[], loading: false };
+          }
+        }),
+      );
+      setResults(fetched);
+    } finally {
+      setLoading(false);
+    }
   }, [nearest]);
 
   useEffect(() => {
-    refresh();
-    const id = setInterval(refresh, refreshMs);
-    return () => clearInterval(id);
+    const run = () => {
+      void refresh();
+    };
+
+    const initialId = window.setTimeout(run, 0);
+    const intervalId = window.setInterval(run, refreshMs);
+    return () => {
+      window.clearTimeout(initialId);
+      window.clearInterval(intervalId);
+    };
   }, [refresh, refreshMs]);
 
   return { nearbyStops: results, loading };

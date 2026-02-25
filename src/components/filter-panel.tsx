@@ -4,100 +4,71 @@ import { UnifiedSearch } from "@/components/unified-search";
 import { Button } from "@/components/ui/button";
 import { Car, Bus } from "lucide-react";
 import { Icon } from "@/components/icon";
-import type { StopDto, LineDto } from "@/lib/types";
+import { useTransitStore } from "@/store/use-transit-store";
+import type { LineDto } from "@/lib/types";
 
 interface FilterPanelProps {
-  selectedLine: { lineNumber: string; type: string } | null;
-  onLineSelect: (line: { lineNumber: string; type: string } | null) => void;
-  selectedStop: StopDto | null;
-  onStopSelect: (stop: StopDto | null) => void;
   vehicleCount: number;
-  onTogglePlanner: () => void;
-  showTraffic?: boolean;
-  onToggleTraffic?: () => void;
-  showVehicles?: boolean;
-  onToggleVehicles?: () => void;
-  showStops?: boolean;
-  onToggleStops?: () => void;
   lines: LineDto[];
 }
 
-export function FilterPanel({
-  selectedLine,
-  onLineSelect,
-  selectedStop,
-  onStopSelect,
-  vehicleCount,
-  onTogglePlanner,
-  showTraffic = false,
-  onToggleTraffic,
-  showVehicles = false,
-  onToggleVehicles,
-  showStops = false,
-  onToggleStops,
-  lines,
-}: FilterPanelProps) {
+export function FilterPanel({ vehicleCount, lines }: FilterPanelProps) {
+  const showPlanner = useTransitStore((s) => s.showPlanner);
+  const setShowPlanner = useTransitStore((s) => s.setShowPlanner);
+  const showTraffic = useTransitStore((s) => s.showTraffic);
+  const toggleTraffic = useTransitStore((s) => s.toggleTraffic);
+  const showVehicles = useTransitStore((s) => s.showVehicles);
+  const toggleVehicles = useTransitStore((s) => s.toggleVehicles);
+  const showStops = useTransitStore((s) => s.showStops);
+  const toggleStops = useTransitStore((s) => s.toggleStops);
+
   return (
     <>
       {/* Desktop only — search bar + controls in one row */}
       <div className="hidden md:flex absolute top-3 right-3 z-[1000] items-center gap-2 px-2 py-1.5 bg-white rounded-2xl shadow-panel">
         <div className="w-64">
-          <UnifiedSearch
-            lines={lines}
-            selectedLine={selectedLine}
-            onLineSelect={onLineSelect}
-            selectedStop={selectedStop}
-            onStopSelect={onStopSelect}
-            vehicleCount={vehicleCount}
-            embedded
-          />
+          <UnifiedSearch lines={lines} vehicleCount={vehicleCount} embedded />
         </div>
 
         <div className="w-px h-5 bg-foreground/6" />
 
-        {onToggleVehicles && (
-          <Button
-            variant={showVehicles ? "default" : "ghost"}
-            size="sm"
-            className="h-10 px-3 rounded-xl text-sm font-semibold"
-            onClick={onToggleVehicles}
-            title="Toggle live vehicles"
-          >
-            <Bus className="w-4 h-4 mr-1.5" />
-            Vehicles
-          </Button>
-        )}
+        <Button
+          variant={showVehicles ? "default" : "ghost"}
+          size="sm"
+          className="h-10 px-3 rounded-xl text-sm font-semibold"
+          onClick={toggleVehicles}
+          title="Toggle live vehicles"
+        >
+          <Bus className="w-4 h-4 mr-1.5" />
+          Vehicles
+        </Button>
 
-        {onToggleTraffic && (
-          <Button
-            variant={showTraffic ? "default" : "ghost"}
-            size="sm"
-            className="h-10 px-3 rounded-xl text-sm font-semibold"
-            onClick={onToggleTraffic}
-            title="Toggle traffic overlay"
-          >
-            <Car className="w-4 h-4 mr-1.5" />
-            Traffic
-          </Button>
-        )}
+        <Button
+          variant={showTraffic ? "default" : "ghost"}
+          size="sm"
+          className="h-10 px-3 rounded-xl text-sm font-semibold"
+          onClick={toggleTraffic}
+          title="Toggle traffic overlay"
+        >
+          <Car className="w-4 h-4 mr-1.5" />
+          Traffic
+        </Button>
 
-        {onToggleStops && (
-          <Button
-            variant={showStops ? "default" : "ghost"}
-            size="sm"
-            className="h-10 px-3 rounded-xl text-sm font-semibold"
-            onClick={onToggleStops}
-            title="Toggle all stops"
-          >
-            <Icon name="map-pin" className="w-4 h-4 mr-1.5" />
-            Stops
-          </Button>
-        )}
+        <Button
+          variant={showStops ? "default" : "ghost"}
+          size="sm"
+          className="h-10 px-3 rounded-xl text-sm font-semibold"
+          onClick={toggleStops}
+          title="Toggle all stops"
+        >
+          <Icon name="map-pin" className="w-4 h-4 mr-1.5" />
+          Stops
+        </Button>
         <Button
           variant="ghost"
           size="sm"
           className="h-10 px-3 rounded-xl text-sm font-semibold"
-          onClick={onTogglePlanner}
+          onClick={() => setShowPlanner(!showPlanner)}
         >
           <Icon name="arrow-right" className="w-4 h-4 mr-1.5" />
           Directions
