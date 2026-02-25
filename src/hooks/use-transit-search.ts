@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import type { LineDto, StopDto } from "@/lib/types";
 import { TYPE_LABELS } from "@/lib/constants";
 import { TYPE_ORDER, groupAndSortLines, uniqueLines as buildUniqueLines } from "@/lib/search-utils";
+import type { LineType } from "@/lib/domain";
 
 interface UseTransitSearchParams {
   lines: LineDto[];
@@ -63,7 +64,7 @@ export function useTransitSearch({
 }
 
 export function getFilterLabel(
-  selectedLine: { lineNumber: string; type: string } | null,
+  selectedLine: { lineNumber: string; type: LineType } | null,
   selectedStop: StopDto | null,
 ): string {
   if (!selectedLine) return selectedStop?.stopName ?? "";

@@ -6,9 +6,10 @@ import { requestUserLocation, useUserLocation } from "@/hooks/use-user-location"
 import { TYPE_COLORS } from "@/lib/constants";
 import { LocateFixed } from "lucide-react";
 import type { StopDto } from "@/lib/types";
+import type { LineType } from "@/lib/domain";
 import { useTransitStore } from "@/store/use-transit-store";
 
-const STOP_TYPE_MAP: Record<string, string> = {
+const STOP_TYPE_MAP: Record<string, LineType> = {
   B: "bus",
   T: "tram",
   O: "trolleybus",

@@ -1,6 +1,7 @@
 import type { LineDto } from "@/lib/types";
+import type { LineType } from "@/lib/domain";
 
-export const TYPE_ORDER = ["train", "tram", "trolleybus", "bus"] as const;
+export const TYPE_ORDER: readonly LineType[] = ["train", "tram", "trolleybus", "bus"] as const;
 
 export const STOP_TYPE_COLORS: Record<string, string> = {
   B: "#1565C0",

@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { transitState } from "@/server/transit-state";
+import { vehicleStreamEventSchema } from "@/lib/schemas";
 
 export const dynamic = "force-dynamic";
 
@@ -28,11 +29,16 @@ export async function GET(request: NextRequest) {
           }
           lastHash = hash;
 
-          const data = JSON.stringify({
+          const payload = {
             vehicles,
             count: vehicles.length,
             timestamp: new Date().toISOString(),
-          });
+          };
+          const parsed = vehicleStreamEventSchema.safeParse(payload);
+          if (!parsed.success) {
+            return;
+          }
+          const data = JSON.stringify(parsed.data);
           controller.enqueue(encoder.encode(`data: ${data}\n\n`));
         } catch (err) {
           console.error("SSE send error:", err);

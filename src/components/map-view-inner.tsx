@@ -21,6 +21,7 @@ import { useTrafficData } from "@/hooks/use-traffic-data";
 import { Icon } from "@/components/icon";
 import { useUserLocation } from "@/hooks/use-user-location";
 import { useStops } from "@/hooks/use-stops";
+import { MAP_LAYER_IDS } from "@/lib/domain";
 import {
   addVehicleArrowImage,
   buildBoardingStops,
@@ -52,10 +53,10 @@ export interface MapViewInnerProps {
   origin: { lat: number; lng: number } | null;
   destination: { lat: number; lng: number } | null;
   pickingPoint: "origin" | "destination" | null;
-  onMapClick: (pointType: string, lat: number, lng: number) => void;
-  focusedVehicleId: number | null;
+  onMapClick: (pointType: "origin" | "destination", lat: number, lng: number) => void;
+  focusedVehicleId: string | null;
   shapes: Record<string, number[][]> | null;
-  onVehicleClick: (id: number) => void;
+  onVehicleClick: (id: string) => void;
   onDeselectVehicle: () => void;
   selectedStop: StopDto | null;
   showTraffic?: boolean;
@@ -197,9 +198,12 @@ export function MapViewInner({
         return;
       }
 
-      const vehicleFeature = e.features?.find((f) => f.layer?.id === "vehicles");
+      const vehicleFeature = e.features?.find(
+        (f) => f.layer?.id === MAP_LAYER_IDS.VEHICLES,
+      );
       if (vehicleFeature) {
-        const vehicleId = vehicleFeature.properties?.id as number | undefined;
+        const rawVehicleId = vehicleFeature.properties?.id;
+        const vehicleId = rawVehicleId == null ? undefined : String(rawVehicleId);
         const vehicle = vehiclesRef.current.find((v) => v.id === vehicleId);
         if (vehicle) {
           onVehicleClick(vehicle.id);
@@ -210,7 +214,9 @@ export function MapViewInner({
       }
 
       const stopFeature = e.features?.find(
-        (f) => f.layer?.id === "all-stops" || f.layer?.id === "all-stops-hit",
+        (f) =>
+          f.layer?.id === MAP_LAYER_IDS.ALL_STOPS ||
+          f.layer?.id === MAP_LAYER_IDS.ALL_STOPS_HIT,
       );
       if (stopFeature) {
         const stopId = String(stopFeature.properties?.stopId ?? "");
@@ -325,9 +331,9 @@ export function MapViewInner({
   const handleMouseMove = useCallback((e: MapLayerMouseEvent) => {
     const hasInteractiveFeature = !!e.features?.some(
       (f) =>
-        f.layer?.id === "vehicles" ||
-        f.layer?.id === "all-stops" ||
-        f.layer?.id === "all-stops-hit",
+        f.layer?.id === MAP_LAYER_IDS.VEHICLES ||
+        f.layer?.id === MAP_LAYER_IDS.ALL_STOPS ||
+        f.layer?.id === MAP_LAYER_IDS.ALL_STOPS_HIT,
     );
     setHoveringInteractive(hasInteractiveFeature);
   }, []);
@@ -382,7 +388,11 @@ export function MapViewInner({
         onDragStart={() => setIsDragging(true)}
         onDragEnd={() => setIsDragging(false)}
         cursor={isDragging ? "grabbing" : hoveringInteractive ? "pointer" : "grab"}
-        interactiveLayerIds={showStops ? ["vehicles", "all-stops-hit", "all-stops"] : ["vehicles"]}
+        interactiveLayerIds={
+          showStops
+            ? [MAP_LAYER_IDS.VEHICLES, MAP_LAYER_IDS.ALL_STOPS_HIT, MAP_LAYER_IDS.ALL_STOPS]
+            : [MAP_LAYER_IDS.VEHICLES]
+        }
         onClick={handleMapClick}
         onLoad={handleMapLoad}
         style={{ width: "100%", height: "100%" }}
@@ -390,7 +400,7 @@ export function MapViewInner({
         attributionControl={false}
       >
         {!webglLost && vehicleRouteGeoJson && !routePlan && (
-          <Source id="vehicle-route" type="geojson" data={vehicleRouteGeoJson}>
+          <Source id={MAP_LAYER_IDS.VEHICLE_ROUTE} type="geojson" data={vehicleRouteGeoJson}>
             <Layer
               id="vehicle-route-line"
               type="line"
@@ -499,7 +509,7 @@ export function MapViewInner({
         {!webglLost && showStops && (
           <Source id="all-stops-source" type="geojson" data={allStopsGeoJson}>
             <Layer
-              id="all-stops-hit"
+              id={MAP_LAYER_IDS.ALL_STOPS_HIT}
               type="circle"
               minzoom={12}
               paint={{
@@ -509,7 +519,7 @@ export function MapViewInner({
               }}
             />
             <Layer
-              id="all-stops"
+              id={MAP_LAYER_IDS.ALL_STOPS}
               type="circle"
               minzoom={12}
               paint={{
@@ -530,9 +540,9 @@ export function MapViewInner({
         )}
 
         {!webglLost && (
-          <Source id="vehicles" type="geojson" data={vehiclesGeoJson}>
+          <Source id={MAP_LAYER_IDS.VEHICLES} type="geojson" data={vehiclesGeoJson}>
             <Layer
-              id="vehicles"
+              id={MAP_LAYER_IDS.VEHICLES}
               type="symbol"
               layout={{
                 "icon-image": "vehicle-arrow",

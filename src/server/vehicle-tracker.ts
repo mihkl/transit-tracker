@@ -3,14 +3,14 @@ import { MAX_HISTORY_SIZE } from "@/lib/types";
 import { findPositionOnRoute } from "./geo-utils";
 
 export class VehicleTracker {
-  private vehicles = new Map<number, VehicleState>();
+  private vehicles = new Map<string, VehicleState>();
   private gtfs: GtfsData;
 
   constructor(gtfs: GtfsData) {
     this.gtfs = gtfs;
   }
 
-  getVehicles(): Map<number, VehicleState> {
+  getVehicles(): Map<string, VehicleState> {
     return this.vehicles;
   }
 

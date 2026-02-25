@@ -1,3 +1,10 @@
+import type {
+  DelayStatus,
+  LineType,
+  TransitMode,
+  TransportType,
+} from "@/lib/domain";
+
 export interface GtfsRoute {
   routeId: string;
   shortName: string;
@@ -64,7 +71,7 @@ export interface GpsReading {
   latitude: number;
   speed: number | null;
   heading: number;
-  id: number;
+  id: string;
   destination: string;
   timestamp: Date;
 }
@@ -79,7 +86,7 @@ export interface PositionSnapshot {
 }
 
 export interface VehicleState {
-  id: number;
+  id: string;
   transportType: number;
   lineNumber: string;
   latitude: number;
@@ -98,9 +105,9 @@ export interface VehicleState {
 export const MAX_HISTORY_SIZE = 60;
 
 export interface VehicleDto {
-  id: number;
+  id: string;
   lineNumber: string;
-  transportType: string;
+  transportType: TransportType;
   latitude: number;
   longitude: number;
   speed: number | null;
@@ -126,7 +133,7 @@ export interface NextStopDto {
 
 export interface LineDto {
   lineNumber: string;
-  type: string;
+  type: LineType;
   routeId: string;
 }
 
@@ -151,7 +158,7 @@ export interface PlannedRoute {
 }
 
 export interface RouteLeg {
-  mode: string;
+  mode: TransitMode;
   lineNumber?: string;
   lineName?: string;
   departureStop?: string;
@@ -170,9 +177,9 @@ export interface RouteLeg {
 }
 
 export interface DelayInfo {
-  vehicleId?: number;
+  vehicleId?: string;
   estimatedDelaySeconds: number;
-  status: string;
+  status: DelayStatus;
   stopsAway?: number;
 }
 
@@ -254,7 +261,7 @@ export interface GtfsData {
 }
 
 export interface StopArrival {
-  transportType: string;
+  transportType: TransportType;
   route: string;
   expectedTime: number;
   scheduleTime: number;
@@ -279,7 +286,7 @@ export interface VehicleStopEta {
 
 export interface VehicleMatchDebugInfo {
   lineNumber: string;
-  mode: string | null;
+  mode: TransitMode | null;
   departureStopLat: number | null;
   departureStopLng: number | null;
   arrivalStopLat: number | null;
@@ -291,7 +298,7 @@ export interface VehicleMatchDebugInfo {
   dir0: DirectionPatternInfo | null;
   dir1: DirectionPatternInfo | null;
   candidates: VehicleCandidateInfo[];
-  selectedVehicleId: number | null;
+  selectedVehicleId: string | null;
   selectionReason: string;
   timestamp: string;
 }
@@ -305,7 +312,7 @@ export interface DirectionPatternInfo {
 }
 
 export interface VehicleCandidateInfo {
-  vehicleId: number;
+  vehicleId: string;
   destination: string;
   latitude: number;
   longitude: number;
@@ -326,3 +333,4 @@ export interface StopDto {
   stopArea?: string;
   lines?: string[];
 }
+

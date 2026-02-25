@@ -1,7 +1,8 @@
 import { create } from "zustand";
 import type { RoutePlanResponse, StopDto } from "@/lib/types";
+import type { LineType } from "@/lib/domain";
 
-export type SelectedLine = { lineNumber: string; type: string } | null;
+export type SelectedLine = { lineNumber: string; type: LineType } | null;
 export type PlannerPoint = { lat: number; lng: number; name?: string } | null;
 export type PickingPoint = "origin" | "destination" | null;
 export type TimeOption = "now" | "depart" | "arrive";
@@ -21,7 +22,7 @@ interface TransitStoreState {
   planLoading: boolean;
   selectedRouteIndex: number;
   routeFitRequest: number;
-  focusedVehicleId: number | null;
+  focusedVehicleId: string | null;
   openSelectedRouteDetails: boolean;
   timeOption: TimeOption;
   selectedDateTime: string;
@@ -45,7 +46,7 @@ interface TransitStoreActions {
   setPlanLoading: (loading: boolean) => void;
   setSelectedRouteIndex: (index: number) => void;
   bumpRouteFitRequest: () => void;
-  setFocusedVehicleId: (vehicleId: number | null) => void;
+  setFocusedVehicleId: (vehicleId: string | null) => void;
   setOpenSelectedRouteDetails: (open: boolean) => void;
   setTimeOption: (option: TimeOption) => void;
   setSelectedDateTime: (value: string) => void;

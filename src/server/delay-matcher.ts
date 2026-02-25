@@ -1,4 +1,6 @@
 import type { DelayInfo, PatternStop } from "@/lib/types";
+import type { DelayStatus, LineType, TransitMode } from "@/lib/domain";
+import { normalizeLineType } from "@/lib/domain";
 import { haversineDistance } from "./geo-utils";
 import { transitState } from "./transit-state";
 import { fetchStopArrivals } from "./siri-client";
@@ -21,7 +23,7 @@ const LIVE_DELAY_LOOKAHEAD_MS = 60 * 60 * 1000;
 
 export function matchTransitLeg(
   lineNumber: string | undefined,
-  vehicleType: string | undefined,
+  vehicleType: TransitMode | undefined,
   departureStopName: string | undefined,
   departureStopLat: number | undefined,
   departureStopLng: number | undefined,
@@ -45,7 +47,7 @@ export function matchTransitLeg(
 
 async function matchTransitLegAsync(
   lineNumber: string | undefined,
-  vehicleType: string | undefined,
+  vehicleType: TransitMode | undefined,
   departureStopName: string | undefined,
   departureStopLat: number | undefined,
   departureStopLng: number | undefined,
@@ -57,16 +59,16 @@ async function matchTransitLegAsync(
   if (!lineNumber) return null;
   if (!isWithinLiveDelayWindow(scheduledDepartureTime)) return null;
 
-  let typeFilter: string | undefined;
+  let typeFilter: LineType | undefined;
   switch (vehicleType?.toUpperCase()) {
     case "BUS":
-      typeFilter = "bus";
+      typeFilter = normalizeLineType("bus");
       break;
     case "TRAM":
-      typeFilter = "tram";
+      typeFilter = normalizeLineType("tram");
       break;
     case "TROLLEYBUS":
-      typeFilter = "trolleybus";
+      typeFilter = normalizeLineType("trolleybus");
       break;
   }
 
@@ -97,7 +99,7 @@ async function matchTransitLegAsync(
     if (!match) return null;
 
     const delaySeconds = match.delaySeconds;
-    let status: string;
+    let status: DelayStatus;
     if (Math.abs(delaySeconds) < 30) status = "on_time";
     else if (delaySeconds > 0) status = "delayed";
     else status = "early";
@@ -133,7 +135,7 @@ function normalizeStopId(stopId: string): string {
 
 function findDepartureStopInfo(
   lineNumber: string,
-  typeFilter: string | undefined,
+  typeFilter: LineType | undefined,
   departureStopName: string | undefined,
   departureStopLat: number | undefined,
   departureStopLng: number | undefined,

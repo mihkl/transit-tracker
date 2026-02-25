@@ -1,4 +1,6 @@
 import type { StopArrival } from "@/lib/types";
+import { normalizeTransportType } from "@/lib/domain";
+import { stopArrivalSchema } from "@/lib/schemas";
 import { fetchWithTimeout } from "./fetch-with-timeout";
 import { getSecondsOfDayInTallinn } from "./time-utils";
 
@@ -26,14 +28,6 @@ function computeSecondsUntilFromClock(nowSeconds: number, targetSeconds: number)
   return delta;
 }
 
-function normalizeTransportType(raw: string): string {
-  const value = raw.trim().toLowerCase();
-  if (value === "tram") return "tram";
-  if (value === "trolleybus") return "trolleybus";
-  if (value === "train" || value === "rail") return "train";
-  return "bus";
-}
-
 /**
  * Parses one departure line from the SIRI stop-board feed.
  *
@@ -43,7 +37,7 @@ function normalizeTransportType(raw: string): string {
  * in between is treated as the destination, preserving embedded commas.
  */
 function parseSiriLine(line: string): {
-  transportType: string;
+  transportType: StopArrival["transportType"];
   route: string;
   expectedTime: number;
   scheduleTime: number;
@@ -133,7 +127,7 @@ async function fetchFromSiri(stopId: string): Promise<StopArrival[]> {
       parsed;
     const delaySeconds = expectedTime - scheduleTime;
 
-    departures.push({
+    const parsedDeparture = stopArrivalSchema.safeParse({
       transportType,
       route,
       expectedTime,
@@ -142,6 +136,8 @@ async function fetchFromSiri(stopId: string): Promise<StopArrival[]> {
       secondsUntilArrival: computeSecondsUntilFromClock(nowSeconds, expectedTime),
       delaySeconds,
     });
+    if (!parsedDeparture.success) continue;
+    departures.push(parsedDeparture.data);
   }
 
   departures.sort((a, b) => a.secondsUntilArrival - b.secondsUntilArrival);

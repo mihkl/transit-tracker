@@ -11,6 +11,8 @@ import type {
   VehicleDto,
 } from "@/lib/types";
 import { LEG_COLORS, TYPE_COLORS } from "@/lib/constants";
+import { modeToTransportType } from "@/lib/domain";
+import type { LineType } from "@/lib/domain";
 
 export const ROUTE_LEG_COLOR_EXPRESSION: ExpressionSpecification = [
   "match",
@@ -177,7 +179,7 @@ export function buildVehicleRouteFeature(
 
 export function buildVehiclesFeatureCollection(
   vehicles: VehicleDto[],
-  focusedVehicleId: number | null,
+  focusedVehicleId: string | null,
 ) {
   return {
     type: "FeatureCollection" as const,
@@ -226,7 +228,7 @@ export function buildBoardingStops(
     lng: number;
     name: string;
     lineNumber?: string;
-    transportType?: string;
+    transportType?: LineType;
   }[] = [];
 
   for (const leg of route.legs) {
@@ -236,7 +238,7 @@ export function buildBoardingStops(
         lng: leg.departureStopLng,
         name: leg.departureStop || "Boarding stop",
         lineNumber: leg.lineNumber,
-        transportType: leg.mode.toLowerCase(),
+        transportType: modeToTransportType(leg.mode),
       });
     }
   }

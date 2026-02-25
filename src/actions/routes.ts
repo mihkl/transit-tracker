@@ -7,27 +7,15 @@ import { matchTransitLeg } from "@/server/delay-matcher";
 import type { RoutePlanRequest, RoutePlanResponse, PlannedRoute, RouteLeg } from "@/lib/types";
 import { parseDurationSeconds } from "@/lib/route-time";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { normalizeTransitMode } from "@/lib/domain";
+import { routePlanRequestSchema, routePlanResponseSchema } from "@/lib/schemas";
 
-function normalizeVehicleType(type: string): string {
-  switch (type) {
-    case "HEAVY_RAIL":
-    case "RAIL":
-    case "HIGH_SPEED_TRAIN":
-    case "INTERCITY_TRAIN":
-    case "COMMUTER_TRAIN":
-    case "LONG_DISTANCE_TRAIN":
-    case "METRO_RAIL":
-    case "SUBWAY":
-    case "MONORAIL":
-      return "TRAIN";
-    case "LIGHT_RAIL":
-      return "TRAM";
-    default:
-      return type;
-  }
+function normalizeVehicleType(type: string) {
+  return normalizeTransitMode(type);
 }
 
 export async function planRoute(req: RoutePlanRequest): Promise<RoutePlanResponse> {
+  const parsedReq = routePlanRequestSchema.parse(req);
   const forwarded = (await headers()).get("x-forwarded-for") ?? "";
   const ip = forwarded.split(",").at(-1)?.trim() ?? "unknown";
   if (!checkRateLimit(`planRoute:${ip}`, 20, 60_000)) {
@@ -41,12 +29,12 @@ export async function planRoute(req: RoutePlanRequest): Promise<RoutePlanRespons
   }
 
   const googleResponse = await computeRoutes(
-    req.originLat,
-    req.originLng,
-    req.destinationLat,
-    req.destinationLng,
-    req.departureTime,
-    req.arrivalTime,
+    parsedReq.originLat,
+    parsedReq.originLng,
+    parsedReq.destinationLat,
+    parsedReq.destinationLng,
+    parsedReq.departureTime,
+    parsedReq.arrivalTime,
   );
 
   if (!googleResponse || !googleResponse.routes?.length) {
@@ -142,5 +130,5 @@ export async function planRoute(req: RoutePlanRequest): Promise<RoutePlanRespons
     response.routes.push(route);
   }
 
-  return response;
+  return routePlanResponseSchema.parse(response);
 }

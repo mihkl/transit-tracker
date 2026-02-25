@@ -4,11 +4,12 @@ import { MapPin, X } from "lucide-react";
 import { TYPE_COLORS } from "@/lib/constants";
 import type { StopDto } from "@/lib/types";
 import { getFilterLabel } from "@/hooks/use-transit-search";
+import type { LineType } from "@/lib/domain";
 
 type FilterPillVariant = "desktop" | "mobile";
 
 interface ActiveFilterPillProps {
-  selectedLine: { lineNumber: string; type: string } | null;
+  selectedLine: { lineNumber: string; type: LineType } | null;
   selectedStop: StopDto | null;
   vehicleCount: number;
   onClear: () => void;

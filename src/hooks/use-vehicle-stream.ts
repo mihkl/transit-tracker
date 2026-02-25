@@ -2,14 +2,14 @@
 
 import { useState, useEffect, useRef, useMemo } from "react";
 import type { VehicleDto } from "@/lib/types";
+import type { TypeFilter } from "@/lib/domain";
+import { vehicleStreamEventSchema } from "@/lib/schemas";
 
-interface StreamData {
-  vehicles: VehicleDto[];
-  count: number;
-  timestamp: string;
-}
-
-export function useVehicleStream(lineFilter: string, typeFilter: string, enabled: boolean = true) {
+export function useVehicleStream(
+  lineFilter: string,
+  typeFilter: TypeFilter,
+  enabled: boolean = true,
+) {
   const [allVehicles, setAllVehicles] = useState<VehicleDto[]>([]);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [loading, setLoading] = useState(false);
@@ -40,9 +40,10 @@ export function useVehicleStream(lineFilter: string, typeFilter: string, enabled
 
       es.onmessage = (event) => {
         try {
-          const data: StreamData = JSON.parse(event.data);
-          setAllVehicles(data.vehicles);
-          setLastUpdate(new Date(data.timestamp));
+          const parsed = vehicleStreamEventSchema.safeParse(JSON.parse(event.data));
+          if (!parsed.success) return;
+          setAllVehicles(parsed.data.vehicles as VehicleDto[]);
+          setLastUpdate(new Date(parsed.data.timestamp));
           setLoading(false);
         } catch (err) {
           console.error("SSE parse error:", err);
@@ -75,12 +76,7 @@ export function useVehicleStream(lineFilter: string, typeFilter: string, enabled
     }
 
     return allVehicles.filter((v) => {
-      if (typeFilter && typeFilter !== "all") {
-        if (typeFilter === "bus" && v.transportType !== "bus") return false;
-        if (typeFilter === "tram" && v.transportType !== "tram") return false;
-        if (typeFilter === "trolleybus" && v.transportType !== "trolleybus") return false;
-        if (typeFilter === "train" && v.transportType !== "train") return false;
-      }
+      if (typeFilter && typeFilter !== "all" && v.transportType !== typeFilter) return false;
       if (lineFilter && v.lineNumber !== lineFilter) return false;
       return true;
     });

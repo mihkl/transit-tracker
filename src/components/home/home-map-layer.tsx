@@ -9,8 +9,8 @@ interface HomeMapLayerProps {
   shapes: Record<string, number[][]>;
   vehicles: VehicleDto[];
   loading: boolean;
-  onMapClick: (pointType: string, lat: number, lng: number) => void;
-  onVehicleClick: (id: number) => void;
+  onMapClick: (pointType: "origin" | "destination", lat: number, lng: number) => void;
+  onVehicleClick: (id: string) => void;
   onDeselectVehicle: () => void;
 }
 

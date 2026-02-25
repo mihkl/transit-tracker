@@ -1,27 +1,33 @@
 import type { GpsReading } from "@/lib/types";
+import { z } from "zod";
 import { fetchWithTimeout } from "./fetch-with-timeout";
 
 const GPS_URL = "https://gis.ee/tallinn/gps.php";
 
-interface GeoJsonFeature {
-  type: "Feature";
-  geometry: {
-    type: "Point";
-    coordinates: [number, number];
-  };
-  properties: {
-    id: number;
-    line: string;
-    type: number;
-    direction: number;
-    destination: string;
-  };
-}
+const geoJsonEnvelopeSchema = z.object({
+  type: z.literal("FeatureCollection"),
+  features: z.array(z.unknown()),
+});
 
-interface GeoJsonResponse {
-  type: "FeatureCollection";
-  features: GeoJsonFeature[];
-}
+const geoJsonFeatureSchema = z.object({
+  type: z.literal("Feature"),
+  geometry: z.object({
+    type: z.literal("Point"),
+    coordinates: z
+      .tuple([z.coerce.number(), z.coerce.number()])
+      .refine(([lng, lat]) => Number.isFinite(lng) && Number.isFinite(lat)),
+  }),
+  properties: z.object({
+    id: z
+      .union([z.string(), z.number()])
+      .transform((v) => String(v).trim())
+      .refine((v) => v.length > 0, "Vehicle id is empty"),
+    line: z.union([z.string(), z.number()]),
+    type: z.coerce.number().refine((n) => Number.isFinite(n)),
+    direction: z.coerce.number().refine((n) => Number.isFinite(n)),
+    destination: z.string().catch(""),
+  }),
+});
 
 export async function pollGps(): Promise<GpsReading[]> {
   const readings: GpsReading[] = [];
@@ -29,9 +35,49 @@ export async function pollGps(): Promise<GpsReading[]> {
 
   const url = `${GPS_URL}?ver=${Date.now()}`;
   const res = await fetchWithTimeout(url);
-  const data: GeoJsonResponse = await res.json();
+  const raw = await res.json();
+  const parsed = geoJsonEnvelopeSchema.safeParse(raw);
+  if (!parsed.success) {
+    console.error("GPS response validation error:", parsed.error.issues[0]?.message ?? parsed.error.message);
+    return [];
+  }
+  const data = parsed.data;
 
-  for (const feature of data.features) {
+  let invalidCount = 0;
+  const invalidDetails: string[] = [];
+  const validFeatures = data.features.flatMap((feature) => {
+    const parsedFeature = geoJsonFeatureSchema.safeParse(feature);
+    if (!parsedFeature.success) {
+      invalidCount += 1;
+      if (invalidDetails.length < 5) {
+        const issues = parsedFeature.error.issues
+          .map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`)
+          .join("; ");
+        const sample =
+          typeof feature === "object" && feature !== null
+            ? JSON.stringify(feature).slice(0, 400)
+            : String(feature).slice(0, 400);
+        invalidDetails.push(
+          `feature[${invalidCount}] invalid -> ${issues} | sample=${sample}`,
+        );
+      }
+      return [];
+    }
+    return [parsedFeature.data];
+  });
+  if (invalidCount > 0) {
+    console.warn(`GPS feed: skipped ${invalidCount} invalid feature(s)`);
+    for (const detail of invalidDetails) {
+      console.warn(`GPS feed detail: ${detail}`);
+    }
+    if (invalidCount > invalidDetails.length) {
+      console.warn(
+        `GPS feed detail: ${invalidCount - invalidDetails.length} additional invalid feature(s) omitted`,
+      );
+    }
+  }
+
+  for (const feature of validFeatures) {
     try {
       const { properties, geometry } = feature;
       const [lng, lat] = geometry.coordinates;

@@ -13,6 +13,8 @@ import { useUserLocation } from "@/hooks/use-user-location";
 import { useIsDesktop } from "@/hooks/use-is-desktop";
 import { useTransitStore } from "@/store/use-transit-store";
 import type { RoutePlanRequest, RouteLeg, LineDto } from "@/lib/types";
+import type { PickingPoint } from "@/store/use-transit-store";
+import { modeToTransportType, normalizeLineType } from "@/lib/domain";
 import { planRoute } from "@/actions";
 
 type ShapesMap = Record<string, number[][]>;
@@ -68,11 +70,11 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
 
   /* ── Callbacks ─────────────────────────────────────────── */
   const handleVehicleClick = useCallback(
-    (vehicleId: number) => {
+    (vehicleId: string) => {
       setFocusedVehicleId(focusedVehicleId === vehicleId ? null : vehicleId);
       const v = vehicles.find((v) => v.id === vehicleId);
       if (v) {
-        setSelectedLine({ lineNumber: v.lineNumber, type: v.transportType });
+        setSelectedLine({ lineNumber: v.lineNumber, type: normalizeLineType(v.transportType) });
       }
     },
     [focusedVehicleId, setFocusedVehicleId, setSelectedLine, vehicles],
@@ -139,7 +141,7 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
   );
 
   const handleMapClick = useCallback(
-    (pointType: string, lat: number, lng: number) => {
+    (pointType: Exclude<PickingPoint, null>, lat: number, lng: number) => {
       const point = { lat, lng };
       if (pointType === "origin") {
         setOrigin(point);
@@ -169,7 +171,7 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
       vehiclesBeforeLocateRef.current = showVehiclesRef.current;
       setSelectedLine({
         lineNumber: leg.lineNumber || "",
-        type: leg.mode.toLowerCase(),
+        type: modeToTransportType(leg.mode),
       });
       setShowVehicles(true);
     }

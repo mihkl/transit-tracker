@@ -16,8 +16,8 @@ interface VehicleTransition {
 }
 
 export function useAnimatedVehicles(rawVehicles: VehicleDto[]): VehicleDto[] {
-  const transitionsRef = useRef<Map<number, VehicleTransition>>(new Map());
-  const prevPositionsRef = useRef<Map<number, { lat: number; lng: number; bearing: number }>>(
+  const transitionsRef = useRef<Map<string, VehicleTransition>>(new Map());
+  const prevPositionsRef = useRef<Map<string, { lat: number; lng: number; bearing: number }>>(
     new Map(),
   );
   const rawRef = useRef<VehicleDto[]>(rawVehicles);
@@ -150,7 +150,7 @@ export function useAnimatedVehicles(rawVehicles: VehicleDto[]): VehicleDto[] {
 
   return useMemo(() => {
     if (animated.length === 0) return rawVehicles;
-    const animatedById = new Map<number, VehicleDto>();
+    const animatedById = new Map<string, VehicleDto>();
     for (const v of animated) {
       animatedById.set(v.id, v);
     }

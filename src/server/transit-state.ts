@@ -7,6 +7,9 @@ import type {
   PatternStop,
   VehicleState,
 } from "@/lib/types";
+import type { LineType, TypeFilter, TransportType } from "@/lib/domain";
+import { normalizeLineType } from "@/lib/domain";
+import { lineDtoSchema, vehicleDtoSchema } from "@/lib/schemas";
 import { loadGtfs } from "./gtfs-loader";
 import { VehicleTracker } from "./vehicle-tracker";
 import { GpsPollerService } from "./gps-poller";
@@ -73,7 +76,7 @@ class TransitState {
     this.notifyUpdate();
   }
 
-  getVehicles(lineFilter?: string, typeFilter?: string): VehicleDto[] {
+  getVehicles(lineFilter?: string, typeFilter?: TypeFilter): VehicleDto[] {
     if (!this.tracker || !this.gtfs) return [];
 
     let vehicles = Array.from(this.tracker.getVehicles().values());
@@ -90,7 +93,7 @@ class TransitState {
     return vehicles.map((v) => this.toDto(v));
   }
 
-  getVehicleById(id: number): VehicleState | null {
+  getVehicleById(id: string): VehicleState | null {
     if (!this.tracker) return null;
     return this.tracker.getVehicles().get(id) ?? null;
   }
@@ -117,11 +120,13 @@ class TransitState {
     if (!this.gtfs) return [];
 
     return Array.from(this.gtfs.routes.values())
-      .map((r) => ({
-        lineNumber: r.shortName,
-        type: getTypeName(r.routeId),
-        routeId: r.routeId,
-      }))
+      .map((r) =>
+        lineDtoSchema.parse({
+          lineNumber: r.shortName,
+          type: getTypeName(r.routeId),
+          routeId: r.routeId,
+        }),
+      )
       .sort((a, b) => {
         if (a.type !== b.type) return a.type.localeCompare(b.type);
         const an = parseInt(a.lineNumber, 10) || 0;
@@ -153,7 +158,7 @@ class TransitState {
     return pattern?.orderedStops ?? null;
   }
 
-  getRouteIdForLine(lineNumber: string, typeFilter?: string): string | null {
+  getRouteIdForLine(lineNumber: string, typeFilter?: LineType): string | null {
     if (!this.gtfs) return null;
     const typeNums =
       typeFilter === "tram"
@@ -173,7 +178,7 @@ class TransitState {
   }
 
   private toDto(v: VehicleState): VehicleDto {
-    const dto: VehicleDto = {
+    const dto = vehicleDtoSchema.parse({
       id: v.id,
       lineNumber: v.lineNumber,
       transportType: getTypeNameFromGps(v.transportType),
@@ -193,7 +198,7 @@ class TransitState {
         v.matchedRouteId !== null && v.matchedDirectionId !== null
           ? `${v.matchedRouteId}_${v.matchedDirectionId}`
           : null,
-    };
+    });
 
     if (v.matchedRouteId !== null && v.matchedDirectionId !== null && this.gtfs) {
       const key = `${v.matchedRouteId}_${v.matchedDirectionId}`;
@@ -240,7 +245,7 @@ function computeSpeedMs(v: VehicleState): number {
   return 0;
 }
 
-function getTransportTypes(typeFilter: string): Set<number> {
+function getTransportTypes(typeFilter: LineType): Set<number> {
   switch (typeFilter) {
     case "bus":
       return new Set([2, 7]);
@@ -255,7 +260,7 @@ function getTransportTypes(typeFilter: string): Set<number> {
   }
 }
 
-function getTypeNameFromGps(transportType: number): string {
+function getTypeNameFromGps(transportType: number): TransportType {
   switch (transportType) {
     case 1:
       return "trolleybus";
@@ -272,11 +277,11 @@ function getTypeNameFromGps(transportType: number): string {
   }
 }
 
-function getTypeName(routeId: string): string {
-  if (routeId.includes("_tram_")) return "tram";
-  if (routeId.includes("_train_") || routeId.includes("_rail_")) return "train";
-  if (routeId.includes("_bus_")) return "bus";
-  return "bus";
+function getTypeName(routeId: string): LineType {
+  if (routeId.includes("_tram_")) return normalizeLineType("tram");
+  if (routeId.includes("_train_") || routeId.includes("_rail_")) return normalizeLineType("train");
+  if (routeId.includes("_bus_")) return normalizeLineType("bus");
+  return normalizeLineType("bus");
 }
 
 const globalForTransit = globalThis as unknown as {

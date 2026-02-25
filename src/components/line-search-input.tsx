@@ -2,8 +2,9 @@
 
 import { Bus, TramFront, TrainFront, Zap } from "lucide-react";
 import { TYPE_COLORS } from "@/lib/constants";
+import type { TransportType } from "@/lib/domain";
 
-export function TypeIcon({ type, className }: { type: string; className?: string }) {
+export function TypeIcon({ type, className }: { type: TransportType; className?: string }) {
   const color = TYPE_COLORS[type] ?? TYPE_COLORS.unknown;
   const props = { size: 16, className, style: { color } };
   switch (type) {

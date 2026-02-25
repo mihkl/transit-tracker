@@ -3,10 +3,11 @@
 import { transitState } from "@/server/transit-state";
 import { matchTransitLeg } from "@/server/delay-matcher";
 import type { DelayInfo } from "@/lib/types";
+import type { TransitMode } from "@/lib/domain";
 
 export interface LegDelayParams {
   line?: string;
-  type?: string;
+  type?: TransitMode;
   depStop?: string;
   depLat?: number;
   depLng?: number;
