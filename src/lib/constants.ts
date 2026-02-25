@@ -1,10 +1,10 @@
-export const TALLINN_CENTER: [number, number] = [59.437, 24.745];
+export const TALLINN_CENTER: [number, number] = [59.4372, 24.7536];
 export const DEFAULT_ZOOM = 13;
 
 export const TYPE_COLORS: Record<string, string> = {
-  bus: "#2196F3",
-  tram: "#F44336",
-  trolleybus: "#4CAF50",
+  bus: "#1565C0",
+  tram: "#C62828",
+  trolleybus: "#2E7D32",
   train: "#FF9800",
   unknown: "#999",
 };
@@ -34,7 +34,7 @@ export const LEG_COLORS: Record<string, string> = {
   BUS: "#1565C0",
   TRAM: "#C62828",
   TROLLEYBUS: "#2E7D32",
-  TRAIN: "#E65100",
+  TRAIN: "#FF9800",
 };
 
 export const TYPE_LABELS: Record<string, string> = {

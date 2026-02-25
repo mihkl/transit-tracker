@@ -37,23 +37,23 @@
 :root {
   --radius: 0.5rem;
   --background: oklch(0.99 0 0);
-  --foreground: oklch(0.2 0 0);
+  --foreground: oklch(0.15 0 0);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.2 0 0);
+  --card-foreground: oklch(0.15 0 0);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.2 0 0);
-  --primary: oklch(0.55 0.2 250);
+  --popover-foreground: oklch(0.15 0 0);
+  --primary: oklch(0.5 0.22 250);
   --primary-foreground: oklch(1 0 0);
   --secondary: oklch(0.96 0 0);
-  --secondary-foreground: oklch(0.3 0 0);
+  --secondary-foreground: oklch(0.25 0 0);
   --muted: oklch(0.96 0 0);
-  --muted-foreground: oklch(0.5 0 0);
+  --muted-foreground: oklch(0.45 0 0);
   --accent: oklch(0.96 0 0);
-  --accent-foreground: oklch(0.3 0 0);
-  --destructive: oklch(0.55 0.22 25);
-  --border: oklch(0 0 0 / 8%);
-  --input: oklch(0 0 0 / 8%);
-  --ring: oklch(0.55 0.2 250);
+  --accent-foreground: oklch(0.25 0 0);
+  --destructive: oklch(0.5 0.24 25);
+  --border: oklch(0 0 0 / 10%);
+  --input: oklch(0 0 0 / 10%);
+  --ring: oklch(0.5 0.22 250);
 }
 
 @layer base {
@@ -62,5 +62,32 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+/* Safe area for bottom navigation on notched devices */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+  :root {
+    --foreground: oklch(0.05 0 0);
+    --border: oklch(0 0 0 / 20%);
+    --muted-foreground: oklch(0.3 0 0);
+  }
+}
+
+/* Focus indicators for keyboard navigation */
+:focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* Respects system font scaling */
+@supports (font-size: clamp(1rem, 1vw, 1.5rem)) {
+  html {
+    font-size: clamp(100%, 100%, 125%);
   }
 }

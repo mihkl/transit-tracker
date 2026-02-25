@@ -1,9 +1,9 @@
 "use client";
 
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Footprints, X, ChevronLeft, ArrowUpDown, Search, Bell } from "lucide-react";
+import { Footprints, X, ArrowUpDown, Search, Bell, ChevronLeft } from "lucide-react";
 import { Icon } from "@/components/icon";
 import { PlaceSearchInput } from "./place-search-input";
 import { RouteLegCard, TransferBadge } from "./route-leg-card";
@@ -72,20 +72,20 @@ function LegChain({ legs }: { legs: RouteLeg[] }) {
   );
 
   return (
-    <div className="flex items-center gap-1 flex-wrap">
+    <div className="flex items-center gap-1.5 flex-wrap">
       {visible.map((leg, i) => (
-        <div key={i} className="flex items-center gap-1">
+        <div key={i} className="flex items-center gap-1.5">
           {i > 0 && (
             <Icon name="chevron-right-sm" size={8} className="text-foreground/20 shrink-0" />
           )}
           {leg.mode === "WALK" ? (
-            <div className="flex items-center gap-1 text-foreground/60">
+            <div className="flex items-center gap-1 text-foreground/60 rounded-full px-1.5 py-0.5 bg-foreground/[0.03]">
               <Footprints size={12} className="shrink-0" />
-              <span className="text-[10px] font-semibold">{formatDuration(leg.duration)}</span>
+              <span className="text-[11px] font-medium">{formatDuration(leg.duration)}</span>
             </div>
           ) : (
             <Badge
-              className="text-white text-[10px] px-1.5 py-0 h-5 font-bold shrink-0 rounded-md"
+              className="text-white text-[11px] px-2 py-0 h-5.5 font-semibold shrink-0 rounded-full tracking-tight"
               style={{ backgroundColor: getTransportColor(leg.mode) }}
             >
               {leg.lineNumber || leg.mode}
@@ -160,17 +160,17 @@ function RouteCard({
     <div
       className={`rounded-xl border transition-all duration-150 overflow-hidden ${
         isSelected
-          ? "border-primary/25 bg-primary/[0.04]"
+          ? "border-primary/30 bg-primary/[0.05] shadow-[0_8px_24px_-16px_rgba(0,96,255,0.5)]"
           : "border-foreground/8 bg-white hover:border-foreground/15"
       }`}
     >
-      <button onClick={onClick} className="w-full text-left px-4 py-3">
+      <button onClick={onClick} className="w-full text-left px-4 py-3.5">
         <div className="flex items-baseline justify-between gap-3">
-          <span className="text-base font-bold text-foreground/90 tabular-nums">
+          <span className="text-[17px] font-semibold text-foreground/90 tabular-nums tracking-tight">
             {formatDuration(route.duration)}
           </span>
           {dep && arr && (
-            <span className="text-xs font-semibold text-foreground/55 tabular-nums">
+            <span className="text-[13px] font-semibold text-foreground/55 tabular-nums">
               {dep} — {arr}
             </span>
           )}
@@ -283,8 +283,21 @@ export function RoutePlanner({
 }: RoutePlannerProps) {
   const [expandedRoute, setExpandedRoute] = useState<number | null>(null);
   const [mobileDetail, setMobileDetail] = useState<number | null>(null);
+  const [fullDragY, setFullDragY] = useState(0);
+  const [isFullDragging, setIsFullDragging] = useState(false);
+  const fullStartYRef = useRef<number | null>(null);
+  const fullStartXRef = useRef<number | null>(null);
+  const fullStartTimeRef = useRef(0);
+  const [detailDragY, setDetailDragY] = useState(0);
+  const [isDetailDragging, setIsDetailDragging] = useState(false);
+  const detailStartYRef = useRef<number | null>(null);
+  const detailStartTimeRef = useRef(0);
+  const detailSheetRef = useRef<HTMLDivElement | null>(null);
+  const lastDetailSheetHeightRef = useRef(0);
 
   const hasRoutes = !!routePlan?.routes?.length;
+  const mobileDetailRoute =
+    mobileDetail !== null && hasRoutes ? routePlan.routes[mobileDetail] : null;
   const selectedRoute = routePlan?.routes[selectedRouteIndex] ?? null;
 
   // Live transfer viability for the selected route
@@ -349,43 +362,149 @@ export function RoutePlanner({
     onConsumeOpenSelectedRouteDetails,
   ]);
 
+  const beginFullDrag = (clientX: number, clientY: number) => {
+    fullStartXRef.current = clientX;
+    fullStartYRef.current = clientY;
+    fullStartTimeRef.current = performance.now();
+    setIsFullDragging(true);
+  };
+
+  const updateFullDrag = (clientX: number, clientY: number) => {
+    if (fullStartYRef.current === null || fullStartXRef.current === null) return;
+    const dx = clientX - fullStartXRef.current;
+    const dy = clientY - fullStartYRef.current;
+    const startedNearTop = fullStartYRef.current <= 140;
+    if (!startedNearTop || Math.abs(dy) <= Math.abs(dx) * 1.2) return;
+    setFullDragY(Math.max(0, dy));
+  };
+
+  const endFullDrag = () => {
+    if (fullStartYRef.current === null) return;
+    const elapsed = Math.max(1, performance.now() - fullStartTimeRef.current);
+    const velocity = fullDragY / elapsed;
+    const shouldClose = fullDragY > 140 || velocity > 0.8;
+    setIsFullDragging(false);
+    fullStartYRef.current = null;
+    fullStartXRef.current = null;
+    if (shouldClose) {
+      setFullDragY(0);
+      onClose();
+      return;
+    }
+    setFullDragY(0);
+  };
+
+  const beginDetailDrag = (clientY: number) => {
+    detailStartYRef.current = clientY;
+    detailStartTimeRef.current = performance.now();
+    setIsDetailDragging(true);
+  };
+
+  const updateDetailDrag = (clientY: number) => {
+    if (detailStartYRef.current === null) return;
+    setDetailDragY(Math.max(0, clientY - detailStartYRef.current));
+  };
+
+  const endDetailDrag = () => {
+    if (detailStartYRef.current === null) return;
+    const elapsed = Math.max(1, performance.now() - detailStartTimeRef.current);
+    const velocity = detailDragY / elapsed;
+    const shouldClose = detailDragY > 120 || velocity > 0.7;
+    setIsDetailDragging(false);
+    detailStartYRef.current = null;
+    if (shouldClose) {
+      setDetailDragY(0);
+      onClose();
+      return;
+    }
+    setDetailDragY(0);
+  };
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!mobileDetailRoute) {
+      document.documentElement.style.removeProperty("--mobile-route-sheet-height");
+      lastDetailSheetHeightRef.current = 0;
+      return;
+    }
+    const el = detailSheetRef.current;
+    if (!el) return;
+
+    const applyHeight = (h: number) => {
+      const rounded = Math.max(0, Math.round(h));
+      document.documentElement.style.setProperty("--mobile-route-sheet-height", `${rounded}px`);
+      if (Math.abs(rounded - lastDetailSheetHeightRef.current) > 8) {
+        lastDetailSheetHeightRef.current = rounded;
+        onSelectRoute(selectedRouteIndex);
+      }
+    };
+
+    applyHeight(el.getBoundingClientRect().height);
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        applyHeight(entry.contentRect.height);
+      }
+    });
+    ro.observe(el);
+
+    return () => {
+      ro.disconnect();
+      document.documentElement.style.removeProperty("--mobile-route-sheet-height");
+      lastDetailSheetHeightRef.current = 0;
+    };
+  }, [mobileDetailRoute, onSelectRoute, selectedRouteIndex]);
+
   /* ── Shared form block ─────────────────────────────── */
   const formBlock = (
-    <div className="p-4 space-y-3">
+    <div className="p-4 pt-3 space-y-3.5 md:px-5 md:pt-4 md:pb-4 md:space-y-4">
+      <div className="md:hidden flex justify-center -mt-1">
+        <div className="h-1 w-10 rounded-full bg-foreground/20" />
+      </div>
+
       {/* Origin / destination inputs */}
-      <div className="flex gap-2 items-start">
-        <div className="flex-1 space-y-2 min-w-0">
-          <PlaceSearchInput
-            value={origin}
-            onSelect={onSetOrigin}
-            pickingPoint={pickingPoint}
-            pointType="origin"
-            onStartPicking={onStartPicking}
-            currentLocation={userLocation}
-          />
-          <PlaceSearchInput
-            value={destination}
-            onSelect={onSetDestination}
-            pickingPoint={pickingPoint}
-            pointType="destination"
-            onStartPicking={onStartPicking}
-          />
+      <div className="rounded-2xl border border-foreground/8 bg-white p-2.5 shadow-sm">
+        <div className="flex gap-2 items-start">
+          <div className="flex-1 space-y-2 min-w-0">
+            <PlaceSearchInput
+              value={origin}
+              onSelect={onSetOrigin}
+              pickingPoint={pickingPoint}
+              pointType="origin"
+              onStartPicking={onStartPicking}
+              currentLocation={userLocation}
+            />
+            <PlaceSearchInput
+              value={destination}
+              onSelect={onSetDestination}
+              pickingPoint={pickingPoint}
+              pointType="destination"
+              onStartPicking={onStartPicking}
+            />
+          </div>
+          <div className="shrink-0 flex flex-col gap-2">
+            <button
+              onClick={onSwap}
+              className="h-10 w-10 rounded-xl border border-foreground/8 hover:bg-foreground/[0.04] active:bg-foreground/[0.08] transition-colors text-foreground/60 hover:text-foreground/70 bg-white flex items-center justify-center"
+              title="Swap"
+            >
+              <ArrowUpDown size={16} />
+            </button>
+            <button
+              onClick={() => onClear?.()}
+              className="h-10 w-10 rounded-xl border border-foreground/10 bg-white text-[11px] font-medium text-foreground/60 active:bg-foreground/[0.04] flex items-center justify-center"
+            >
+              Reset
+            </button>
+          </div>
         </div>
-        <button
-          onClick={onSwap}
-          className="mt-3 p-2.5 rounded-xl border border-foreground/8 hover:bg-foreground/[0.04] active:bg-foreground/[0.08] transition-colors text-foreground/60 hover:text-foreground/60 shrink-0"
-          title="Swap"
-        >
-          <ArrowUpDown size={16} />
-        </button>
       </div>
 
       {/* Time selector + search */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 md:gap-3">
         <select
           value={timeOption}
           onChange={(e) => onTimeOptionChange(e.target.value as TimeOption)}
-          className="h-9 rounded-xl border border-foreground/10 bg-white px-2.5 text-sm text-foreground/80 font-medium focus:outline-none focus:ring-1 focus:ring-primary/30 transition-all"
+          className="h-10 rounded-xl border border-foreground/10 bg-white px-3 text-sm text-foreground/80 font-medium focus:outline-none focus:ring-1 focus:ring-primary/30 transition-all"
         >
           <option value="now">Leave now</option>
           <option value="depart">Depart at</option>
@@ -396,12 +515,12 @@ export function RoutePlanner({
             type="datetime-local"
             value={selectedDateTime}
             onChange={(e) => onDateTimeChange(e.target.value)}
-            className="h-9 rounded-xl border border-foreground/10 bg-white px-2.5 text-sm text-foreground/80 font-medium focus:outline-none focus:ring-1 focus:ring-primary/30 transition-all flex-1 min-w-0"
+            className="h-10 rounded-xl border border-foreground/10 bg-white px-3 text-sm text-foreground/80 font-medium focus:outline-none focus:ring-1 focus:ring-primary/30 transition-all flex-1 min-w-0"
           />
         )}
         <Button
           size="sm"
-          className="h-9 px-5 bg-primary hover:bg-primary/90 text-white font-semibold rounded-xl text-sm shadow-sm transition-all active:scale-[0.98] ml-auto shrink-0"
+          className="h-10 px-5 bg-primary hover:bg-primary/90 text-white font-semibold rounded-xl text-sm shadow-[0_8px_20px_-12px_rgba(0,96,255,0.8)] transition-all active:scale-[0.98] ml-auto shrink-0"
           disabled={!origin || !destination || planLoading}
           onClick={onPlanRoute}
         >
@@ -423,10 +542,6 @@ export function RoutePlanner({
 
   const noResults = routePlan?.routes?.length === 0 && !planLoading;
 
-  /* ── Mobile detail view ────────────────────────────── */
-  const mobileDetailRoute =
-    mobileDetail !== null && hasRoutes ? routePlan.routes[mobileDetail] : null;
-
   if (mobileDetailRoute) {
     const { dep, arr } = getRouteTimeRange(mobileDetailRoute);
     return (
@@ -441,34 +556,46 @@ export function RoutePlanner({
           handleRouteClick,
           onLocateVehicle,
           noResults,
-          onClear,
           onClose,
           reminderProps,
           transfersByArrivingLeg,
         })}
 
         {/* Mobile detail sheet */}
-        <div className="md:hidden absolute bottom-0 left-0 right-0 z-[1000] bg-white rounded-t-2xl shadow-sheet animate-slide-up">
-          <div className="flex items-center gap-3 px-4 py-3 border-b border-foreground/6">
+        <div
+          ref={detailSheetRef}
+          className={`md:hidden absolute bottom-0 left-0 right-0 z-[1100] bg-white rounded-t-3xl shadow-sheet border-t border-foreground/8 ${
+            isDetailDragging ? "" : "transition-transform duration-250 ease-out"
+          }`}
+          style={{ transform: `translateY(${detailDragY}px)` }}
+        >
+          <div
+            className="flex justify-center pt-2 pb-1 touch-none"
+            onTouchStart={(e) => beginDetailDrag(e.touches[0].clientY)}
+            onTouchMove={(e) => updateDetailDrag(e.touches[0].clientY)}
+            onTouchEnd={endDetailDrag}
+            onTouchCancel={endDetailDrag}
+          >
+            <div className="h-1 w-10 rounded-full bg-foreground/20" />
+          </div>
+          <div className="flex items-center gap-2 px-4 py-3.5 border-b border-foreground/6">
             <button
               onClick={() => setMobileDetail(null)}
-              className="p-1 rounded-lg hover:bg-foreground/5 transition-colors text-foreground/60"
+              className="h-8 w-8 rounded-full text-foreground/55 hover:text-foreground/75 hover:bg-foreground/[0.06] active:bg-foreground/[0.1] inline-flex items-center justify-center shrink-0 transition-colors"
+              aria-label="Back to all routes"
             >
-              <ChevronLeft size={20} />
+              <ChevronLeft size={16} />
             </button>
             <div className="flex-1 min-w-0">
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="font-bold text-foreground/90">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[18px] font-semibold text-foreground/90 tabular-nums tracking-tight">
                   {formatDuration(mobileDetailRoute.duration)}
                 </span>
                 {dep && arr && (
-                  <span className="text-xs text-foreground/60 font-semibold tabular-nums">
+                  <span className="text-[13px] text-foreground/60 font-semibold tabular-nums">
                     {dep} — {arr}
                   </span>
                 )}
-              </div>
-              <div className="mt-1">
-                <LegChain legs={mobileDetailRoute.legs} />
               </div>
             </div>
             {/* Bell — large target for gloved fingers */}
@@ -489,7 +616,7 @@ export function RoutePlanner({
             )}
           </div>
 
-          <div className="overflow-y-auto max-h-[55vh] p-3 space-y-1.5">
+          <div className="overflow-y-auto max-h-[58vh] p-4 pb-20 space-y-3.5">
             {/* Reminder countdown banner */}
             {reminderProps?.isSet && (
               <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-primary/6 border border-primary/15">
@@ -524,62 +651,52 @@ export function RoutePlanner({
         handleRouteClick,
         onLocateVehicle,
         noResults,
-        onClear,
         onClose,
         reminderProps,
         transfersByArrivingLeg,
       })}
 
       {/* Mobile fullscreen */}
-      <div className="md:hidden absolute inset-0 z-[1000] flex flex-col bg-white">
-        <div className="flex items-center justify-between px-4 h-12 border-b border-foreground/6 shrink-0">
-          <h2 className="font-bold text-foreground/90">Directions</h2>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => onClear?.()}
-              className="px-2.5 py-1 text-xs text-foreground/60 hover:text-foreground/80 rounded-lg font-semibold transition-colors"
-            >
-              Clear
-            </button>
-            <button
-              onClick={onClose}
-              className="p-1.5 rounded-lg hover:bg-foreground/5 text-foreground/60 hover:text-foreground/60 transition-colors"
-            >
-              <X size={18} />
-            </button>
-          </div>
-        </div>
-
+      <div
+        className={`md:hidden absolute inset-0 z-[1100] flex flex-col bg-white ${
+          isFullDragging ? "" : "transition-transform duration-250 ease-out"
+        }`}
+        style={{ transform: `translateY(${fullDragY}px)` }}
+        onTouchStart={(e) => beginFullDrag(e.touches[0].clientX, e.touches[0].clientY)}
+        onTouchMove={(e) => updateFullDrag(e.touches[0].clientX, e.touches[0].clientY)}
+        onTouchEnd={endFullDrag}
+        onTouchCancel={endFullDrag}
+      >
         {formBlock}
 
         <div className="h-px bg-foreground/6" />
 
-        <div className="flex-1 min-h-0 overflow-y-auto">
+        <div className="flex-1 min-h-0 overflow-y-auto pb-20">
           {hasRoutes && (
-            <div className="p-3 space-y-2">
+            <div className="p-3 space-y-2.5">
               {routePlan.routes.map((route, i) => {
                 const { dep, arr } = getRouteTimeRange(route);
                 return (
                   <button
                     key={i}
                     onClick={() => handleMobileRouteClick(i)}
-                    className={`w-full text-left rounded-xl border p-4 transition-all duration-150 ${
+                    className={`w-full text-left rounded-2xl border p-4 min-h-[88px] transition-all duration-150 shadow-sm ${
                       i === selectedRouteIndex
-                        ? "border-primary/25 bg-primary/[0.04]"
+                        ? "border-primary/30 bg-primary/[0.05] shadow-[0_10px_24px_-16px_rgba(0,96,255,0.65)]"
                         : "border-foreground/8 bg-white active:bg-foreground/2"
                     }`}
                   >
                     <div className="flex items-baseline justify-between gap-3">
-                      <span className="text-base font-bold text-foreground/90 tabular-nums">
+                      <span className="text-[24px] leading-none font-semibold tracking-tight text-foreground/90 tabular-nums">
                         {formatDuration(route.duration)}
                       </span>
                       {dep && arr && (
-                        <span className="text-xs font-semibold text-foreground/55 tabular-nums">
+                        <span className="text-[14px] font-semibold text-foreground/55 tabular-nums">
                           {dep} — {arr}
                         </span>
                       )}
                     </div>
-                    <div className="mt-2">
+                    <div className="mt-2.5">
                       <LegChain legs={route.legs} />
                     </div>
                   </button>
@@ -609,7 +726,6 @@ function desktopSidebar({
   handleRouteClick,
   onLocateVehicle,
   noResults,
-  onClear,
   onClose,
   reminderProps,
   transfersByArrivingLeg,
@@ -622,36 +738,27 @@ function desktopSidebar({
   handleRouteClick: (i: number) => void;
   onLocateVehicle: (leg: RouteLeg) => void;
   noResults: boolean;
-  onClear?: () => void;
   onClose: () => void;
   reminderProps?: ReminderProps;
   transfersByArrivingLeg: Map<RouteLeg, TransferInfo>;
 }) {
   return (
-    <div className="hidden md:flex w-[340px] border-r border-foreground/6 bg-white flex-col shrink-0">
-      <div className="flex items-center justify-between px-4 h-12 border-b border-foreground/6 shrink-0">
-        <h2 className="font-bold text-foreground/90">Directions</h2>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => onClear?.()}
-            className="px-2.5 py-1 text-xs text-foreground/60 hover:text-foreground/80 rounded-lg font-semibold transition-colors"
-          >
-            Clear
-          </button>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-foreground/5 text-foreground/60 hover:text-foreground/60 transition-colors"
-          >
-            <X size={16} />
-          </button>
-        </div>
+    <div className="hidden md:flex w-[360px] border-r border-foreground/6 bg-gradient-to-b from-white to-foreground/[0.015] flex-col shrink-0">
+      <div className="flex items-center justify-end px-4 h-12 border-b border-foreground/6 shrink-0">
+        <button
+          onClick={onClose}
+          className="p-1.5 rounded-lg hover:bg-foreground/5 text-foreground/60 hover:text-foreground/60 transition-colors"
+          aria-label="Close directions panel"
+        >
+          <X size={16} />
+        </button>
       </div>
 
       {formBlock}
       <div className="h-px bg-foreground/6" />
 
       {hasRoutes && routePlan && (
-        <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-2">
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
           {routePlan.routes.map((route, i) => (
             <RouteCard
               key={i}

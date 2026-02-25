@@ -45,6 +45,8 @@ export function PlaceSearchInput({
       setQuery(value.name);
     } else if (value) {
       setQuery(formatCoord(value.lat, value.lng));
+    } else {
+      setQuery("");
     }
   }, [value]);
 

@@ -39,19 +39,7 @@ export function FilterPanel({
 }: FilterPanelProps) {
   return (
     <>
-      {/* Mobile — just the search bar, clean and minimal */}
-      <div className="absolute top-3 left-3 right-3 z-[1000] md:hidden">
-        <UnifiedSearch
-          lines={lines}
-          selectedLine={selectedLine}
-          onLineSelect={onLineSelect}
-          selectedStop={selectedStop}
-          onStopSelect={onStopSelect}
-          vehicleCount={vehicleCount}
-        />
-      </div>
-
-      {/* Desktop — search bar + controls in one row */}
+      {/* Desktop only — search bar + controls in one row */}
       <div className="hidden md:flex absolute top-3 right-3 z-[1000] items-center gap-2 px-2 py-1.5 bg-white rounded-2xl shadow-panel">
         <div className="w-64">
           <UnifiedSearch
@@ -71,7 +59,7 @@ export function FilterPanel({
           <Button
             variant={showVehicles ? "default" : "ghost"}
             size="sm"
-            className="h-8 px-2.5 rounded-xl text-sm font-medium"
+            className="h-10 px-3 rounded-xl text-sm font-semibold"
             onClick={onToggleVehicles}
             title="Toggle live vehicles"
           >
@@ -84,7 +72,7 @@ export function FilterPanel({
           <Button
             variant={showTraffic ? "default" : "ghost"}
             size="sm"
-            className="h-8 px-2.5 rounded-xl text-sm font-medium"
+            className="h-10 px-3 rounded-xl text-sm font-semibold"
             onClick={onToggleTraffic}
             title="Toggle traffic overlay"
           >
@@ -97,7 +85,7 @@ export function FilterPanel({
           <Button
             variant={showStops ? "default" : "ghost"}
             size="sm"
-            className="h-8 px-2.5 rounded-xl text-sm font-medium"
+            className="h-10 px-3 rounded-xl text-sm font-semibold"
             onClick={onToggleStops}
             title="Toggle all stops"
           >
@@ -108,7 +96,7 @@ export function FilterPanel({
         <Button
           variant="ghost"
           size="sm"
-          className="h-8 px-2.5 rounded-xl text-sm font-medium"
+          className="h-10 px-3 rounded-xl text-sm font-semibold"
           onClick={onTogglePlanner}
         >
           <Icon name="arrow-right" className="w-4 h-4 mr-1.5" />

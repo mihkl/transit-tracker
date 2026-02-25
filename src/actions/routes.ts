@@ -15,7 +15,13 @@ function normalizeVehicleType(type: string): string {
     case "HIGH_SPEED_TRAIN":
     case "INTERCITY_TRAIN":
     case "COMMUTER_TRAIN":
+    case "LONG_DISTANCE_TRAIN":
+    case "METRO_RAIL":
+    case "SUBWAY":
+    case "MONORAIL":
       return "TRAIN";
+    case "LIGHT_RAIL":
+      return "TRAM";
     default:
       return type;
   }

@@ -23,7 +23,11 @@ import { Icon } from "@/components/icon";
 import { useUserLocation } from "@/hooks/use-user-location";
 import { useStops } from "@/hooks/use-stops";
 
-function fitMapToPoints(map: MapRef, points: number[][]) {
+function fitMapToPoints(
+  map: MapRef,
+  points: number[][],
+  options?: { isDesktop?: boolean; reserveBottomSpace?: boolean },
+) {
   let minLat = Infinity,
     maxLat = -Infinity,
     minLng = Infinity,
@@ -37,12 +41,37 @@ function fitMapToPoints(map: MapRef, points: number[][]) {
   }
 
   if (minLat !== Infinity) {
+    const isDesktop = options?.isDesktop ?? true;
+    const reserveBottomSpace = options?.reserveBottomSpace ?? false;
+    const viewportHeight =
+      typeof window !== "undefined" ? window.innerHeight : 720;
+    const cssSheetHeight =
+      typeof window !== "undefined"
+        ? Number.parseFloat(
+            getComputedStyle(document.documentElement)
+              .getPropertyValue("--mobile-route-sheet-height")
+              .trim(),
+          )
+        : NaN;
+    const dynamicSheetPadding =
+      Number.isFinite(cssSheetHeight) && cssSheetHeight > 0
+        ? Math.round(cssSheetHeight + 24)
+        : Math.max(240, Math.round(viewportHeight * 0.48));
+    const mobileBottomPadding = reserveBottomSpace
+      ? Math.min(dynamicSheetPadding, Math.round(viewportHeight * 0.82))
+      : 88;
+
     map.fitBounds(
       [
         [minLng, minLat],
         [maxLng, maxLat],
       ] as LngLatBoundsLike,
-      { padding: 60, duration: 500 },
+      {
+        padding: isDesktop
+          ? { top: 70, left: 70, right: 70, bottom: 70 }
+          : { top: 48, left: 36, right: 36, bottom: mobileBottomPadding },
+        duration: 550,
+      },
     );
   }
 }
@@ -87,6 +116,7 @@ export interface MapViewInnerProps {
   vehicles: VehicleDto[];
   routePlan: RoutePlanResponse | null;
   selectedRouteIndex: number;
+  routeFitRequest?: number;
   origin: { lat: number; lng: number } | null;
   destination: { lat: number; lng: number } | null;
   pickingPoint: "origin" | "destination" | null;
@@ -104,6 +134,7 @@ export function MapViewInner({
   vehicles,
   routePlan,
   selectedRouteIndex,
+  routeFitRequest = 0,
   origin,
   destination,
   pickingPoint,
@@ -146,23 +177,6 @@ export function MapViewInner({
   const { stops: allStops } = useStops();
 
   const userLocation = useUserLocation();
-  const hasInitiallyLocated = useRef(false);
-
-  useEffect(() => {
-    if (!userLocation || hasInitiallyLocated.current) return;
-    hasInitiallyLocated.current = true;
-
-    const { lat: latitude, lng: longitude } = userLocation;
-    // Only auto-pan if the map hasn't been moved from the default center
-    setViewState((prev) => {
-      const atDefault =
-        Math.abs(prev.latitude - TALLINN_CENTER[0]) < 0.02 &&
-        Math.abs(prev.longitude - TALLINN_CENTER[1]) < 0.02 &&
-        prev.zoom === DEFAULT_ZOOM;
-      if (!atDefault) return prev;
-      return { ...prev, latitude, longitude, zoom: 14 };
-    });
-  }, [userLocation]);
 
   const handleMapLoad = useCallback(() => {
     const map = mapRef.current?.getMap();
@@ -340,8 +354,8 @@ export function MapViewInner({
 
     const route = routePlan.routes[selectedRouteIndex];
     const points = route.legs.flatMap((leg) => leg.polyline);
-    fitMapToPoints(map, points);
-  }, [routePlan, selectedRouteIndex]);
+    fitMapToPoints(map, points, { isDesktop, reserveBottomSpace: !isDesktop });
+  }, [routePlan, selectedRouteIndex, routeFitRequest, isDesktop]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -349,8 +363,8 @@ export function MapViewInner({
     const shape = shapes[focusedVehicle.routeKey];
     if (!shape || shape.length === 0) return;
 
-    fitMapToPoints(map, shape);
-  }, [focusedVehicle, shapes]);
+    fitMapToPoints(map, shape, { isDesktop, reserveBottomSpace: !isDesktop });
+  }, [focusedVehicle, shapes, isDesktop]);
 
   const handleMoveEnd = useCallback(() => {
     followingRef.current = false;
@@ -543,13 +557,43 @@ export function MapViewInner({
                   ["get", "mode"],
                   "WALK",
                   LEG_COLORS.WALK,
+                  "walk",
+                  LEG_COLORS.WALK,
                   "BUS",
+                  LEG_COLORS.BUS,
+                  "bus",
                   LEG_COLORS.BUS,
                   "TRAM",
                   LEG_COLORS.TRAM,
+                  "tram",
+                  LEG_COLORS.TRAM,
+                  "LIGHT_RAIL",
+                  LEG_COLORS.TRAM,
                   "TROLLEYBUS",
                   LEG_COLORS.TROLLEYBUS,
+                  "trolleybus",
+                  LEG_COLORS.TROLLEYBUS,
                   "TRAIN",
+                  LEG_COLORS.TRAIN,
+                  "train",
+                  LEG_COLORS.TRAIN,
+                  "RAIL",
+                  LEG_COLORS.TRAIN,
+                  "HEAVY_RAIL",
+                  LEG_COLORS.TRAIN,
+                  "COMMUTER_TRAIN",
+                  LEG_COLORS.TRAIN,
+                  "INTERCITY_TRAIN",
+                  LEG_COLORS.TRAIN,
+                  "HIGH_SPEED_TRAIN",
+                  LEG_COLORS.TRAIN,
+                  "LONG_DISTANCE_TRAIN",
+                  LEG_COLORS.TRAIN,
+                  "METRO_RAIL",
+                  LEG_COLORS.TRAIN,
+                  "SUBWAY",
+                  LEG_COLORS.TRAIN,
+                  "MONORAIL",
                   LEG_COLORS.TRAIN,
                   "#007bff",
                 ],
@@ -724,7 +768,7 @@ export function MapViewInner({
       {userLocation && (
         <button
           onClick={handleLocateMe}
-          className="absolute bottom-6 left-3 z-10 w-11 h-11 rounded-xl bg-white shadow-fab flex items-center justify-center text-foreground/60 hover:text-foreground/80 active:scale-95 transition-all duration-150"
+          className="absolute bottom-[88px] md:bottom-6 left-3 z-10 w-12 h-12 rounded-xl bg-white shadow-fab flex items-center justify-center text-foreground/60 hover:text-foreground/80 active:scale-95 transition-all duration-150"
           title="Center on my location"
         >
           <Icon name="crosshair" className="w-5 h-5" />

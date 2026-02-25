@@ -1,6 +1,21 @@
 import type { GoogleRoutesResponse, PlaceSearchResult } from "@/lib/types";
 
 const ROUTES_URL = "https://routes.googleapis.com/directions/v2:computeRoutes";
+const HARJUMAA_BOUNDS = {
+  minLat: 58.95,
+  maxLat: 59.85,
+  minLng: 23.45,
+  maxLng: 25.95,
+} as const;
+
+function isWithinHarjumaa(lat: number, lng: number): boolean {
+  return (
+    lat >= HARJUMAA_BOUNDS.minLat &&
+    lat <= HARJUMAA_BOUNDS.maxLat &&
+    lng >= HARJUMAA_BOUNDS.minLng &&
+    lng <= HARJUMAA_BOUNDS.maxLng
+  );
+}
 
 function getApiKey(): string {
   return process.env.GOOGLE_ROUTES_API_KEY || "";
@@ -202,10 +217,10 @@ export async function searchPlaces(query: string): Promise<PlaceSearchResult[]> 
           languageCode: "et",
           regionCode: "EE",
           pageSize: 5,
-          locationBias: {
+          locationRestriction: {
             rectangle: {
-              low: { latitude: 59.35, longitude: 24.5 },
-              high: { latitude: 59.5, longitude: 25.0 },
+              low: { latitude: HARJUMAA_BOUNDS.minLat, longitude: HARJUMAA_BOUNDS.minLng },
+              high: { latitude: HARJUMAA_BOUNDS.maxLat, longitude: HARJUMAA_BOUNDS.maxLng },
             },
           },
         }),
@@ -241,7 +256,10 @@ export async function searchPlaces(query: string): Promise<PlaceSearchResult[]> 
                 lng: location.longitude,
               } satisfies PlaceSearchResult;
             })
-            .filter((p): p is PlaceSearchResult => p !== null);
+            .filter(
+              (p): p is PlaceSearchResult =>
+                p !== null && isWithinHarjumaa(p.lat, p.lng),
+            );
 
           if (enriched.length > 0) return enriched;
         }
@@ -256,7 +274,7 @@ export async function searchPlaces(query: string): Promise<PlaceSearchResult[]> 
     `https://maps.googleapis.com/maps/api/geocode/json` +
     `?address=${encodeURIComponent("Tallinn " + query)}` +
     `&key=${apiKey}` +
-    `&bounds=59.35,24.5%7C59.5,25.0` +
+    `&bounds=${HARJUMAA_BOUNDS.minLat},${HARJUMAA_BOUNDS.minLng}%7C${HARJUMAA_BOUNDS.maxLat},${HARJUMAA_BOUNDS.maxLng}` +
     `&language=et` +
     `&region=ee`;
 
@@ -278,12 +296,15 @@ export async function searchPlaces(query: string): Promise<PlaceSearchResult[]> 
     return [];
   }
 
-  return data.results.slice(0, 5).map((r) => ({
-    name: buildPlaceNameFromComponents(r.address_components),
-    address: r.formatted_address,
-    lat: r.geometry.location.lat,
-    lng: r.geometry.location.lng,
-  }));
+  return data.results
+    .map((r) => ({
+      name: buildPlaceNameFromComponents(r.address_components),
+      address: r.formatted_address,
+      lat: r.geometry.location.lat,
+      lng: r.geometry.location.lng,
+    }))
+    .filter((p) => isWithinHarjumaa(p.lat, p.lng))
+    .slice(0, 5);
 }
 
 export function decodePolyline(encoded: string): number[][] {

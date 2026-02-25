@@ -3,10 +3,10 @@ import type { LineDto } from "@/lib/types";
 export const TYPE_ORDER = ["train", "tram", "trolleybus", "bus"] as const;
 
 export const STOP_TYPE_COLORS: Record<string, string> = {
-  B: "#2196F3",
-  T: "#F44336",
-  t: "#4CAF50",
-  K: "#FF9800",
+  B: "#1565C0",
+  T: "#C62828",
+  t: "#2E7D32",
+  K: "#E65100",
 };
 
 export function uniqueLines(lines: LineDto[]): LineDto[] {

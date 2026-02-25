@@ -1,6 +1,6 @@
 "use client";
 
-import { X } from "lucide-react";
+import { useRef, useState } from "react";
 
 interface BottomSheetProps {
   open: boolean;
@@ -9,38 +9,64 @@ interface BottomSheetProps {
 }
 
 export function BottomSheet({ open, onClose, children }: BottomSheetProps) {
+  const [dragY, setDragY] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const startYRef = useRef<number | null>(null);
+  const startTimeRef = useRef<number>(0);
+
+  const beginDrag = (clientY: number) => {
+    startYRef.current = clientY;
+    startTimeRef.current = performance.now();
+    setIsDragging(true);
+  };
+
+  const updateDrag = (clientY: number) => {
+    if (startYRef.current === null) return;
+    const delta = Math.max(0, clientY - startYRef.current);
+    setDragY(delta);
+  };
+
+  const endDrag = () => {
+    if (startYRef.current === null) return;
+    const elapsed = Math.max(1, performance.now() - startTimeRef.current);
+    const velocity = dragY / elapsed; // px/ms
+    const shouldClose = dragY > 120 || velocity > 0.7;
+    setIsDragging(false);
+    startYRef.current = null;
+    if (shouldClose) {
+      setDragY(0);
+      onClose();
+    } else {
+      setDragY(0);
+    }
+  };
+
   return (
     <div className="md:hidden">
-      {/* Backdrop */}
-      <div
-        className={`fixed inset-0 z-[999] bg-black/20 transition-opacity duration-300 ${
-          open ? "opacity-100" : "opacity-0 pointer-events-none"
-        }`}
-        onClick={onClose}
-      />
-
       {/* Sheet */}
       <div
-        className={`fixed bottom-0 left-0 right-0 z-[1000] bg-white rounded-t-3xl shadow-sheet transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+        className={`fixed bottom-0 left-0 right-0 z-[1100] bg-white rounded-t-3xl shadow-sheet ${
+          isDragging
+            ? ""
+            : "transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]"
+        } ${
           open ? "translate-y-0" : "translate-y-full"
         }`}
+        style={open ? { transform: `translateY(${dragY}px)` } : undefined}
       >
         {/* Drag handle */}
-        <div className="flex justify-center pt-3 pb-2">
+        <div
+          className="flex justify-center pt-3 pb-2 touch-none"
+          onTouchStart={(e) => beginDrag(e.touches[0].clientY)}
+          onTouchMove={(e) => updateDrag(e.touches[0].clientY)}
+          onTouchEnd={endDrag}
+          onTouchCancel={endDrag}
+        >
           <div className="w-9 h-1 rounded-full bg-foreground/20" />
         </div>
 
-        {/* Close button */}
-        <button
-          onClick={onClose}
-          className="absolute top-3 right-3 p-1.5 rounded-full bg-foreground/8 hover:bg-foreground/15 transition-colors"
-          aria-label="Close"
-        >
-          <X className="h-4 w-4 text-foreground/55" />
-        </button>
-
-        {/* Content */}
-        <div className="px-5 pb-8 pt-1 max-h-[60vh] overflow-y-auto">{children}</div>
+        {/* Content — pb-20 clears the bottom nav bar */}
+        <div className="px-5 pb-20 pt-1 max-h-[55vh] overflow-y-auto">{children}</div>
       </div>
     </div>
   );

@@ -53,6 +53,46 @@ function getServerSnapshot() {
   return null;
 }
 
+function mapGeolocationError(err: GeolocationPositionError): string {
+  switch (err.code) {
+    case err.PERMISSION_DENIED:
+      return "Location permission was denied.";
+    case err.POSITION_UNAVAILABLE:
+      return "Location is unavailable right now.";
+    case err.TIMEOUT:
+      return "Location request timed out. Try again.";
+    default:
+      return "Could not get your location.";
+  }
+}
+
+export function requestUserLocation(options?: { acceptCoarse?: boolean }): Promise<void> {
+  const acceptCoarse = options?.acceptCoarse ?? false;
+
+  return new Promise((resolve, reject) => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      reject(new Error("Geolocation is not supported in this browser."));
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        const reliable = isReliableUserLocation(coords);
+        if (!reliable && !acceptCoarse) {
+          reject(new Error("Location accuracy is too low. Try again outdoors."));
+          return;
+        }
+        currentLocation = { lat: coords.latitude, lng: coords.longitude };
+        emit();
+        startWatch();
+        resolve();
+      },
+      (err) => reject(new Error(mapGeolocationError(err))),
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 15_000 },
+    );
+  });
+}
+
 export function useUserLocation(): UserLocation {
   return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }
