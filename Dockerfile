@@ -1,4 +1,4 @@
-FROM node:25-alpine AS builder
+FROM platformatic/node-caged:25-slim AS builder
 
 # curl + unzip needed by the GTFS download script at build time
 RUN apk add --no-cache curl unzip
@@ -13,7 +13,7 @@ RUN npm run build
 
 # ---
 
-FROM gcr.io/distroless/nodejs22-debian12 AS runner
+FROM platformatic/node-caged:25-slim AS runner
 
 WORKDIR /app
 
