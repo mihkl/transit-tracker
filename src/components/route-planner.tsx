@@ -1,18 +1,21 @@
 "use client";
 
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Footprints, X, ArrowUpDown, Search, Bell, ChevronLeft } from "lucide-react";
 import { Icon } from "@/components/icon";
 import { PlaceSearchInput } from "./place-search-input";
+import type { SavedLocation } from "./place-search-input";
 import { RouteLegCard, TransferBadge } from "./route-leg-card";
 import { formatDuration, formatTime } from "@/lib/format-utils";
 import { getTransportColor } from "@/lib/constants";
 import { useTransferViability, type TransferInfo } from "@/hooks/use-transfer-viability";
 import { useLeaveReminder } from "@/hooks/use-leave-reminder";
 import { useDragDismiss } from "@/hooks/use-drag-dismiss";
+import { useSavedPlannerItems } from "@/hooks/use-saved-planner-items";
 import type { RoutePlanResponse, PlannedRoute, RouteLeg } from "@/lib/types";
+import { SavedPlannerPanel } from "@/components/saved-planner-panel";
 
 export type TimeOption = "now" | "depart" | "arrive";
 
@@ -372,6 +375,33 @@ export function RoutePlanner({
   const detailSheetRef = useRef<HTMLDivElement | null>(null);
   const lastDetailSheetHeightRef = useRef(0);
 
+  // Saved routes & places
+  const savedItems = useSavedPlannerItems();
+  const allSavedLocations = useMemo((): SavedLocation[] => {
+    return savedItems.locations.map((loc) => ({
+      lat: loc.lat,
+      lng: loc.lng,
+      name: loc.name,
+      nickname: loc.nickname,
+    }));
+  }, [savedItems.locations]);
+
+  const isLocationSaved = useCallback(
+    (lat: number, lng: number): boolean => {
+      return savedItems.locations.some(
+        (loc) => Math.abs(loc.lat - lat) < 0.0001 && Math.abs(loc.lng - lng) < 0.0001,
+      );
+    },
+    [savedItems.locations],
+  );
+
+  const handleSaveLocation = useCallback(
+    async (point: { lat: number; lng: number; name: string }, nickname?: string) => {
+      await savedItems.saveLocation(point, nickname);
+    },
+    [savedItems],
+  );
+
   const hasRoutes = !!routePlan?.routes?.length;
   const mobileDetailRoute =
     mobileDetail !== null && hasRoutes ? routePlan.routes[mobileDetail] : null;
@@ -491,6 +521,9 @@ export function RoutePlanner({
               pointType="origin"
               onStartPicking={onStartPicking}
               currentLocation={userLocation}
+              savedLocations={allSavedLocations}
+              onSaveLocation={handleSaveLocation}
+              isLocationSaved={isLocationSaved}
             />
             <PlaceSearchInput
               value={destination}
@@ -498,6 +531,9 @@ export function RoutePlanner({
               pickingPoint={pickingPoint}
               pointType="destination"
               onStartPicking={onStartPicking}
+              savedLocations={allSavedLocations}
+              onSaveLocation={handleSaveLocation}
+              isLocationSaved={isLocationSaved}
             />
           </div>
           <div className="shrink-0 flex flex-col gap-2">
@@ -519,42 +555,51 @@ export function RoutePlanner({
       </div>
 
       {/* Time selector + search */}
-      <div className="flex items-center gap-2 md:gap-3">
-        <select
-          value={timeOption}
-          onChange={(e) => onTimeOptionChange(e.target.value as TimeOption)}
-          className="h-10 rounded-xl border border-foreground/10 bg-white px-3 text-sm text-foreground/80 font-medium focus:outline-none focus:ring-1 focus:ring-primary/30 transition-all"
-        >
-          <option value="now">Leave now</option>
-          <option value="depart">Depart at</option>
-          <option value="arrive">Arrive by</option>
-        </select>
+      <div className="space-y-2 md:space-y-2.5">
+        <div className="flex items-center gap-2 md:gap-3">
+          <select
+            value={timeOption}
+            onChange={(e) => onTimeOptionChange(e.target.value as TimeOption)}
+            className="h-10 rounded-xl border border-foreground/10 bg-white px-3 text-sm text-foreground/80 font-medium focus:outline-none focus:ring-1 focus:ring-primary/30 transition-all flex-1 min-w-0"
+          >
+            <option value="now">Leave now</option>
+            <option value="depart">Depart at</option>
+            <option value="arrive">Arrive by</option>
+          </select>
+          <SavedPlannerPanel
+            origin={origin}
+            destination={destination}
+            onSetOrigin={onSetOrigin}
+            onSetDestination={onSetDestination}
+            saved={savedItems}
+          />
+          <Button
+            size="sm"
+            className="h-10 px-5 bg-primary hover:bg-primary/90 text-white font-semibold rounded-xl text-sm shadow-[0_8px_20px_-12px_rgba(0,96,255,0.8)] transition-all active:scale-[0.98] shrink-0"
+            disabled={!origin || !destination || planLoading}
+            onClick={onPlanRoute}
+          >
+            {planLoading ? (
+              <span className="flex items-center gap-2">
+                <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                Searching
+              </span>
+            ) : (
+              <span className="flex items-center gap-1.5">
+                <Search size={14} />
+                Search
+              </span>
+            )}
+          </Button>
+        </div>
         {timeOption !== "now" && (
           <input
             type="datetime-local"
             value={selectedDateTime}
             onChange={(e) => onDateTimeChange(e.target.value)}
-            className="h-10 rounded-xl border border-foreground/10 bg-white px-3 text-sm text-foreground/80 font-medium focus:outline-none focus:ring-1 focus:ring-primary/30 transition-all flex-1 min-w-0"
+            className="h-10 w-full rounded-xl border border-foreground/10 bg-white px-3 text-sm text-foreground/80 font-medium focus:outline-none focus:ring-1 focus:ring-primary/30 transition-all"
           />
         )}
-        <Button
-          size="sm"
-          className="h-10 px-5 bg-primary hover:bg-primary/90 text-white font-semibold rounded-xl text-sm shadow-[0_8px_20px_-12px_rgba(0,96,255,0.8)] transition-all active:scale-[0.98] ml-auto shrink-0"
-          disabled={!origin || !destination || planLoading}
-          onClick={onPlanRoute}
-        >
-          {planLoading ? (
-            <span className="flex items-center gap-2">
-              <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              Searching
-            </span>
-          ) : (
-            <span className="flex items-center gap-1.5">
-              <Search size={14} />
-              Search
-            </span>
-          )}
-        </Button>
       </div>
     </div>
   );

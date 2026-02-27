@@ -9,10 +9,17 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { AlertCircle, Crosshair, MapPin, Navigation } from "lucide-react";
+import { AlertCircle, Bookmark, Crosshair, MapPin, Navigation } from "lucide-react";
 import { formatCoord } from "@/lib/format-utils";
 import type { PlaceSearchResult } from "@/lib/types";
 import { searchPlacesAction } from "@/actions";
+
+export interface SavedLocation {
+  lat: number;
+  lng: number;
+  name: string;
+  nickname?: string;
+}
 
 interface PlaceSearchInputProps {
   value: { lat: number; lng: number; name?: string } | null;
@@ -21,6 +28,9 @@ interface PlaceSearchInputProps {
   pointType: "origin" | "destination";
   onStartPicking: (point: "origin" | "destination" | null) => void;
   currentLocation?: { lat: number; lng: number } | null;
+  savedLocations?: SavedLocation[];
+  onSaveLocation?: (point: { lat: number; lng: number; name: string }, nickname?: string) => void;
+  isLocationSaved?: (lat: number, lng: number) => boolean;
 }
 
 export function PlaceSearchInput({
@@ -30,12 +40,17 @@ export function PlaceSearchInput({
   pointType,
   onStartPicking,
   currentLocation,
+  savedLocations,
+  onSaveLocation,
+  isLocationSaved,
 }: PlaceSearchInputProps) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<PlaceSearchResult[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [showSavePopover, setShowSavePopover] = useState(false);
+  const [nicknameInput, setNicknameInput] = useState("");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -103,18 +118,34 @@ export function PlaceSearchInput({
     });
   }, [currentLocation, onSelect]);
 
+  const handleSave = useCallback(() => {
+    if (!value || !onSaveLocation) return;
+    const name = value.name || formatCoord(value.lat, value.lng);
+    const nick = nicknameInput.trim();
+    onSaveLocation(
+      { lat: value.lat, lng: value.lng, name },
+      nick && nick !== name ? nick : undefined,
+    );
+    setShowSavePopover(false);
+  }, [value, onSaveLocation, nicknameInput]);
+
   useEffect(() => {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, []);
 
-  const closeDropdown = useCallback(() => setShowDropdown(false), []);
+  const closeDropdown = useCallback(() => {
+    setShowDropdown(false);
+    setShowSavePopover(false);
+  }, []);
   useClickOutside(wrapperRef, closeDropdown);
 
   const isPicking = pickingPoint === pointType;
   const isOrigin = pointType === "origin";
   const canUseMyLocation = isOrigin && !!currentLocation;
+  const alreadySaved = value ? isLocationSaved?.(value.lat, value.lng) : false;
+  const showBookmark = !!value && !!onSaveLocation;
 
   return (
     <div className="relative" ref={wrapperRef}>
@@ -127,7 +158,9 @@ export function PlaceSearchInput({
       >
         <input
           ref={inputRef}
-          className="w-full h-full pl-3 pr-16 text-sm bg-transparent rounded-xl outline-none placeholder:text-foreground/50 text-foreground/85 font-medium"
+          className={`w-full h-full pl-3 text-sm bg-transparent rounded-xl outline-none placeholder:text-foreground/50 text-foreground/85 font-medium ${
+            showBookmark ? "pr-[4.5rem]" : "pr-16"
+          }`}
           type="text"
           placeholder={isOrigin ? "From" : "To"}
           value={query}
@@ -137,13 +170,39 @@ export function PlaceSearchInput({
 
         {/* Loading spinner */}
         {loading && (
-          <div className="absolute right-10 top-1/2 -translate-y-1/2">
+          <div className={`absolute top-1/2 -translate-y-1/2 ${showBookmark ? "right-[4rem]" : "right-10"}`}>
             <div className="w-3.5 h-3.5 border-2 border-foreground/10 border-t-foreground/50 rounded-full animate-spin" />
           </div>
         )}
 
-        {/* Map picker button — icon only */}
+        {/* Save place bookmark button */}
+        {showBookmark && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (alreadySaved) return;
+              setNicknameInput(value.name || "");
+              setShowDropdown(false);
+              setShowSavePopover(true);
+            }}
+            className={`absolute right-10 top-1/2 -translate-y-1/2 w-7 h-7 rounded-lg flex items-center justify-center transition-all ${
+              alreadySaved
+                ? "text-primary/60 cursor-default"
+                : "text-foreground/35 hover:text-foreground/60 hover:bg-foreground/[0.06]"
+            }`}
+            title={alreadySaved ? "Saved" : "Save this place"}
+          >
+            <Bookmark
+              size={13}
+              fill={alreadySaved ? "currentColor" : "none"}
+            />
+          </button>
+        )}
+
+        {/* Map picker button */}
         <button
+          type="button"
           onClick={() => onStartPicking(isPicking ? null : pointType)}
           className={`absolute right-1.5 top-1/2 -translate-y-1/2 w-7 h-7 rounded-lg flex items-center justify-center transition-all ${
             isPicking
@@ -156,7 +215,49 @@ export function PlaceSearchInput({
         </button>
       </div>
 
-      {showDropdown && (
+      {/* Save place popover */}
+      {showSavePopover && value && (
+        <div className="absolute z-50 top-full left-0 right-0 md:w-80 mt-1.5 animate-scale-in">
+          <div className="bg-white border border-foreground/8 rounded-xl shadow-dropdown p-3">
+            <div className="text-[11px] uppercase tracking-wider text-foreground/40 font-semibold mb-2">
+              Save place
+            </div>
+            <input
+              autoFocus
+              className="w-full h-9 px-3 text-sm bg-foreground/[0.03] border border-foreground/10 rounded-lg outline-none focus:border-foreground/20 font-medium text-foreground/85"
+              placeholder="Nickname (optional)"
+              value={nicknameInput}
+              onChange={(e) => setNicknameInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleSave();
+                else if (e.key === "Escape") setShowSavePopover(false);
+              }}
+            />
+            <div className="text-[11px] text-foreground/40 mt-1.5 truncate px-0.5">
+              {value.name}
+            </div>
+            <div className="flex gap-2 mt-2.5">
+              <button
+                type="button"
+                onClick={() => setShowSavePopover(false)}
+                className="flex-1 h-8 rounded-lg text-[12px] font-semibold text-foreground/50 hover:bg-foreground/[0.04] transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSave}
+                className="flex-1 h-8 rounded-lg bg-primary text-white text-[12px] font-semibold hover:bg-primary/90 active:scale-[0.97] transition-all"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Search dropdown */}
+      {showDropdown && !showSavePopover && (
         <div className="absolute z-50 top-full left-0 right-0 md:w-80 mt-1.5 animate-scale-in">
           <Command className="bg-white border border-foreground/8 rounded-xl shadow-dropdown">
             <CommandList>
@@ -180,6 +281,35 @@ export function PlaceSearchInput({
                     <Crosshair size={15} className="mr-2.5 text-blue-500 shrink-0" />
                     <span className="text-sm font-semibold text-blue-600">Use my location</span>
                   </CommandItem>
+                </CommandGroup>
+              )}
+              {results.length === 0 && savedLocations && savedLocations.length > 0 && (
+                <CommandGroup heading="Saved places">
+                  {savedLocations.map((loc) => (
+                    <CommandItem
+                      key={`saved-${loc.lat}-${loc.lng}-${loc.nickname ?? loc.name}`}
+                      onSelect={() => {
+                        const displayName = loc.nickname || loc.name;
+                        setQuery(displayName);
+                        setShowDropdown(false);
+                        setResults([]);
+                        onSelect({ lat: loc.lat, lng: loc.lng, name: displayName });
+                      }}
+                      className="cursor-pointer px-3 py-2.5 hover:bg-foreground/[0.04] rounded-lg mx-1 transition-colors"
+                    >
+                      <Bookmark size={14} className="mr-2.5 text-primary/50 shrink-0" />
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-foreground/80 truncate">
+                          {loc.nickname || loc.name}
+                        </div>
+                        {loc.nickname && (
+                          <div className="text-[11px] text-foreground/40 truncate">
+                            {loc.name}
+                          </div>
+                        )}
+                      </div>
+                    </CommandItem>
+                  ))}
                 </CommandGroup>
               )}
               {results.length > 0 && (
