@@ -31,7 +31,7 @@ const MAX_TOTAL_SCHEDULED = 5_000;
 const MAX_PER_ENDPOINT = 50;
 const MAX_TIMER_DELAY_MS = 2_147_483_647;
 
-function toScheduleKey(endpoint: string, jobKey: string): string {
+function toScheduleKey(endpoint: string, jobKey: string) {
   return `${endpoint}::${jobKey}`;
 }
 
@@ -59,7 +59,7 @@ function clearScheduleKey(scheduleKey: string) {
   unindexKey(entry.endpoint, scheduleKey);
 }
 
-async function sendPush(subscription: PushSubscription, payload: PushPayload) {
+async function sendPushAsync(subscription: PushSubscription, payload: PushPayload) {
   try {
     await webpush.sendNotification(subscription, JSON.stringify(payload));
   } catch (err) {
@@ -71,7 +71,7 @@ async function sendPush(subscription: PushSubscription, payload: PushPayload) {
   }
 }
 
-function getEndpointCount(endpoint: string): number {
+function getEndpointCount(endpoint: string) {
   return endpointIndex.get(endpoint)?.size ?? 0;
 }
 
@@ -86,14 +86,14 @@ function assertSchedulingCapacity(endpoint: string, scheduleKey: string) {
   }
 }
 
-function armTimer(entry: ScheduledEntry, scheduleKey: string): void {
+function armTimer(entry: ScheduledEntry, scheduleKey: string) {
   const delay = entry.notifyAt - Date.now();
 
   if (delay <= 0) {
     // Invariant: the entry has already been inserted into `scheduled` and
     // `endpointIndex` by the caller before armTimer is invoked, so
     // clearScheduleKey will find and clean it up correctly.
-    sendPush(entry.subscription, entry.payload);
+    sendPushAsync(entry.subscription, entry.payload);
     clearScheduleKey(scheduleKey);
     return;
   }
@@ -117,7 +117,7 @@ export function scheduleNotification(
   assertSchedulingCapacity(subscription.endpoint, scheduleKey);
 
   if (notifyAt <= Date.now()) {
-    sendPush(subscription, payload);
+    sendPushAsync(subscription, payload);
     return;
   }
 

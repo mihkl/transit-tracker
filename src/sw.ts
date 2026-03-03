@@ -1,4 +1,5 @@
 /// <reference lib="webworker" />
+export type {};
 declare const self: ServiceWorkerGlobalScope;
 
 const CACHE_NAME = "transit-tracker-v2";
@@ -36,6 +37,8 @@ self.addEventListener("push", (event) => {
         return;
       }
 
+      // TS's NotificationOptions is incomplete — cast to include spec properties
+      // like renotify, timestamp, actions, badge, requireInteraction.
       await self.registration.showNotification(data.title ?? "Time to leave", {
         body: data.body ?? "Open Transit Tracker for updated directions.",
         icon: "/icon-192x192.png",
@@ -57,12 +60,12 @@ self.addEventListener("push", (event) => {
           { action: "snooze-2m", title: "Snooze 2 min" },
           { action: "dismiss", title: "Dismiss" },
         ],
-      });
+      } as NotificationOptions);
     })(),
   );
 });
 
-async function focusOrOpen(targetUrl: string): Promise<void> {
+async function focusOrOpenAsync(targetUrl: string) {
   const clients = await self.clients.matchAll({
     type: "window",
     includeUncontrolled: true,
@@ -79,7 +82,7 @@ async function focusOrOpen(targetUrl: string): Promise<void> {
   await self.clients.openWindow(targetUrl);
 }
 
-async function rescheduleByMinutes(
+async function rescheduleByMinutesAsync(
   minutes: number,
   data: {
     title?: string;
@@ -89,9 +92,9 @@ async function rescheduleByMinutes(
     endpoint?: string;
     jobPrefix?: string;
   },
-): Promise<boolean> {
+) {
   try {
-    const reg = await self.registration;
+    const reg = self.registration;
     const subscription = await reg.pushManager.getSubscription();
     if (!subscription) return false;
 
@@ -120,7 +123,7 @@ async function rescheduleByMinutes(
   }
 }
 
-async function cancelScheduledUpdates(endpoint?: string, jobPrefix?: string): Promise<void> {
+async function cancelScheduledUpdatesAsync(endpoint?: string, jobPrefix?: string) {
   if (!endpoint || !jobPrefix) return;
   try {
     await fetch("/api/push", {
@@ -153,12 +156,12 @@ self.addEventListener("notificationclick", (event) => {
       const target = data.url || "/";
 
       if (event.action === "dismiss") {
-        await cancelScheduledUpdates(data.endpoint, data.jobPrefix);
+        await cancelScheduledUpdatesAsync(data.endpoint, data.jobPrefix);
         return;
       }
 
       if (event.action === "snooze-2m") {
-        const ok = await rescheduleByMinutes(2, data);
+        const ok = await rescheduleByMinutesAsync(2, data);
         if (!ok) {
           await self.registration.showNotification("Snooze failed", {
             body: "Could not schedule a new reminder. Open the app to retry.",
@@ -170,7 +173,7 @@ self.addEventListener("notificationclick", (event) => {
         return;
       }
 
-      await focusOrOpen(target);
+      await focusOrOpenAsync(target);
     })(),
   );
 });
@@ -184,7 +187,7 @@ self.addEventListener("notificationclose", (event) => {
     endpoint?: string;
     jobPrefix?: string;
   };
-  event.waitUntil(cancelScheduledUpdates(data.endpoint, data.jobPrefix));
+  event.waitUntil(cancelScheduledUpdatesAsync(data.endpoint, data.jobPrefix));
 });
 
 // --- Lifecycle ---
@@ -208,8 +211,6 @@ self.addEventListener("activate", (event) => {
       .then(() => self.clients.claim()),
   );
 });
-
-// --- Fetch strategy ---
 
 self.addEventListener("fetch", (event) => {
   const { request } = event;

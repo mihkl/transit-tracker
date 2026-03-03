@@ -3,10 +3,33 @@ import { getTransportColor } from "@/lib/constants";
 import { formatEta, formatDistance } from "@/lib/format-utils";
 import { Badge } from "@/components/ui/badge";
 
-export function VehiclePopup({ vehicle }: { vehicle: VehicleDto }) {
+export function VehiclePopup({
+  vehicle,
+  etaSeconds,
+}: {
+  vehicle: VehicleDto;
+  etaSeconds: number | null;
+}) {
   const color = getTransportColor(vehicle.transportType);
+  const isOffRoute = !vehicle.isOnRoute;
   const progress =
     vehicle.totalStops > 0 ? ((vehicle.stopIndex + 1) / vehicle.totalStops) * 100 : 0;
+
+  if (isOffRoute) {
+    return (
+      <div className="min-w-24 p-1 flex items-center gap-2.5">
+        <Badge
+          className="text-white text-sm px-2.5 py-0.5 font-bold rounded-lg"
+          style={{ backgroundColor: color }}
+        >
+          {vehicle.lineNumber}
+        </Badge>
+        <span className="text-xs text-foreground/55 font-medium">
+          {vehicle.transportType} #{vehicle.id}
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div className="min-w-48 p-1">
@@ -36,7 +59,9 @@ export function VehiclePopup({ vehicle }: { vehicle: VehicleDto }) {
             {vehicle.nextStop.name}
           </div>
           <div className="text-2xl font-bold tracking-tight" style={{ color }}>
-            {formatEta(vehicle.nextStop.etaSeconds)}
+            {etaSeconds != null ? formatEta(etaSeconds) : (
+              <span className="text-sm font-medium text-foreground/40">Loading...</span>
+            )}
           </div>
         </div>
       )}

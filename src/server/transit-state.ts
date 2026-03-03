@@ -1,59 +1,131 @@
-import * as path from "path";
 import type {
   GpsReading,
-  VehicleDto,
-  LineDto,
   GtfsData,
-  PatternStop,
+  GtfsStop,
+  RoutePattern,
   VehicleState,
 } from "@/lib/types";
 import type { LineType, TypeFilter, TransportType } from "@/lib/domain";
-import { normalizeLineType } from "@/lib/domain";
+import { normalizeLineType, GPS_TYPE_TO_TRANSPORT, LINE_TYPE_TO_GPS_TYPES } from "@/lib/domain";
 import { lineDtoSchema, vehicleDtoSchema } from "@/lib/schemas";
 import { loadGtfs } from "./gtfs-loader";
 import { VehicleTracker } from "./vehicle-tracker";
 import { GpsPollerService } from "./gps-poller";
 import { haversineDistance } from "./geo-utils";
 
+const GPS_POLL_INTERVAL_MS = 10_000;
+const STOP_MATCH_RADIUS_M = 200;
+const ACTIVE_ROUTE_MAX_OFFSET_M = 120;
+const GRID_CELL_DEG = 0.01;
+
+const GTFS_ROUTE_TYPE = {
+  TRAM: 0,
+  RAIL: 2,
+  BUS: 3,
+  TROLLEYBUS: 800,
+} as const;
+
+type StopGrid = Map<string, { stopId: string; lat: number; lng: number }[]>;
+
+function getTransportTypes(typeFilter: LineType) {
+  return new Set(LINE_TYPE_TO_GPS_TYPES[typeFilter] ?? LINE_TYPE_TO_GPS_TYPES.all);
+}
+
+function getTypeNameFromGps(transportType: number): TransportType {
+  return GPS_TYPE_TO_TRANSPORT[transportType] ?? "unknown";
+}
+
+function gtfsRouteTypeToName(routeType: number) {
+  switch (routeType) {
+    case GTFS_ROUTE_TYPE.TRAM:        return normalizeLineType("tram");
+    case GTFS_ROUTE_TYPE.RAIL:        return normalizeLineType("train");
+    case GTFS_ROUTE_TYPE.TROLLEYBUS:  return normalizeLineType("trolleybus");
+    case GTFS_ROUTE_TYPE.BUS:
+    default:                          return normalizeLineType("bus");
+  }
+}
+
+function gridKey(lat: number, lng: number) {
+  return `${Math.floor(lat / GRID_CELL_DEG)}_${Math.floor(lng / GRID_CELL_DEG)}`;
+}
+
+function buildStopGrid(stops: Map<string, GtfsStop>): StopGrid {
+  const grid: StopGrid = new Map();
+  for (const stop of stops.values()) {
+    const key = gridKey(stop.latitude, stop.longitude);
+    let cell = grid.get(key);
+    if (!cell) {
+      cell = [];
+      grid.set(key, cell);
+    }
+    cell.push({ stopId: stop.stopId, lat: stop.latitude, lng: stop.longitude });
+  }
+  return grid;
+}
+
+function findNearestStop(grid: StopGrid, lat: number, lng: number, maxDist: number) {
+  const cellRow = Math.floor(lat / GRID_CELL_DEG);
+  const cellCol = Math.floor(lng / GRID_CELL_DEG);
+  let bestId: string | null = null;
+  let bestDist = Infinity;
+
+  for (let dr = -1; dr <= 1; dr++) {
+    for (let dc = -1; dc <= 1; dc++) {
+      const cell = grid.get(`${cellRow + dr}_${cellCol + dc}`);
+      if (!cell) continue;
+      for (const stop of cell) {
+        const dist = haversineDistance(lat, lng, stop.lat, stop.lng);
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestId = stop.stopId;
+        }
+      }
+    }
+  }
+
+  return bestDist < maxDist ? bestId : null;
+}
+
+function computeNextStop(pattern: RoutePattern | null, v: VehicleState) {
+  if (!pattern) return null;
+  const nextIdx = v.lastStopIndex + 1;
+  if (nextIdx >= pattern.orderedStops.length) return null;
+
+  const nextStop = pattern.orderedStops[nextIdx];
+  const dist = Math.max(0, nextStop.distAlongRoute - v.distanceAlongRoute);
+
+  return {
+    stopId: nextStop.stopId,
+    name: nextStop.stopName,
+    latitude: nextStop.latitude,
+    longitude: nextStop.longitude,
+    distanceMeters: Math.round(dist),
+  };
+}
+
+
 class TransitState {
   private gtfs: GtfsData | null = null;
   private tracker: VehicleTracker | null = null;
   private poller: GpsPollerService | null = null;
   private shapesCache: Record<string, number[][]> | null = null;
-  private lastUpdate = new Date(0);
+  private stopGrid: StopGrid | null = null;
   private initialized = false;
   private initializing = false;
   private updateCallbacks: Set<() => void> = new Set();
 
-  onUpdate(callback: () => void): () => void {
-    this.updateCallbacks.add(callback);
-    return () => this.updateCallbacks.delete(callback);
-  }
-
-  private notifyUpdate(): void {
-    for (const cb of this.updateCallbacks) {
-      try {
-        cb();
-      } catch (err) {
-        console.error("Update callback error:", err);
-      }
-    }
-  }
-
-  async initialize(): Promise<void> {
+  async initializeAsync() {
     if (this.initialized || this.initializing) return;
     this.initializing = true;
 
     try {
-      const gtfsDir = process.env.GTFS_DATA_DIR || path.join(process.cwd(), "data", "tallinn");
-      console.log(`Loading GTFS from ${path.resolve(gtfsDir)}...`);
-
-      this.gtfs = await loadGtfs(gtfsDir);
+      this.gtfs = loadGtfs();
+      this.stopGrid = buildStopGrid(this.gtfs.stops);
       this.tracker = new VehicleTracker(this.gtfs);
 
       this.poller = new GpsPollerService((readings) => {
         this.processReadings(readings);
-      }, 10_000);
+      }, GPS_POLL_INTERVAL_MS);
       this.poller.start();
 
       this.initialized = true;
@@ -65,18 +137,36 @@ class TransitState {
     }
   }
 
-  isReady(): boolean {
+  isReady() {
     return this.initialized;
   }
 
-  private processReadings(readings: GpsReading[]): void {
+  onUpdate(callback: () => void) {
+    this.updateCallbacks.add(callback);
+    return () => this.updateCallbacks.delete(callback);
+  }
+
+  private notifyUpdate() {
+    for (const cb of this.updateCallbacks) {
+      try {
+        cb();
+      } catch (err) {
+        console.error("Update callback error:", err);
+      }
+    }
+  }
+
+  private processReadings(readings: GpsReading[]) {
     if (!this.tracker) return;
     this.tracker.processReadings(readings);
-    this.lastUpdate = new Date();
     this.notifyUpdate();
   }
 
-  getVehicles(lineFilter?: string, typeFilter?: TypeFilter): VehicleDto[] {
+  getGtfs() {
+    return this.gtfs;
+  }
+
+  getVehicles(lineFilter?: string, typeFilter?: TypeFilter) {
     if (!this.tracker || !this.gtfs) return [];
 
     let vehicles = Array.from(this.tracker.getVehicles().values());
@@ -93,37 +183,19 @@ class TransitState {
     return vehicles.map((v) => this.toDto(v));
   }
 
-  getVehicleById(id: string): VehicleState | null {
+  getVehicleById(id: string) {
     if (!this.tracker) return null;
     return this.tracker.getVehicles().get(id) ?? null;
   }
 
-  getStopIdByCoords(lat: number, lng: number): string | null {
-    if (!this.gtfs) return null;
-    let bestId: string | null = null;
-    let bestDist = Infinity;
-    for (const stop of this.gtfs.stops.values()) {
-      const dist = haversineDistance(lat, lng, stop.latitude, stop.longitude);
-      if (dist < bestDist) {
-        bestDist = dist;
-        bestId = stop.stopId;
-      }
-    }
-    return bestDist < 200 ? bestId : null;
-  }
-
-  getGtfs(): GtfsData | null {
-    return this.gtfs;
-  }
-
-  getLines(): LineDto[] {
+  getLines() {
     if (!this.gtfs) return [];
 
     return Array.from(this.gtfs.routes.values())
       .map((r) =>
         lineDtoSchema.parse({
           lineNumber: r.shortName,
-          type: getTypeName(r.routeId),
+          type: gtfsRouteTypeToName(r.routeType),
           routeId: r.routeId,
         }),
       )
@@ -136,7 +208,7 @@ class TransitState {
       });
   }
 
-  getShapes(): Record<string, number[][]> | null {
+  getShapes() {
     if (!this.gtfs) return null;
     if (this.shapesCache) return this.shapesCache;
 
@@ -151,25 +223,16 @@ class TransitState {
     return this.shapesCache;
   }
 
-  getPatternStops(routeKey: string): PatternStop[] | null {
+  getPatternStops(routeKey: string) {
     if (!routeKey || !this.gtfs) return null;
 
     const pattern = this.gtfs.patterns.get(routeKey);
     return pattern?.orderedStops ?? null;
   }
 
-  getRouteIdForLine(lineNumber: string, typeFilter?: LineType): string | null {
+  getRouteIdForLine(lineNumber: string, typeFilter?: LineType) {
     if (!this.gtfs) return null;
-    const typeNums =
-      typeFilter === "tram"
-        ? [3]
-        : typeFilter === "trolleybus"
-          ? [1]
-          : typeFilter === "bus"
-            ? [2, 7]
-            : typeFilter === "train"
-              ? [10]
-              : [1, 2, 3, 7, 10];
+    const typeNums = LINE_TYPE_TO_GPS_TYPES[typeFilter ?? "all"];
     for (const t of typeNums) {
       const routeId = this.gtfs.gpsToRouteMap.get(`${t}_${lineNumber}`);
       if (routeId) return routeId;
@@ -177,111 +240,45 @@ class TransitState {
     return null;
   }
 
-  private toDto(v: VehicleState): VehicleDto {
+  getStopIdByCoords(lat: number, lng: number) {
+    if (!this.stopGrid) return null;
+    return findNearestStop(this.stopGrid, lat, lng, STOP_MATCH_RADIUS_M);
+  }
+
+  private toDto(v: VehicleState) {
+    const routeKey =
+      v.matchedRouteId !== null && v.matchedDirectionId !== null
+        ? `${v.matchedRouteId}_${v.matchedDirectionId}`
+        : null;
+    const pattern = routeKey ? this.gtfs?.patterns.get(routeKey) ?? null : null;
+    const routeOffsetMeters =
+      typeof v.routeOffsetMeters === "number" ? Math.round(v.routeOffsetMeters) : null;
+    const isOnRoute =
+      routeKey !== null &&
+      routeOffsetMeters !== null &&
+      routeOffsetMeters <= ACTIVE_ROUTE_MAX_OFFSET_M;
+
     const dto = vehicleDtoSchema.parse({
       id: v.id,
       lineNumber: v.lineNumber,
       transportType: getTypeNameFromGps(v.transportType),
       latitude: v.latitude,
       longitude: v.longitude,
-      speed: v.speed,
       heading: v.heading,
       bearing: v.heading,
       destination: v.destination,
       directionId: v.matchedDirectionId ?? 0,
       stopIndex: v.lastStopIndex,
-      totalStops: 0,
-      nextStop: null,
+      totalStops: pattern?.orderedStops.length ?? 0,
+      nextStop: computeNextStop(pattern, v),
       distanceAlongRoute: Math.round(v.distanceAlongRoute * 10) / 10,
-      speedMs: Math.round(computeSpeedMs(v) * 100) / 100,
-      routeKey:
-        v.matchedRouteId !== null && v.matchedDirectionId !== null
-          ? `${v.matchedRouteId}_${v.matchedDirectionId}`
-          : null,
+      routeKey,
+      routeOffsetMeters,
+      isOnRoute,
     });
-
-    if (v.matchedRouteId !== null && v.matchedDirectionId !== null && this.gtfs) {
-      const key = `${v.matchedRouteId}_${v.matchedDirectionId}`;
-      const pattern = this.gtfs.patterns.get(key);
-      if (pattern) {
-        dto.totalStops = pattern.orderedStops.length;
-
-        const nextIdx = v.lastStopIndex + 1;
-        if (nextIdx < pattern.orderedStops.length) {
-          const nextStop = pattern.orderedStops[nextIdx];
-          let dist = nextStop.distAlongRoute - v.distanceAlongRoute;
-          if (dist < 0) dist = 0;
-
-          const speedMs = computeSpeedMs(v);
-          const speed = speedMs > 0.5 ? speedMs : 20.0 / 3.6;
-          const etaSeconds = dist / speed;
-
-          dto.nextStop = {
-            name: nextStop.stopName,
-            latitude: nextStop.latitude,
-            longitude: nextStop.longitude,
-            distanceMeters: Math.round(dist),
-            etaSeconds: Math.round(etaSeconds),
-          };
-        }
-      }
-    }
 
     return dto;
   }
-}
-
-function computeSpeedMs(v: VehicleState): number {
-  if (v.positionHistory.length >= 2) {
-    const prev = v.positionHistory[v.positionHistory.length - 2];
-    const curr = v.positionHistory[v.positionHistory.length - 1];
-    const dt = (curr.timestamp.getTime() - prev.timestamp.getTime()) / 1000;
-    if (dt > 0.5) {
-      const dd = curr.distanceAlongRoute - prev.distanceAlongRoute;
-      if (dd > 0) return Math.min(dd / dt, 25);
-    }
-  }
-
-  return 0;
-}
-
-function getTransportTypes(typeFilter: LineType): Set<number> {
-  switch (typeFilter) {
-    case "bus":
-      return new Set([2, 7]);
-    case "tram":
-      return new Set([3]);
-    case "trolleybus":
-      return new Set([1]);
-    case "train":
-      return new Set([10]);
-    default:
-      return new Set([1, 2, 3, 7, 10]);
-  }
-}
-
-function getTypeNameFromGps(transportType: number): TransportType {
-  switch (transportType) {
-    case 1:
-      return "trolleybus";
-    case 2:
-      return "bus";
-    case 3:
-      return "tram";
-    case 7:
-      return "bus";
-    case 10:
-      return "train";
-    default:
-      return "unknown";
-  }
-}
-
-function getTypeName(routeId: string): LineType {
-  if (routeId.includes("_tram_")) return normalizeLineType("tram");
-  if (routeId.includes("_train_") || routeId.includes("_rail_")) return normalizeLineType("train");
-  if (routeId.includes("_bus_")) return normalizeLineType("bus");
-  return normalizeLineType("bus");
 }
 
 const globalForTransit = globalThis as unknown as {

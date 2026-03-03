@@ -12,7 +12,7 @@ import {
 import { AlertCircle, Bookmark, Crosshair, MapPin, Navigation } from "lucide-react";
 import { formatCoord } from "@/lib/format-utils";
 import type { PlaceSearchResult } from "@/lib/types";
-import { searchPlacesAction } from "@/actions";
+import { searchPlacesActionAsync } from "@/actions";
 
 export interface SavedLocation {
   lat: number;
@@ -74,7 +74,7 @@ export function PlaceSearchInput({
     setLoading(true);
     setErrorMessage(null);
     try {
-      const results = await searchPlacesAction(q);
+      const results = await searchPlacesActionAsync(q);
       setResults(results);
       setShowDropdown(true);
     } catch (err) {

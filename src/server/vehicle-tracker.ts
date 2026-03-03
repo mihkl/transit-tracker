@@ -1,6 +1,9 @@
 import type { GpsReading, VehicleState, GtfsData } from "@/lib/types";
 import { MAX_HISTORY_SIZE } from "@/lib/types";
-import { findPositionOnRoute } from "./geo-utils";
+import { findPositionOnRoute, segmentBearing, angleDiff } from "./geo-utils";
+
+const STALE_VEHICLE_MS = 2 * 60 * 1000;
+const ROUTE_MATCH_MAX_DISTANCE_M = 500;
 
 export class VehicleTracker {
   private vehicles = new Map<string, VehicleState>();
@@ -10,11 +13,11 @@ export class VehicleTracker {
     this.gtfs = gtfs;
   }
 
-  getVehicles(): Map<string, VehicleState> {
+  getVehicles() {
     return this.vehicles;
   }
 
-  processReadings(readings: GpsReading[]): VehicleState[] {
+  processReadings(readings: GpsReading[]) {
     const updated: VehicleState[] = [];
 
     for (const reading of readings) {
@@ -22,7 +25,6 @@ export class VehicleTracker {
 
       state.latitude = reading.latitude;
       state.longitude = reading.longitude;
-      state.speed = reading.speed;
       state.heading = reading.heading;
       state.transportType = reading.transportType;
       state.lineNumber = reading.lineNumber;
@@ -36,7 +38,6 @@ export class VehicleTracker {
       state.positionHistory.push({
         latitude: state.latitude,
         longitude: state.longitude,
-        speed: state.speed,
         distanceAlongRoute: state.distanceAlongRoute,
         stopIndex: state.lastStopIndex,
         timestamp: state.lastUpdateTime,
@@ -49,7 +50,8 @@ export class VehicleTracker {
       updated.push(state);
     }
 
-    const cutoff = new Date(Date.now() - 2 * 60 * 1000);
+    // Safe: JS spec guarantees Map deletion during iteration works correctly
+    const cutoff = new Date(Date.now() - STALE_VEHICLE_MS);
     for (const [key, v] of this.vehicles) {
       if (v.lastUpdateTime < cutoff) {
         this.vehicles.delete(key);
@@ -59,24 +61,24 @@ export class VehicleTracker {
     return updated;
   }
 
-  private getOrCreateState(reading: GpsReading): VehicleState {
+  private getOrCreateState(reading: GpsReading) {
     let state = this.vehicles.get(reading.id);
 
     if (!state) {
       state = {
         id: reading.id,
-        transportType: 0,
-        lineNumber: "",
-        latitude: 0,
-        longitude: 0,
-        speed: null,
-        heading: 0,
-        destination: "",
+        transportType: reading.transportType,
+        lineNumber: reading.lineNumber,
+        latitude: reading.latitude,
+        longitude: reading.longitude,
+        heading: reading.heading,
+        destination: reading.destination,
         matchedRouteId: null,
         matchedDirectionId: null,
         lastStopIndex: -1,
         distanceAlongRoute: 0,
-        lastUpdateTime: new Date(),
+        routeOffsetMeters: null,
+        lastUpdateTime: reading.timestamp,
         positionHistory: [],
       };
       this.vehicles.set(reading.id, state);
@@ -84,16 +86,14 @@ export class VehicleTracker {
 
     if (state.lineNumber !== reading.lineNumber || state.transportType !== reading.transportType) {
       state.matchedRouteId = null;
-      state.matchedDirectionId = null;
-      state.lastStopIndex = -1;
-      state.distanceAlongRoute = 0;
+      this.clearRouteProgress(state);
       state.positionHistory = [];
     }
 
     return state;
   }
 
-  private matchRoute(state: VehicleState, reading: GpsReading): boolean {
+  private matchRoute(state: VehicleState, reading: GpsReading) {
     if (state.matchedRouteId !== null) return true;
 
     const key = `${reading.transportType}_${reading.lineNumber}`;
@@ -106,66 +106,76 @@ export class VehicleTracker {
     return false;
   }
 
-  private matchDirectionAndProgress(state: VehicleState): void {
-    if (state.matchedRouteId === null) return;
-
-    let bestPerpDist = Infinity;
-    let bestDirection = -1;
-    let bestDistAlong = 0;
-
-    for (let dir = 0; dir <= 1; dir++) {
-      const key = `${state.matchedRouteId}_${dir}`;
-      const pattern = this.gtfs.patterns.get(key);
-      if (!pattern || pattern.shapePoints.length === 0) continue;
-
-      const { distAlong, perpDist } = findPositionOnRoute(
-        state.latitude,
-        state.longitude,
-        pattern.shapePoints,
-      );
-
-      if (perpDist < bestPerpDist) {
-        bestPerpDist = perpDist;
-        bestDirection = dir;
-        bestDistAlong = distAlong;
-      }
+  private matchDirectionAndProgress(state: VehicleState) {
+    if (state.matchedRouteId === null) {
+      this.clearRouteProgress(state);
+      return;
     }
 
-    if (bestDirection < 0) return;
-
-    if (state.matchedDirectionId !== null && state.matchedDirectionId !== bestDirection) {
-      if (bestPerpDist > 200) return;
-
-      const currentKey = `${state.matchedRouteId}_${state.matchedDirectionId}`;
-      const currentPattern = this.gtfs.patterns.get(currentKey);
-      if (currentPattern && currentPattern.shapePoints.length > 0) {
-        const { perpDist: currentPerpDist } = findPositionOnRoute(
-          state.latitude,
-          state.longitude,
-          currentPattern.shapePoints,
-        );
-        if (currentPerpDist - bestPerpDist < 100) {
-          const { distAlong } = findPositionOnRoute(
-            state.latitude,
-            state.longitude,
-            currentPattern.shapePoints,
-          );
-          state.distanceAlongRoute = distAlong;
-          return;
-        }
-      }
+    // Project onto direction 0's shape to get position along route
+    const key0 = `${state.matchedRouteId}_0`;
+    const pattern0 = this.gtfs.patterns.get(key0);
+    if (!pattern0 || pattern0.shapePoints.length < 2) {
+      this.clearRouteProgress(state);
+      return;
     }
 
-    state.matchedDirectionId = bestDirection;
-    state.distanceAlongRoute = bestDistAlong;
+    const result0 = findPositionOnRoute(
+      state.latitude,
+      state.longitude,
+      pattern0.shapePoints,
+    );
 
-    const pattern = this.gtfs.patterns.get(`${state.matchedRouteId}_${bestDirection}`);
-    if (pattern) {
-      state.lastStopIndex = this.findLastStopIndex(pattern.orderedStops, bestDistAlong);
+    if (result0.perpDist > ROUTE_MATCH_MAX_DISTANCE_M) {
+      this.clearRouteProgress(state);
+      return;
+    }
+
+    // Use vehicle heading to determine direction
+    const seg = pattern0.shapePoints;
+    const routeBearing = segmentBearing(
+      seg[result0.segmentIndex].latitude, seg[result0.segmentIndex].longitude,
+      seg[result0.segmentIndex + 1].latitude, seg[result0.segmentIndex + 1].longitude,
+    );
+
+    // If heading aligns with direction 0's bearing, direction is 0; otherwise 1
+    const direction = angleDiff(state.heading, routeBearing) < 90 ? 0 : 1;
+
+    if (direction === 0) {
+      state.matchedDirectionId = 0;
+      state.distanceAlongRoute = result0.distAlong;
+      state.lastStopIndex = this.findLastStopIndex(pattern0.orderedStops, result0.distAlong);
+      state.routeOffsetMeters = result0.perpDist;
+    } else {
+      // For direction 1, project onto its own shape for accurate distAlong
+      const key1 = `${state.matchedRouteId}_1`;
+      const pattern1 = this.gtfs.patterns.get(key1);
+      if (!pattern1 || pattern1.shapePoints.length < 2) {
+        this.clearRouteProgress(state);
+        return;
+      }
+
+      const result = findPositionOnRoute(state.latitude, state.longitude, pattern1.shapePoints);
+      if (result.perpDist > ROUTE_MATCH_MAX_DISTANCE_M) {
+        this.clearRouteProgress(state);
+        return;
+      }
+
+      state.matchedDirectionId = 1;
+      state.distanceAlongRoute = result.distAlong;
+      state.lastStopIndex = this.findLastStopIndex(pattern1.orderedStops, result.distAlong);
+      state.routeOffsetMeters = result.perpDist;
     }
   }
 
-  private findLastStopIndex(stops: { distAlongRoute: number }[], distAlong: number): number {
+  private clearRouteProgress(state: VehicleState) {
+    state.matchedDirectionId = null;
+    state.lastStopIndex = -1;
+    state.distanceAlongRoute = 0;
+    state.routeOffsetMeters = null;
+  }
+
+  private findLastStopIndex(stops: { distAlongRoute: number }[], distAlong: number) {
     for (let i = stops.length - 1; i >= 0; i--) {
       if (stops[i].distAlongRoute <= distAlong) {
         return i;

@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import type { PlannedRoute, RouteLeg } from "@/lib/types";
 import { parseDurationSeconds } from "@/lib/route-time";
-import { fetchLegDelay } from "@/lib/leg-delay";
+import { fetchLegDelayAsync } from "@/lib/leg-delay";
 
 export interface LeaveInfo {
   leaveTime: Date;
@@ -24,7 +24,7 @@ interface StoredReminder {
   endpoint: string;
   notifyAt: number;
   routeKey?: string;
-  lastDelaySeconds?: number;
+  lastDelaySeconds?: number | null;
   lastDelayPushAt?: number;
 }
 
@@ -43,20 +43,26 @@ const ADAPTIVE_POLL_MS = 20_000;
 const DELAY_NOTIFY_THRESHOLD_S = 120;
 const DELAY_NOTIFY_COOLDOWN_MS = 5 * 60_000;
 
-function formatTime(dateMs: number): string {
+function formatTime(dateMs: number) {
   return new Date(dateMs).toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
   });
 }
 
-function formatDelayLabel(delaySeconds: number): string {
+function formatDelayLabel(delaySeconds: number | null | undefined) {
+  if (delaySeconds == null) return "no real-time data";
   const mins = Math.round(Math.abs(delaySeconds) / 60);
   if (mins <= 0) return "on time";
   return delaySeconds > 0 ? `${mins} min late` : `${mins} min early`;
 }
 
-function getReminderBaseInfo(route: PlannedRoute): ReminderBaseInfo | null {
+function getKnownDelaySeconds(delay: { estimatedDelaySeconds: number; status: string } | null | undefined) {
+  if (!delay || delay.status === "unknown") return null;
+  return delay.estimatedDelaySeconds;
+}
+
+function getReminderBaseInfo(route: PlannedRoute) {
   let walkBeforeSeconds = 0;
   let firstTransitDep: Date | null = null;
   let firstTransitLeg: RouteLeg | null = null;
@@ -100,7 +106,7 @@ function getReminderBaseInfo(route: PlannedRoute): ReminderBaseInfo | null {
   };
 }
 
-function computeNotifyAtMs(baseInfo: ReminderBaseInfo, delaySeconds: number): number {
+function computeNotifyAtMs(baseInfo: ReminderBaseInfo, delaySeconds: number) {
   return (
     baseInfo.scheduledDepartureMs +
     delaySeconds * 1000 -
@@ -112,11 +118,11 @@ function computeNotifyAtMs(baseInfo: ReminderBaseInfo, delaySeconds: number): nu
 function buildLeaveReminderText(
   baseInfo: ReminderBaseInfo,
   notifyAtMs: number,
-  delaySeconds: number,
-): { title: string; body: string } {
+  delaySeconds: number | null,
+) {
   const line = baseInfo.lineNumber || "Transit";
   const leaveAt = formatTime(notifyAtMs);
-  const depTime = formatTime(baseInfo.scheduledDepartureMs + delaySeconds * 1000);
+  const depTime = formatTime(baseInfo.scheduledDepartureMs + (delaySeconds ?? 0) * 1000);
   const stopText = baseInfo.departureStop || "your stop";
   const walkText = baseInfo.walkMinutes > 0 ? `${baseInfo.walkMinutes} min walk` : "Head there";
 
@@ -129,8 +135,8 @@ function buildLeaveReminderText(
 function buildDelayUpdateText(
   baseInfo: ReminderBaseInfo,
   notifyAtMs: number,
-  delaySeconds: number,
-): { title: string; body: string } {
+  delaySeconds: number | null,
+) {
   const line = baseInfo.lineNumber || "Transit";
   return {
     title: `Update · Line ${line} ${formatDelayLabel(delaySeconds)}`,
@@ -138,7 +144,7 @@ function buildDelayUpdateText(
   };
 }
 
-async function schedulePush(
+async function schedulePushAsync(
   subscription: PushSubscription,
   notifyAt: number,
   title: string,
@@ -174,7 +180,7 @@ function saveReminder(data: StoredReminder) {
   } catch {}
 }
 
-function loadStoredReminder(): StoredReminder | null {
+function loadStoredReminder() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
@@ -216,7 +222,7 @@ function clearRouteSnapshot() {
   } catch {}
 }
 
-function hasFreshRouteSnapshot(): boolean {
+function hasFreshRouteSnapshot() {
   try {
     const raw = localStorage.getItem(ROUTE_SNAPSHOT_KEY);
     if (!raw) return false;
@@ -227,7 +233,7 @@ function hasFreshRouteSnapshot(): boolean {
   }
 }
 
-function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
+function urlBase64ToUint8Array(base64String: string) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
   const rawData = atob(base64);
@@ -238,10 +244,7 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
   return bytes;
 }
 
-async function getPushSubscription(): Promise<{
-  subscription: PushSubscription | null;
-  error: string | null;
-}> {
+async function getPushSubscriptionAsync() {
   if (
     typeof navigator === "undefined" ||
     !("serviceWorker" in navigator) ||
@@ -370,23 +373,23 @@ export function useLeaveReminder(route: PlannedRoute | null) {
         return;
       }
 
-      const { subscription: sub, error } = await getPushSubscription();
+      const { subscription: sub, error } = await getPushSubscriptionAsync();
       if (!sub) {
         setLastError(error ?? "Unable to create push subscription.");
         return;
       }
 
-      let delaySeconds = 0;
+      let delaySeconds: number | null = null;
       if (baseInfo.firstTransitLeg) {
-        const liveDelay = await fetchLegDelay(baseInfo.firstTransitLeg);
-        delaySeconds = liveDelay?.estimatedDelaySeconds ?? 0;
+        const liveDelay = await fetchLegDelayAsync(baseInfo.firstTransitLeg);
+        delaySeconds = getKnownDelaySeconds(liveDelay);
       }
 
-      let nextNotifyAt = computeNotifyAtMs(baseInfo, delaySeconds);
+      let nextNotifyAt = computeNotifyAtMs(baseInfo, delaySeconds ?? 0);
       if (nextNotifyAt < Date.now() + 5_000) nextNotifyAt = Date.now() + 5_000;
 
       const reminderText = buildLeaveReminderText(baseInfo, nextNotifyAt, delaySeconds);
-      await schedulePush(
+      await schedulePushAsync(
         sub,
         nextNotifyAt,
         reminderText.title,
@@ -421,7 +424,7 @@ export function useLeaveReminder(route: PlannedRoute | null) {
 
     let cancelled = false;
 
-    const run = async () => {
+    const runAsync = async () => {
       try {
         const reg = await navigator.serviceWorker.ready;
         const sub = await reg.pushManager.getSubscription();
@@ -430,11 +433,11 @@ export function useLeaveReminder(route: PlannedRoute | null) {
         const stored = loadStoredReminder();
         if (!hasMatchingRoute(stored, routeKey)) return;
 
-        const liveDelay = await fetchLegDelay(baseInfo.firstTransitLeg!);
+        const liveDelay = await fetchLegDelayAsync(baseInfo.firstTransitLeg!);
         if (cancelled) return;
 
-        const delaySeconds = liveDelay?.estimatedDelaySeconds ?? 0;
-        let nextNotifyAt = computeNotifyAtMs(baseInfo, delaySeconds);
+        const delaySeconds = getKnownDelaySeconds(liveDelay);
+        let nextNotifyAt = computeNotifyAtMs(baseInfo, delaySeconds ?? 0);
         if (nextNotifyAt < Date.now() + 5_000) nextNotifyAt = Date.now() + 5_000;
 
         const prevNotifyAt = stored.notifyAt;
@@ -442,13 +445,16 @@ export function useLeaveReminder(route: PlannedRoute | null) {
 
         if (needsReschedule) {
           const text = buildLeaveReminderText(baseInfo, nextNotifyAt, delaySeconds);
-          await schedulePush(sub, nextNotifyAt, text.title, text.body, "leave-main", sub.endpoint);
+          await schedulePushAsync(sub, nextNotifyAt, text.title, text.body, "leave-main", sub.endpoint);
           if (cancelled) return;
           setNotifyAtMs(nextNotifyAt);
         }
 
-        const prevDelaySeconds = stored.lastDelaySeconds ?? 0;
-        const delayChangedBy = Math.abs(delaySeconds - prevDelaySeconds);
+        const prevDelaySeconds = stored.lastDelaySeconds ?? null;
+        const delayChangedBy =
+          delaySeconds == null || prevDelaySeconds == null
+            ? 0
+            : Math.abs(delaySeconds - prevDelaySeconds);
         const cooldownPassed =
           Date.now() - (stored.lastDelayPushAt ?? 0) >= DELAY_NOTIFY_COOLDOWN_MS;
         const isBeforeReminder = nextNotifyAt > Date.now() + 60_000;
@@ -456,7 +462,7 @@ export function useLeaveReminder(route: PlannedRoute | null) {
         let lastDelayPushAt = stored.lastDelayPushAt ?? 0;
         if (delayChangedBy >= DELAY_NOTIFY_THRESHOLD_S && cooldownPassed && isBeforeReminder) {
           const delayText = buildDelayUpdateText(baseInfo, nextNotifyAt, delaySeconds);
-          await schedulePush(
+          await schedulePushAsync(
             sub,
             Date.now() + 1_000,
             delayText.title,
@@ -485,10 +491,10 @@ export function useLeaveReminder(route: PlannedRoute | null) {
       }
     };
 
-    run();
-    const timer = setInterval(run, ADAPTIVE_POLL_MS);
+    runAsync();
+    const timer = setInterval(runAsync, ADAPTIVE_POLL_MS);
     const onVisible = () => {
-      if (!document.hidden) run();
+      if (!document.hidden) runAsync();
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => {

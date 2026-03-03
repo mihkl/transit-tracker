@@ -118,7 +118,7 @@ export function SavedPlannerPanel({
     return () => clearTimeout(t);
   }, [justSaved]);
 
-  const handleClick = async () => {
+  const handleClickAsync = async () => {
     // If route can be saved and isn't saved yet → save immediately
     if (canSave && !isCurrentRouteSaved) {
       const ok = await saveRoute(origin!, destination!);
@@ -140,7 +140,7 @@ export function SavedPlannerPanel({
     setEditNickname(loc.nickname ?? "");
   };
 
-  const commitNickname = async () => {
+  const commitNicknameAsync = async () => {
     if (!editingLocId) return;
     await updateNickname(editingLocId, editNickname);
     setEditingLocId(null);
@@ -219,10 +219,10 @@ export function SavedPlannerPanel({
                                 value={editNickname}
                                 onChange={(e) => setEditNickname(e.target.value)}
                                 onKeyDown={(e) => {
-                                  if (e.key === "Enter") void commitNickname();
+                                  if (e.key === "Enter") void commitNicknameAsync();
                                   if (e.key === "Escape") setEditingLocId(null);
                                 }}
-                                onBlur={() => void commitNickname()}
+                                onBlur={() => void commitNicknameAsync()}
                               />
                             ) : (
                               <>
@@ -297,7 +297,7 @@ export function SavedPlannerPanel({
       <button
         ref={triggerRef}
         type="button"
-        onClick={handleClick}
+        onClick={handleClickAsync}
         disabled={mutating}
         className={`h-10 w-10 rounded-xl border bg-white flex items-center justify-center relative transition-all duration-200 active:scale-[0.97] shrink-0 disabled:opacity-60 ${buttonClass}`}
         title={

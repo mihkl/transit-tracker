@@ -2,14 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  deleteSavedLocation,
-  deleteSavedRoute,
-  listSavedLocations,
-  listSavedRoutes,
+  deleteSavedLocationAsync,
+  deleteSavedRouteAsync,
+  listSavedLocationsAsync,
+  listSavedRoutesAsync,
   supportsPlannerPersistence,
-  updateLocationNickname,
-  upsertSavedLocation,
-  upsertSavedRoute,
+  updateLocationNicknameAsync,
+  upsertSavedLocationAsync,
+  upsertSavedRouteAsync,
   type PlannerPointValue,
   type SavedLocationRecord,
   type SavedRouteRecord,
@@ -55,7 +55,7 @@ export function useSavedPlannerItems() {
     }));
 
     try {
-      const [routes, locations] = await Promise.all([listSavedRoutes(), listSavedLocations()]);
+      const [routes, locations] = await Promise.all([listSavedRoutesAsync(), listSavedLocationsAsync()]);
       setState((prev) => ({
         ...prev,
         routes,
@@ -78,7 +78,7 @@ export function useSavedPlannerItems() {
     void refresh();
   }, [refresh]);
 
-  const runMutation = useCallback(async (action: () => Promise<void>): Promise<boolean> => {
+  const runMutation = useCallback(async (action: () => Promise<void>) => {
     setState((prev) => ({ ...prev, mutating: true, error: null }));
     try {
       await action();
@@ -95,7 +95,7 @@ export function useSavedPlannerItems() {
   const saveRoute = useCallback(
     async (origin: PlannerPointValue, destination: PlannerPointValue) =>
       runMutation(async () => {
-        await upsertSavedRoute(origin, destination);
+        await upsertSavedRouteAsync(origin, destination);
       }),
     [runMutation],
   );
@@ -103,7 +103,7 @@ export function useSavedPlannerItems() {
   const saveLocation = useCallback(
     async (point: PlannerPointValue, nickname?: string) =>
       runMutation(async () => {
-        await upsertSavedLocation(point, nickname);
+        await upsertSavedLocationAsync(point, nickname);
       }),
     [runMutation],
   );
@@ -111,7 +111,7 @@ export function useSavedPlannerItems() {
   const updateNickname = useCallback(
     async (id: string, nickname: string) =>
       runMutation(async () => {
-        await updateLocationNickname(id, nickname);
+        await updateLocationNicknameAsync(id, nickname);
       }),
     [runMutation],
   );
@@ -119,7 +119,7 @@ export function useSavedPlannerItems() {
   const removeRoute = useCallback(
     async (id: string) =>
       runMutation(async () => {
-        await deleteSavedRoute(id);
+        await deleteSavedRouteAsync(id);
       }),
     [runMutation],
   );
@@ -127,7 +127,7 @@ export function useSavedPlannerItems() {
   const removeLocation = useCallback(
     async (id: string) =>
       runMutation(async () => {
-        await deleteSavedLocation(id);
+        await deleteSavedLocationAsync(id);
       }),
     [runMutation],
   );

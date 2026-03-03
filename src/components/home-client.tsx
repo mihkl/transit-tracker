@@ -15,7 +15,7 @@ import { useTransitStore } from "@/store/use-transit-store";
 import type { RoutePlanRequest, RouteLeg, LineDto } from "@/lib/types";
 import type { PickingPoint } from "@/store/use-transit-store";
 import { modeToTransportType, normalizeLineType } from "@/lib/domain";
-import { planRoute } from "@/actions";
+import { planRouteAsync } from "@/actions";
 
 type ShapesMap = Record<string, number[][]>;
 
@@ -111,7 +111,7 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
         req.arrivalTime = new Date(selectedDateTime).toISOString();
       }
 
-      const data = await planRoute(req);
+      const data = await planRouteAsync(req);
       setRoutePlan(data);
     } catch (err) {
       console.error("Failed to plan route:", err);

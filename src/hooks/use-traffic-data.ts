@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
-  getTrafficFlow,
-  getTrafficIncidents,
+  getTrafficFlowAsync,
+  getTrafficIncidentsAsync,
   type TrafficFlowTileInfo,
   type TrafficIncidentCollection as TrafficIncidentData,
 } from "@/actions";
@@ -37,7 +37,7 @@ export function useTrafficData(
   } | null,
   zoom: number,
   options: UseTrafficDataOptions = {},
-): TrafficDataState {
+) {
   const { enabled = true, minZoom = 11, debounceMs = 400 } = options;
 
   const [state, setState] = useState<TrafficDataState>(DEFAULT_STATE);
@@ -58,8 +58,8 @@ export function useTrafficData(
     try {
       const needsFlow = !flowTileInfoRef.current;
       const [flowResult, incidentsResult] = await Promise.all([
-        needsFlow ? getTrafficFlow() : Promise.resolve(null),
-        getTrafficIncidents(bounds),
+        needsFlow ? getTrafficFlowAsync() : Promise.resolve(null),
+        getTrafficIncidentsAsync(bounds),
       ]);
 
       if (fetchGenRef.current !== gen) return;

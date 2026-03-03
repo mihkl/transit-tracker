@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback } from "react";
 import { Map, Compass, Search, Route, Layers } from "lucide-react";
 import { useTransitStore, type MobileTab } from "@/store/use-transit-store";
 
@@ -14,7 +15,22 @@ const tabs: { id: MobileTab; label: string; icon: typeof Map }[] = [
 export function BottomNavigation() {
   const mobileTab = useTransitStore((s) => s.mobileTab);
   const showMobileLayers = useTransitStore((s) => s.showMobileLayers);
-  const handleMobileTabChange = useTransitStore((s) => s.handleMobileTabChange);
+  const setMobileTab = useTransitStore((s) => s.setMobileTab);
+  const setShowMobileLayers = useTransitStore((s) => s.setShowMobileLayers);
+  const setShowPlanner = useTransitStore((s) => s.setShowPlanner);
+
+  const handleTabChange = useCallback(
+    (tab: MobileTab) => {
+      if (tab === "layers") {
+        setShowMobileLayers(!showMobileLayers);
+        return;
+      }
+      setMobileTab(tab);
+      setShowMobileLayers(false);
+      if (tab === "directions") setShowPlanner(true);
+    },
+    [showMobileLayers, setMobileTab, setShowMobileLayers, setShowPlanner],
+  );
 
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-[1200] bg-white/95 backdrop-blur-lg border-t border-foreground/8 safe-bottom">
@@ -24,7 +40,7 @@ export function BottomNavigation() {
           return (
             <button
               key={id}
-              onClick={() => handleMobileTabChange(id)}
+              onClick={() => handleTabChange(id)}
               className={`flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors active:scale-[0.96] ${
                 active ? "text-primary" : "text-foreground/40"
               }`}

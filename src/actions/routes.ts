@@ -2,8 +2,8 @@
 
 import { headers } from "next/headers";
 import { transitState } from "@/server/transit-state";
-import { isConfigured, computeRoutes, decodePolyline } from "@/server/google-routes";
-import { matchTransitLeg } from "@/server/delay-matcher";
+import { isConfigured, computeRoutesAsync, decodePolyline } from "@/server/google-routes";
+import { matchTransitLegAsync } from "@/server/delay-matcher";
 import type { RoutePlanRequest, RoutePlanResponse, PlannedRoute, RouteLeg } from "@/lib/types";
 import { parseDurationSeconds } from "@/lib/route-time";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -14,7 +14,7 @@ function normalizeVehicleType(type: string) {
   return normalizeTransitMode(type);
 }
 
-export async function planRoute(req: RoutePlanRequest): Promise<RoutePlanResponse> {
+export async function planRouteAsync(req: RoutePlanRequest) {
   const parsedReq = routePlanRequestSchema.parse(req);
   const forwarded = (await headers()).get("x-forwarded-for") ?? "";
   const ip = forwarded.split(",").at(-1)?.trim() ?? "unknown";
@@ -22,13 +22,13 @@ export async function planRoute(req: RoutePlanRequest): Promise<RoutePlanRespons
     throw new Error("Too many requests. Please wait a moment.");
   }
 
-  await transitState.initialize();
+  await transitState.initializeAsync();
 
   if (!isConfigured()) {
     throw new Error("Google Routes API key is not configured.");
   }
 
-  const googleResponse = await computeRoutes(
+  const googleResponse = await computeRoutesAsync(
     parsedReq.originLat,
     parsedReq.originLng,
     parsedReq.destinationLat,
@@ -43,7 +43,7 @@ export async function planRoute(req: RoutePlanRequest): Promise<RoutePlanRespons
 
   const response: RoutePlanResponse = { routes: [] };
 
-  for (const gRoute of googleResponse.routes.slice(0, 3)) {
+  for (const gRoute of googleResponse.routes.slice(0, 5)) {
     const route: PlannedRoute = {
       duration: gRoute.duration,
       distanceMeters: String(gRoute.distanceMeters),
@@ -90,16 +90,11 @@ export async function planRoute(req: RoutePlanRequest): Promise<RoutePlanRespons
           leg.arrivalStopLng = arrLng;
 
           leg.delay =
-            (await matchTransitLeg(
+            (await matchTransitLegAsync(
               leg.lineNumber,
-              vehicleType,
-              leg.departureStop,
               depLat,
               depLng,
               leg.scheduledDeparture,
-              leg.arrivalStop,
-              arrLat,
-              arrLng,
             )) ?? undefined;
         } else {
           leg.mode = "WALK";

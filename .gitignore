@@ -48,3 +48,4 @@ next-env.d.ts
 .serena/project.yml
 .serena/.gitignore
 package-lock.json
+todo.md

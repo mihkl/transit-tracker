@@ -31,7 +31,7 @@ export function isLineType(value: string): value is LineType {
   return (LINE_TYPES as readonly string[]).includes(value);
 }
 
-export function normalizeTransportType(value: string | null | undefined): TransportType {
+export function normalizeTransportType(value: string | null | undefined) {
   const v = String(value ?? "").trim().toLowerCase();
   if (v === "tram") return "tram";
   if (v === "trolleybus") return "trolleybus";
@@ -40,12 +40,12 @@ export function normalizeTransportType(value: string | null | undefined): Transp
   return "unknown";
 }
 
-export function normalizeLineType(value: string | null | undefined): LineType {
+export function normalizeLineType(value: string | null | undefined) {
   const normalized = normalizeTransportType(value);
   return normalized === "unknown" ? "bus" : normalized;
 }
 
-export function normalizeTransitMode(value: string | null | undefined): TransitMode {
+export function normalizeTransitMode(value: string | null | undefined) {
   switch (String(value ?? "").trim().toUpperCase()) {
     case "WALK":
       return "WALK";
@@ -72,7 +72,7 @@ export function normalizeTransitMode(value: string | null | undefined): TransitM
   }
 }
 
-export function modeToTransportType(mode: TransitMode): LineType {
+export function modeToTransportType(mode: TransitMode) {
   switch (mode) {
     case "TRAM":
       return "tram";
@@ -87,7 +87,32 @@ export function modeToTransportType(mode: TransitMode): LineType {
   }
 }
 
-export function toModeLabel(mode: TransitMode): string {
+/** Numeric transport type codes from the Tallinn GPS feed (gis.ee). */
+export const GPS_TYPE = {
+  TROLLEYBUS: 1,
+  BUS: 2,
+  TRAM: 3,
+  BUS_REGIONAL: 7,
+  TRAIN: 10,
+} as const;
+
+export const GPS_TYPE_TO_TRANSPORT: Record<number, TransportType> = {
+  [GPS_TYPE.TROLLEYBUS]: "trolleybus",
+  [GPS_TYPE.BUS]: "bus",
+  [GPS_TYPE.TRAM]: "tram",
+  [GPS_TYPE.BUS_REGIONAL]: "bus",
+  [GPS_TYPE.TRAIN]: "train",
+};
+
+export const LINE_TYPE_TO_GPS_TYPES: Record<LineType | "all", readonly number[]> = {
+  trolleybus: [GPS_TYPE.TROLLEYBUS],
+  bus: [GPS_TYPE.BUS, GPS_TYPE.BUS_REGIONAL],
+  tram: [GPS_TYPE.TRAM],
+  train: [GPS_TYPE.TRAIN],
+  all: [GPS_TYPE.TROLLEYBUS, GPS_TYPE.BUS, GPS_TYPE.TRAM, GPS_TYPE.BUS_REGIONAL, GPS_TYPE.TRAIN],
+};
+
+export function toModeLabel(mode: TransitMode) {
   switch (mode) {
     case "WALK":
       return "Walk";

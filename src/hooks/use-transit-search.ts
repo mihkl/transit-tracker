@@ -66,7 +66,7 @@ export function useTransitSearch({
 export function getFilterLabel(
   selectedLine: { lineNumber: string; type: LineType } | null,
   selectedStop: StopDto | null,
-): string {
+) {
   if (!selectedLine) return selectedStop?.stopName ?? "";
   if (!selectedLine.lineNumber) return "All Trains";
   return `${TYPE_LABELS[selectedLine.type] ?? selectedLine.type} ${selectedLine.lineNumber}`;

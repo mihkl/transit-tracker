@@ -10,7 +10,7 @@ export const STOP_TYPE_COLORS: Record<string, string> = {
   K: "#E65100",
 };
 
-export function uniqueLines(lines: LineDto[]): LineDto[] {
+export function uniqueLines(lines: LineDto[]) {
   const seen = new Set<string>();
   return lines.filter((l) => {
     const key = `${l.type}_${l.lineNumber}`;
@@ -20,7 +20,7 @@ export function uniqueLines(lines: LineDto[]): LineDto[] {
   });
 }
 
-export function groupAndSortLines(lines: LineDto[]): Record<string, LineDto[]> {
+export function groupAndSortLines(lines: LineDto[]) {
   const groups: Record<string, LineDto[]> = {};
   for (const line of lines) {
     if (!groups[line.type]) groups[line.type] = [];

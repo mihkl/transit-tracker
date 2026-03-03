@@ -3,10 +3,12 @@
     "target": "ES2017",
     "lib": ["webworker", "esnext"],
     "strict": true,
-    "noEmit": true,
+    "emitDeclarationOnly": true,
+    "declaration": true,
     "module": "esnext",
     "moduleResolution": "bundler",
-    "isolatedModules": true
+    "isolatedModules": true,
+    "composite": true
   },
   "include": ["src/sw.ts"]
 }

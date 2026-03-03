@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useStops } from "@/hooks/use-stops";
-import { getStopArrivals } from "@/actions";
+import { getStopArrivalsAsync } from "@/actions";
 import type { StopDto, StopArrival } from "@/lib/types";
 
 function haversineMeters(
@@ -10,7 +10,7 @@ function haversineMeters(
   lng1: number,
   lat2: number,
   lng2: number,
-): number {
+) {
   const R = 6_371_000;
   const toRad = (d: number) => (d * Math.PI) / 180;
   const dLat = toRad(lat2 - lat1);
@@ -65,7 +65,7 @@ export function useNearbyStops(
       const fetched = await Promise.all(
         nearest.map(async ({ stop, distanceMeters }) => {
           try {
-            const arrivals = await getStopArrivals(stop.stopId);
+            const arrivals = await getStopArrivalsAsync(stop.stopId);
             return { stop, distanceMeters, arrivals, loading: false };
           } catch {
             return { stop, distanceMeters, arrivals: [] as StopArrival[], loading: false };

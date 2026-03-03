@@ -33,10 +33,10 @@ import {
   ROUTE_LEG_COLOR_EXPRESSION,
 } from "@/components/map/map-view-helpers";
 
-import { getStopArrivals } from "@/actions";
+import { getStopArrivalsAsync } from "@/actions";
 
-async function fetchArrivals(stopId: string): Promise<StopArrival[]> {
-  return getStopArrivals(stopId);
+async function fetchArrivalsAsync(stopId: string) {
+  return getStopArrivalsAsync(stopId);
 }
 
 const INITIAL_VIEW_STATE = {
@@ -86,7 +86,7 @@ export function MapViewInner({
   const [popupStop, setPopupStop] = useState<StopDto | null>(null);
   const [stopArrivals, setStopArrivals] = useState<StopArrival[]>([]);
   const [arrivalsLoading, setArrivalsLoading] = useState(false);
-  const followingRef = useRef(false);
+  const [vehicleEta, setVehicleEta] = useState<number | null>(null);
   const [hoveringInteractive, setHoveringInteractive] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const isDesktop = useIsDesktop();
@@ -152,29 +152,47 @@ export function MapViewInner({
     if (focusedVehicleId == null) return null;
     return vehicles.find((v) => v.id === focusedVehicleId) ?? null;
   }, [vehicles, focusedVehicleId]);
-  const focusedVehicleRef = useRef(focusedVehicle);
-  focusedVehicleRef.current = focusedVehicle;
 
   useEffect(() => {
-    if (focusedVehicle) {
-      // Only center on vehicle if it has no route shape (fitBounds handles that case)
-      const hasRouteShape = shapes && focusedVehicle.routeKey && shapes[focusedVehicle.routeKey];
-      if (!hasRouteShape) {
-        setViewState((prev) => ({
-          ...prev,
-          longitude: focusedVehicle.longitude,
-          latitude: focusedVehicle.latitude,
-          zoom: Math.max(prev.zoom, 14),
-        }));
-      }
-      followingRef.current = !hasRouteShape;
-      setPopupVehicle(focusedVehicle);
-    } else {
+    if (!focusedVehicleId) {
       setPopupVehicle(null);
+      return;
     }
-    // Only trigger when the focused vehicle *identity* changes, not on every position update
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focusedVehicleId]);
+
+    const selected = vehiclesRef.current.find((v) => v.id === focusedVehicleId);
+    if (!selected) {
+      setPopupVehicle(null);
+      return;
+    }
+
+    setPopupVehicle(selected);
+
+    const map = mapRef.current?.getMap();
+    const shape = selected.routeKey && shapes ? shapes[selected.routeKey] : null;
+
+    if (map) {
+      if (shape && shape.length > 0) {
+        fitMapToPoints(map, shape, { isDesktop, reserveBottomSpace: !isDesktop });
+      } else {
+        const currentZoom = map.getZoom();
+        map.flyTo({
+          center: [selected.longitude, selected.latitude],
+          zoom: Math.max(currentZoom, 14),
+          duration: 600,
+        });
+      }
+      return;
+    }
+
+    if (!shape || shape.length === 0) {
+      setViewState((prev) => ({
+        ...prev,
+        longitude: selected.longitude,
+        latitude: selected.latitude,
+        zoom: Math.max(prev.zoom, 14),
+      }));
+    }
+  }, [focusedVehicleId, shapes, isDesktop]);
 
   const handleStopClick = useCallback(async (stop: StopDto) => {
     setPopupStop(stop);
@@ -183,7 +201,7 @@ export function MapViewInner({
     setStopArrivals([]);
 
     try {
-      setStopArrivals(await fetchArrivals(stop.stopId));
+      setStopArrivals(await fetchArrivalsAsync(stop.stopId));
     } catch (err) {
       console.error("Failed to fetch departures:", err);
     } finally {
@@ -255,7 +273,7 @@ export function MapViewInner({
     if (!updated) return;
     // Only update popup when API data changes, not on every animation frame.
     // Exclude lat/lng/bearing because those are animated and change at 60fps.
-    const key = `${popupVehicle.id}:${updated.stopIndex}:${updated.distanceAlongRoute}:${updated.speedMs}:${updated.nextStop?.name ?? ""}:${updated.nextStop?.etaSeconds ?? ""}`;
+    const key = `${popupVehicle.id}:${updated.stopIndex}:${updated.distanceAlongRoute}:${updated.nextStop?.name ?? ""}`;
     if (key === popupVehicleKeyRef.current) return;
     popupVehicleKeyRef.current = key;
     setPopupVehicle(updated);
@@ -263,20 +281,56 @@ export function MapViewInner({
   }, [vehicles, popupVehicle?.id]);
 
   useEffect(() => {
+    if (popupVehicle && !popupVehicle.isOnRoute) {
+      setVehicleEta(null);
+      return;
+    }
+
+    const stopId = popupVehicle?.nextStop?.stopId;
+    if (!popupVehicle || !stopId) {
+      setVehicleEta(null);
+      return;
+    }
+
+    const lineNumber = popupVehicle.lineNumber;
+    let cancelled = false;
+
+    const fetchEtaAsync = async () => {
+      try {
+        const arrivals = await fetchArrivalsAsync(stopId);
+        if (cancelled) return;
+        const match = arrivals.find((a) => a.route === lineNumber);
+        setVehicleEta(match?.secondsUntilArrival ?? null);
+      } catch {
+        if (!cancelled) setVehicleEta(null);
+      }
+    };
+
+    setVehicleEta(null);
+    fetchEtaAsync();
+    const intervalId = setInterval(fetchEtaAsync, 5_000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(intervalId);
+    };
+  }, [popupVehicle?.isOnRoute, popupVehicle?.nextStop?.stopId, popupVehicle?.lineNumber]);
+
+  useEffect(() => {
     if (!popupStop) return;
 
-    const refresh = async () => {
+    const refreshAsync = async () => {
       try {
-        setStopArrivals(await fetchArrivals(popupStop.stopId));
+        setStopArrivals(await fetchArrivalsAsync(popupStop.stopId));
       } catch (err) {
         console.error("Failed to refresh departures:", err);
       }
     };
 
-    const intervalId = setInterval(refresh, 5_000);
+    const intervalId = setInterval(refreshAsync, 5_000);
 
     const handleVisibility = () => {
-      if (!document.hidden) refresh();
+      if (!document.hidden) refreshAsync();
     };
     document.addEventListener("visibilitychange", handleVisibility);
 
@@ -295,18 +349,7 @@ export function MapViewInner({
     fitMapToPoints(map, points, { isDesktop, reserveBottomSpace: !isDesktop });
   }, [routePlan, selectedRouteIndex, routeFitRequest, isDesktop]);
 
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !focusedVehicle || !shapes || !focusedVehicle.routeKey) return;
-    const shape = shapes[focusedVehicle.routeKey];
-    if (!shape || shape.length === 0) return;
-
-    fitMapToPoints(map, shape, { isDesktop, reserveBottomSpace: !isDesktop });
-  }, [focusedVehicle, shapes, isDesktop]);
-
   const handleMoveEnd = useCallback(() => {
-    followingRef.current = false;
-
     const map = mapRef.current?.getMap();
     if (map) {
       const bounds = map.getBounds();
@@ -320,12 +363,7 @@ export function MapViewInner({
   }, []);
 
   const handleMove = useCallback((evt: { viewState: typeof INITIAL_VIEW_STATE }) => {
-    const next = { ...evt.viewState };
-    if (followingRef.current && focusedVehicleRef.current) {
-      next.longitude = focusedVehicleRef.current.longitude;
-      next.latitude = focusedVehicleRef.current.latitude;
-    }
-    setViewState(next);
+    setViewState({ ...evt.viewState });
   }, []);
 
   const handleMouseMove = useCallback((e: MapLayerMouseEvent) => {
@@ -573,7 +611,7 @@ export function MapViewInner({
             onClose={() => setPopupVehicle(null)}
             maxWidth="280px"
           >
-            <VehiclePopup vehicle={popupVehicle} />
+            <VehiclePopup vehicle={popupVehicle} etaSeconds={vehicleEta} />
           </Popup>
         )}
 
@@ -604,7 +642,7 @@ export function MapViewInner({
 
       {/* Mobile bottom sheet */}
       <BottomSheet open={!!(popupVehicle || popupStop)} onClose={handleBottomSheetClose}>
-        {popupVehicle && <VehiclePopup vehicle={popupVehicle} />}
+        {popupVehicle && <VehiclePopup vehicle={popupVehicle} etaSeconds={vehicleEta} />}
         {popupStop && (
           <StopPopup stop={popupStop} arrivals={stopArrivals} loading={arrivalsLoading} />
         )}

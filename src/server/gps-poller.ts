@@ -1,6 +1,6 @@
 import type { GpsReading } from "@/lib/types";
 import { z } from "zod";
-import { fetchWithTimeout } from "./fetch-with-timeout";
+import { fetchWithTimeoutAsync } from "./fetch-with-timeout";
 
 const GPS_URL = "https://gis.ee/tallinn/gps.php";
 
@@ -29,12 +29,11 @@ const geoJsonFeatureSchema = z.object({
   }),
 });
 
-export async function pollGps(): Promise<GpsReading[]> {
-  const readings: GpsReading[] = [];
+export async function pollGpsAsync() {
   const now = new Date();
 
   const url = `${GPS_URL}?ver=${Date.now()}`;
-  const res = await fetchWithTimeout(url);
+  const res = await fetchWithTimeoutAsync(url);
   const raw = await res.json();
   const parsed = geoJsonEnvelopeSchema.safeParse(raw);
   if (!parsed.success) {
@@ -77,30 +76,20 @@ export async function pollGps(): Promise<GpsReading[]> {
     }
   }
 
-  for (const feature of validFeatures) {
-    try {
-      const { properties, geometry } = feature;
-      const [lng, lat] = geometry.coordinates;
-
-      const reading: GpsReading = {
-        transportType: properties.type,
-        lineNumber: String(properties.line),
-        longitude: lng,
-        latitude: lat,
-        speed: null,
-        heading: properties.direction,
-        id: properties.id,
-        destination: properties.destination || "",
-        timestamp: now,
-      };
-
-      readings.push(reading);
-    } catch {
-      continue;
-    }
-  }
-
-  return readings;
+  return validFeatures.map((feature) => {
+    const { properties, geometry } = feature;
+    const [lng, lat] = geometry.coordinates;
+    return {
+      transportType: properties.type,
+      lineNumber: String(properties.line),
+      longitude: lng,
+      latitude: lat,
+      heading: properties.direction,
+      id: properties.id,
+      destination: properties.destination || "",
+      timestamp: now,
+    } satisfies GpsReading;
+  });
 }
 
 export class GpsPollerService {
@@ -114,16 +103,16 @@ export class GpsPollerService {
     this.intervalMs = intervalMs;
   }
 
-  start(): void {
+  start() {
     if (this.intervalId) return;
 
-    this.poll();
+    this.pollAsync();
 
-    this.intervalId = setInterval(() => this.poll(), this.intervalMs);
+    this.intervalId = setInterval(() => this.pollAsync(), this.intervalMs);
     console.log(`GPS poller started (every ${this.intervalMs / 1000}s)`);
   }
 
-  stop(): void {
+  stop() {
     if (this.intervalId) {
       clearInterval(this.intervalId);
       this.intervalId = null;
@@ -131,11 +120,11 @@ export class GpsPollerService {
     }
   }
 
-  private async poll(): Promise<void> {
+  private async pollAsync() {
     if (this.isPolling) return;
     this.isPolling = true;
     try {
-      const readings = await pollGps();
+      const readings = await pollGpsAsync();
       this.onData(readings);
     } catch (err) {
       console.error("GPS poll error:", err instanceof Error ? err.message : err);

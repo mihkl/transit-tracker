@@ -21,18 +21,6 @@ interface PushSubscriptionJson {
   };
 }
 
-interface PushScheduleBody {
-  subscription: PushSubscriptionJson;
-  notifyAt: number;
-  title: string;
-  body: string;
-  tag?: string;
-  url?: string;
-  timestamp?: number;
-  category?: string;
-  jobKey?: string;
-}
-
 function isObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object";
 }
@@ -53,14 +41,14 @@ function isPushSubscriptionJson(value: unknown): value is PushSubscriptionJson {
   );
 }
 
-function toSafeString(value: unknown, maxLen: number): string | undefined {
+function toSafeString(value: unknown, maxLen: number) {
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
   if (!trimmed) return undefined;
   return trimmed.slice(0, maxLen);
 }
 
-function parseScheduleBody(value: unknown): PushScheduleBody | null {
+function parseScheduleBody(value: unknown) {
   if (!isObject(value)) return null;
   if (!isPushSubscriptionJson(value.subscription)) return null;
 
@@ -94,7 +82,7 @@ function parseScheduleBody(value: unknown): PushScheduleBody | null {
   };
 }
 
-function isSameOrigin(req: NextRequest): boolean {
+function isSameOrigin(req: NextRequest) {
   const origin = req.headers.get("origin");
   if (!origin) return false;
   const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? "";

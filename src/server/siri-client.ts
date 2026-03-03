@@ -1,7 +1,7 @@
 import type { StopArrival } from "@/lib/types";
 import { normalizeTransportType } from "@/lib/domain";
 import { stopArrivalSchema } from "@/lib/schemas";
-import { fetchWithTimeout } from "./fetch-with-timeout";
+import { fetchWithTimeoutAsync } from "./fetch-with-timeout";
 import { getSecondsOfDayInTallinn } from "./time-utils";
 
 const SIRI_URL = "https://transport.tallinn.ee/siri-stop-departures.php";
@@ -14,18 +14,36 @@ interface CacheEntry {
 
 const cache = new Map<string, CacheEntry>();
 
-function toRawStopId(stopId: string): string {
+function toRawStopId(stopId: string) {
   return stopId.includes(":") ? (stopId.split(":").pop() ?? stopId) : stopId;
 }
 
-function toSecondsSinceMidnight(now: Date): number {
+function toSecondsSinceMidnight(now: Date) {
   return getSecondsOfDayInTallinn(now);
 }
 
-function computeSecondsUntilFromClock(nowSeconds: number, targetSeconds: number): number {
+function computeSecondsUntilFromClock(nowSeconds: number, targetSeconds: number) {
   let delta = targetSeconds - nowSeconds;
   if (delta < 0) delta += 24 * 60 * 60;
   return delta;
+}
+
+function hasRealtimeData(expectedTime: number, scheduleTime: number, realtimeMarker: string) {
+  if (expectedTime !== scheduleTime) return true;
+
+  const marker = realtimeMarker.trim().toLowerCase();
+  if (!marker) return false;
+
+  return (
+    marker === "1" ||
+    marker === "r" ||
+    marker === "rt" ||
+    marker === "realtime" ||
+    marker === "real-time" ||
+    marker === "real_time" ||
+    marker === "true" ||
+    marker === "yes"
+  );
 }
 
 /**
@@ -36,14 +54,7 @@ function computeSecondsUntilFromClock(nowSeconds: number, targetSeconds: number)
  * scheduleTime) and the last field from the right (realtimeMarker). Everything
  * in between is treated as the destination, preserving embedded commas.
  */
-function parseSiriLine(line: string): {
-  transportType: StopArrival["transportType"];
-  route: string;
-  expectedTime: number;
-  scheduleTime: number;
-  destination: string;
-  realtimeMarker: string;
-} | null {
+function parseSiriLine(line: string) {
   // Extract first 4 fixed fields by walking from the left.
   let pos = 0;
   const ends: number[] = [];
@@ -99,10 +110,10 @@ function parseSiriLine(line: string): {
   };
 }
 
-async function fetchFromSiri(stopId: string): Promise<StopArrival[]> {
+async function fetchFromSiriAsync(stopId: string) {
   const rawStopId = toRawStopId(stopId);
   const url = `${SIRI_URL}?stopid=${encodeURIComponent(rawStopId)}`;
-  const res = await fetchWithTimeout(url, 10_000);
+  const res = await fetchWithTimeoutAsync(url, 10_000);
   if (!res.ok) {
     throw new Error(`SIRI API error: ${res.status}`);
   }
@@ -123,15 +134,17 @@ async function fetchFromSiri(stopId: string): Promise<StopArrival[]> {
     const parsed = parseSiriLine(lines[i]);
     if (!parsed) continue;
 
-    const { transportType, route, expectedTime, scheduleTime, destination } =
+    const { transportType, route, expectedTime, scheduleTime, destination, realtimeMarker } =
       parsed;
     const delaySeconds = expectedTime - scheduleTime;
+    const hasRealtime = hasRealtimeData(expectedTime, scheduleTime, realtimeMarker);
 
     const parsedDeparture = stopArrivalSchema.safeParse({
       transportType,
       route,
       expectedTime,
       scheduleTime,
+      hasRealtime,
       destination,
       secondsUntilArrival: computeSecondsUntilFromClock(nowSeconds, expectedTime),
       delaySeconds,
@@ -144,14 +157,14 @@ async function fetchFromSiri(stopId: string): Promise<StopArrival[]> {
   return departures;
 }
 
-export async function fetchStopArrivals(stopId: string): Promise<StopArrival[]> {
+export async function fetchStopArrivalsAsync(stopId: string) {
   const cached = cache.get(stopId);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
     return cached.data;
   }
 
   try {
-    const departures = await fetchFromSiri(stopId);
+    const departures = await fetchFromSiriAsync(stopId);
     cache.set(stopId, { data: departures, timestamp: Date.now() });
     return departures;
   } catch (err) {

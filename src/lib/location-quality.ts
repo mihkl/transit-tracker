@@ -5,7 +5,7 @@ const TALLINN_BOUNDS = {
   maxLng: 25.05,
 };
 
-function isWithinTallinn(lat: number, lng: number): boolean {
+function isWithinTallinn(lat: number, lng: number) {
   return (
     lat >= TALLINN_BOUNDS.minLat &&
     lat <= TALLINN_BOUNDS.maxLat &&
@@ -16,7 +16,7 @@ function isWithinTallinn(lat: number, lng: number): boolean {
 
 // Desktop browsers can return coarse IP-based geolocation (often wrong city).
 // Accept either Tallinn-area fixes or globally precise fixes.
-export function isReliableUserLocation(coords: GeolocationCoordinates): boolean {
+export function isReliableUserLocation(coords: GeolocationCoordinates) {
   const { latitude, longitude, accuracy } = coords;
   const inTallinnWithReasonableAccuracy = isWithinTallinn(latitude, longitude) && accuracy <= 1000;
   const globallyPrecise = accuracy <= 100;

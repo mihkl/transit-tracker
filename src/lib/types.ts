@@ -69,7 +69,6 @@ export interface GpsReading {
   lineNumber: string;
   longitude: number;
   latitude: number;
-  speed: number | null;
   heading: number;
   id: string;
   destination: string;
@@ -79,7 +78,6 @@ export interface GpsReading {
 export interface PositionSnapshot {
   latitude: number;
   longitude: number;
-  speed: number | null;
   distanceAlongRoute: number;
   stopIndex: number;
   timestamp: Date;
@@ -91,13 +89,13 @@ export interface VehicleState {
   lineNumber: string;
   latitude: number;
   longitude: number;
-  speed: number | null;
   heading: number;
   destination: string;
   matchedRouteId: string | null;
   matchedDirectionId: number | null;
   lastStopIndex: number;
   distanceAlongRoute: number;
+  routeOffsetMeters: number | null;
   lastUpdateTime: Date;
   positionHistory: PositionSnapshot[];
 }
@@ -110,7 +108,6 @@ export interface VehicleDto {
   transportType: TransportType;
   latitude: number;
   longitude: number;
-  speed: number | null;
   heading: number;
   bearing: number;
   destination: string;
@@ -119,16 +116,17 @@ export interface VehicleDto {
   totalStops: number;
   nextStop: NextStopDto | null;
   distanceAlongRoute: number;
-  speedMs: number;
   routeKey: string | null;
+  routeOffsetMeters: number | null;
+  isOnRoute: boolean;
 }
 
 export interface NextStopDto {
+  stopId: string;
   name: string;
   latitude: number;
   longitude: number;
   distanceMeters: number;
-  etaSeconds: number;
 }
 
 export interface LineDto {
@@ -253,8 +251,6 @@ export interface GoogleLocalizedValues {
 export interface GtfsData {
   routes: Map<string, GtfsRoute>;
   stops: Map<string, GtfsStop>;
-  trips: Map<string, GtfsTrip>;
-  stopTimesByTrip: Map<string, GtfsStopTime[]>;
   shapesByShapeId: Map<string, GtfsShapePoint[]>;
   patterns: Map<string, RoutePattern>;
   gpsToRouteMap: Map<string, string>;
@@ -265,6 +261,7 @@ export interface StopArrival {
   route: string;
   expectedTime: number;
   scheduleTime: number;
+  hasRealtime: boolean;
   destination: string;
   secondsUntilArrival: number;
   delaySeconds: number;

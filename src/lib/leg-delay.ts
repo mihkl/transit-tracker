@@ -1,17 +1,12 @@
-import { getLegDelay } from "@/actions";
-import type { DelayInfo, RouteLeg } from "@/lib/types";
+import { getLegDelayAsync } from "@/actions";
+import type { RouteLeg } from "@/lib/types";
 
-export async function fetchLegDelay(leg: RouteLeg): Promise<DelayInfo | null> {
+export async function fetchLegDelayAsync(leg: RouteLeg) {
   try {
-    return await getLegDelay({
+    return await getLegDelayAsync({
       line: leg.lineNumber,
-      type: leg.mode,
-      depStop: leg.departureStop,
       depLat: leg.departureStopLat,
       depLng: leg.departureStopLng,
-      arrStop: leg.arrivalStop,
-      arrLat: leg.arrivalStopLat,
-      arrLng: leg.arrivalStopLng,
       scheduledDep: leg.scheduledDeparture,
     });
   } catch {

@@ -76,6 +76,7 @@ export const stopArrivalSchema = z.object({
   route: z.string(),
   expectedTime: z.number(),
   scheduleTime: z.number(),
+  hasRealtime: z.boolean(),
   destination: z.string(),
   secondsUntilArrival: z.number(),
   delaySeconds: z.number(),
@@ -85,11 +86,11 @@ export const stopArrivalSchema = z.object({
 });
 
 export const nextStopSchema = z.object({
+  stopId: z.string(),
   name: z.string(),
   latitude: z.number(),
   longitude: z.number(),
   distanceMeters: z.number(),
-  etaSeconds: z.number(),
 });
 
 export const vehicleDtoSchema = z.object({
@@ -98,7 +99,6 @@ export const vehicleDtoSchema = z.object({
   transportType: transportTypeSchema,
   latitude: z.number(),
   longitude: z.number(),
-  speed: z.number().nullable(),
   heading: z.number(),
   bearing: z.number(),
   destination: z.string(),
@@ -107,8 +107,9 @@ export const vehicleDtoSchema = z.object({
   totalStops: z.number(),
   nextStop: nextStopSchema.nullable(),
   distanceAlongRoute: z.number(),
-  speedMs: z.number(),
   routeKey: z.string().nullable(),
+  routeOffsetMeters: z.number().nullable(),
+  isOnRoute: z.boolean(),
 });
 
 export const vehicleStreamEventSchema = z.object({

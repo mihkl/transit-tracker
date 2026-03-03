@@ -53,7 +53,7 @@ function getServerSnapshot() {
   return null;
 }
 
-function mapGeolocationError(err: GeolocationPositionError): string {
+function mapGeolocationError(err: GeolocationPositionError) {
   switch (err.code) {
     case err.PERMISSION_DENIED:
       return "Location permission was denied.";
@@ -66,10 +66,10 @@ function mapGeolocationError(err: GeolocationPositionError): string {
   }
 }
 
-export function requestUserLocation(options?: { acceptCoarse?: boolean }): Promise<void> {
+export function requestUserLocation(options?: { acceptCoarse?: boolean }) {
   const acceptCoarse = options?.acceptCoarse ?? false;
 
-  return new Promise((resolve, reject) => {
+  return new Promise<void>((resolve, reject) => {
     if (typeof navigator === "undefined" || !navigator.geolocation) {
       reject(new Error("Geolocation is not supported in this browser."));
       return;
@@ -93,6 +93,6 @@ export function requestUserLocation(options?: { acceptCoarse?: boolean }): Promi
   });
 }
 
-export function useUserLocation(): UserLocation {
+export function useUserLocation() {
   return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }

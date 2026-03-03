@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import type { PlannedRoute, RouteLeg, DelayInfo } from "@/lib/types";
 import { parseDurationSeconds } from "@/lib/route-time";
-import { fetchLegDelay } from "@/lib/leg-delay";
+import { fetchLegDelayAsync } from "@/lib/leg-delay";
 
 export type TransferStatus = "safe" | "tight" | "missed" | "unknown";
 
@@ -21,7 +21,7 @@ const TIGHT_THRESHOLD_S = 180;
 function computeTransfers(
   route: PlannedRoute,
   liveDelays: Map<RouteLeg, DelayInfo | null>,
-): TransferInfo[] {
+) {
   const result: TransferInfo[] = [];
 
   for (let i = 0; i < route.legs.length - 1; i++) {
@@ -47,7 +47,10 @@ function computeTransfers(
       ? liveDelays.get(nextTransitLeg)
       : nextTransitLeg.delay;
 
-    if (!leg.scheduledArrival || !nextTransitLeg.scheduledDeparture) {
+    const hasLiveDelay1 = !!delay1 && delay1.status !== "unknown";
+    const hasLiveDelay2 = !!delay2 && delay2.status !== "unknown";
+
+    if (!leg.scheduledArrival || !nextTransitLeg.scheduledDeparture || !hasLiveDelay1 || !hasLiveDelay2) {
       result.push({
         arrivingLeg: leg,
         departingLeg: nextTransitLeg,
@@ -58,8 +61,8 @@ function computeTransfers(
       continue;
     }
 
-    const d1 = delay1?.estimatedDelaySeconds ?? 0;
-    const d2 = delay2?.estimatedDelaySeconds ?? 0;
+    const d1 = delay1.estimatedDelaySeconds;
+    const d2 = delay2.estimatedDelaySeconds;
     const arrMs = new Date(leg.scheduledArrival).getTime() + d1 * 1000;
     const depMs = new Date(nextTransitLeg.scheduledDeparture).getTime() + d2 * 1000;
     const bufferSeconds = Math.round((depMs - arrMs) / 1000) - walkSeconds;
@@ -79,7 +82,7 @@ function computeTransfers(
   return result;
 }
 
-export function useTransferViability(route: PlannedRoute | null): TransferInfo[] {
+export function useTransferViability(route: PlannedRoute | null) {
   const [transfers, setTransfers] = useState<TransferInfo[]>([]);
   const pollRef = useRef<(() => Promise<void>) | null>(null);
 
@@ -87,7 +90,7 @@ export function useTransferViability(route: PlannedRoute | null): TransferInfo[]
     let cancelled = false;
     let intervalId: ReturnType<typeof setInterval> | null = null;
 
-    async function run() {
+    async function runAsync() {
       if (!route) {
         if (!cancelled) setTransfers([]);
         return;
@@ -106,23 +109,23 @@ export function useTransferViability(route: PlannedRoute | null): TransferInfo[]
 
       if (!cancelled) setTransfers(computeTransfers(currentRoute, liveDelays));
 
-      async function poll() {
+      async function pollAsync() {
         await Promise.all(
           transitLegs.map(async (leg) => {
-            const delay = await fetchLegDelay(leg);
+            const delay = await fetchLegDelayAsync(leg);
             liveDelays.set(leg, delay);
           }),
         );
         if (!cancelled) setTransfers(computeTransfers(currentRoute, liveDelays));
       }
 
-      pollRef.current = poll;
-      await poll();
+      pollRef.current = pollAsync;
+      await pollAsync();
       if (cancelled) return;
-      intervalId = setInterval(poll, POLL_INTERVAL_MS);
+      intervalId = setInterval(pollAsync, POLL_INTERVAL_MS);
     }
 
-    run();
+    runAsync();
 
     const handleVisibility = () => {
       if (!document.hidden) pollRef.current?.();

@@ -377,7 +377,7 @@ export function RoutePlanner({
 
   // Saved routes & places
   const savedItems = useSavedPlannerItems();
-  const allSavedLocations = useMemo((): SavedLocation[] => {
+  const allSavedLocations = useMemo(() => {
     return savedItems.locations.map((loc) => ({
       lat: loc.lat,
       lng: loc.lng,
@@ -387,7 +387,7 @@ export function RoutePlanner({
   }, [savedItems.locations]);
 
   const isLocationSaved = useCallback(
-    (lat: number, lng: number): boolean => {
+    (lat: number, lng: number) => {
       return savedItems.locations.some(
         (loc) => Math.abs(loc.lat - lat) < 0.0001 && Math.abs(loc.lng - lng) < 0.0001,
       );

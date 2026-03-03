@@ -38,21 +38,21 @@ export interface SavedLocationRecord {
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
-function normalizeText(value: string): string {
+function normalizeText(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
-function normalizeCoord(value: number): string {
+function normalizeCoord(value: number) {
   return value.toFixed(5);
 }
 
-function getPointLabel(point: PlannerPointValue): string {
+function getPointLabel(point: PlannerPointValue) {
   const clean = point.name?.trim();
   if (clean) return clean;
   return formatCoord(point.lat, point.lng);
 }
 
-function toSavedPoint(point: PlannerPointValue): SavedPoint {
+function toSavedPoint(point: PlannerPointValue) {
   return {
     lat: point.lat,
     lng: point.lng,
@@ -60,11 +60,11 @@ function toSavedPoint(point: PlannerPointValue): SavedPoint {
   };
 }
 
-function buildLocationId(lat: number, lng: number): string {
+function buildLocationId(lat: number, lng: number) {
   return [normalizeCoord(lat), normalizeCoord(lng)].join("|");
 }
 
-function buildRouteId(origin: SavedPoint, destination: SavedPoint): string {
+function buildRouteId(origin: SavedPoint, destination: SavedPoint) {
   return [
     normalizeText(origin.name),
     normalizeCoord(origin.lat),
@@ -76,19 +76,19 @@ function buildRouteId(origin: SavedPoint, destination: SavedPoint): string {
   ].join("|");
 }
 
-function buildRouteLabel(origin: SavedPoint, destination: SavedPoint): string {
+function buildRouteLabel(origin: SavedPoint, destination: SavedPoint) {
   return `${origin.name} to ${destination.name}`;
 }
 
-function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {
-  return new Promise((resolve, reject) => {
+function requestToPromise<T>(request: IDBRequest<T>) {
+  return new Promise<T>((resolve, reject) => {
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error ?? new Error("IndexedDB request failed."));
   });
 }
 
-function transactionToPromise(transaction: IDBTransaction): Promise<void> {
-  return new Promise((resolve, reject) => {
+function transactionToPromise(transaction: IDBTransaction) {
+  return new Promise<void>((resolve, reject) => {
     transaction.oncomplete = () => resolve();
     transaction.onabort = () =>
       reject(transaction.error ?? new Error("IndexedDB transaction was aborted."));
@@ -97,11 +97,11 @@ function transactionToPromise(transaction: IDBTransaction): Promise<void> {
   });
 }
 
-function isIndexedDbSupported(): boolean {
+function isIndexedDbSupported() {
   return typeof window !== "undefined" && typeof window.indexedDB !== "undefined";
 }
 
-async function openDatabase(): Promise<IDBDatabase> {
+async function openDatabaseAsync() {
   if (!isIndexedDbSupported()) {
     throw new Error("IndexedDB is not supported in this browser.");
   }
@@ -142,12 +142,12 @@ async function openDatabase(): Promise<IDBDatabase> {
   return dbPromise as Promise<IDBDatabase>;
 }
 
-async function withStore<T>(
+async function withStoreAsync<T>(
   storeName: typeof ROUTES_STORE | typeof LOCATIONS_STORE,
   mode: IDBTransactionMode,
   handler: (store: IDBObjectStore) => Promise<T>,
-): Promise<T> {
-  const db = await openDatabase();
+) {
+  const db = await openDatabaseAsync();
   const transaction = db.transaction(storeName, mode);
   const done = transactionToPromise(transaction);
   const store = transaction.objectStore(storeName);
@@ -167,40 +167,40 @@ async function withStore<T>(
   }
 }
 
-function byMostRecent<T extends { updatedAt: string }>(a: T, b: T): number {
+function byMostRecent<T extends { updatedAt: string }>(a: T, b: T) {
   return b.updatedAt.localeCompare(a.updatedAt);
 }
 
-export function supportsPlannerPersistence(): boolean {
+export function supportsPlannerPersistence() {
   return isIndexedDbSupported();
 }
 
-export async function listSavedRoutes(): Promise<SavedRouteRecord[]> {
-  const records = await withStore(ROUTES_STORE, "readonly", async (store) => {
+export async function listSavedRoutesAsync() {
+  const records = await withStoreAsync(ROUTES_STORE, "readonly", async (store) => {
     const all = await requestToPromise(store.getAll() as IDBRequest<SavedRouteRecord[]>);
     return all ?? [];
   });
   return records.sort(byMostRecent);
 }
 
-export async function listSavedLocations(): Promise<SavedLocationRecord[]> {
-  const records = await withStore(LOCATIONS_STORE, "readonly", async (store) => {
+export async function listSavedLocationsAsync() {
+  const records = await withStoreAsync(LOCATIONS_STORE, "readonly", async (store) => {
     const all = await requestToPromise(store.getAll() as IDBRequest<SavedLocationRecord[]>);
     return all ?? [];
   });
   return records.sort(byMostRecent);
 }
 
-export async function upsertSavedRoute(
+export async function upsertSavedRouteAsync(
   originInput: PlannerPointValue,
   destinationInput: PlannerPointValue,
-): Promise<SavedRouteRecord> {
+) {
   const origin = toSavedPoint(originInput);
   const destination = toSavedPoint(destinationInput);
   const id = buildRouteId(origin, destination);
   const now = new Date().toISOString();
 
-  return withStore(ROUTES_STORE, "readwrite", async (store) => {
+  return withStoreAsync(ROUTES_STORE, "readwrite", async (store) => {
     const existing = await requestToPromise(
       store.get(id) as IDBRequest<SavedRouteRecord | undefined>,
     );
@@ -218,15 +218,15 @@ export async function upsertSavedRoute(
   });
 }
 
-export async function upsertSavedLocation(
+export async function upsertSavedLocationAsync(
   pointInput: PlannerPointValue,
   nickname?: string,
-): Promise<SavedLocationRecord> {
+) {
   const point = toSavedPoint(pointInput);
   const id = buildLocationId(point.lat, point.lng);
   const now = new Date().toISOString();
 
-  return withStore(LOCATIONS_STORE, "readwrite", async (store) => {
+  return withStoreAsync(LOCATIONS_STORE, "readwrite", async (store) => {
     const existing = await requestToPromise(
       store.get(id) as IDBRequest<SavedLocationRecord | undefined>,
     );
@@ -245,8 +245,8 @@ export async function upsertSavedLocation(
   });
 }
 
-export async function updateLocationNickname(id: string, nickname: string): Promise<void> {
-  await withStore(LOCATIONS_STORE, "readwrite", async (store) => {
+export async function updateLocationNicknameAsync(id: string, nickname: string) {
+  await withStoreAsync(LOCATIONS_STORE, "readwrite", async (store) => {
     const existing = await requestToPromise(
       store.get(id) as IDBRequest<SavedLocationRecord | undefined>,
     );
@@ -258,14 +258,14 @@ export async function updateLocationNickname(id: string, nickname: string): Prom
   });
 }
 
-export async function deleteSavedRoute(id: string): Promise<void> {
-  await withStore(ROUTES_STORE, "readwrite", async (store) => {
+export async function deleteSavedRouteAsync(id: string) {
+  await withStoreAsync(ROUTES_STORE, "readwrite", async (store) => {
     await requestToPromise(store.delete(id));
   });
 }
 
-export async function deleteSavedLocation(id: string): Promise<void> {
-  await withStore(LOCATIONS_STORE, "readwrite", async (store) => {
+export async function deleteSavedLocationAsync(id: string) {
+  await withStoreAsync(LOCATIONS_STORE, "readwrite", async (store) => {
     await requestToPromise(store.delete(id));
   });
 }

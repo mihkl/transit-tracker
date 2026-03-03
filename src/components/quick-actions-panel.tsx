@@ -16,7 +16,7 @@ const STOP_TYPE_MAP: Record<string, LineType> = {
   R: "train",
 };
 
-function stopAccentColor(stop: StopDto): string {
+function stopAccentColor(stop: StopDto) {
   const code = stop.lines?.[0]?.[0];
   if (!code) return "#6b7280";
   const type = STOP_TYPE_MAP[code];

@@ -1,16 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getAllStops } from "@/actions";
+import { getAllStopsAsync } from "@/actions";
 import type { StopDto } from "@/lib/types";
 
 let stopsCache: StopDto[] | null = null;
 let inflight: Promise<StopDto[]> | null = null;
 
-async function loadStops(): Promise<StopDto[]> {
+async function loadStopsAsync() {
   if (stopsCache) return stopsCache;
   if (!inflight) {
-    inflight = getAllStops()
+    inflight = getAllStopsAsync()
       .then((data) => {
         stopsCache = data;
         return data;
@@ -31,7 +31,7 @@ export function useStops() {
     let cancelled = false;
     if (stopsCache) return;
 
-    loadStops()
+    loadStopsAsync()
       .then((data) => {
         if (cancelled) return;
         setStops(data);

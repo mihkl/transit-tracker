@@ -4,8 +4,8 @@ import type { LineDto } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-export default async function Home() {
-  await transitState.initialize();
+export default async function HomeAsync() {
+  await transitState.initializeAsync();
 
   const shapes = transitState.getShapes() ?? {};
   const lines: LineDto[] = transitState.getLines();

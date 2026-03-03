@@ -11,7 +11,7 @@ interface CacheEntry {
 
 let cache: CacheEntry | null = null;
 
-async function loadStops(): Promise<StopDto[]> {
+async function loadStopsAsync() {
   if (cache && Date.now() - cache.timestamp < CACHE_TTL_MS) {
     return cache.stops;
   }
@@ -46,6 +46,6 @@ async function loadStops(): Promise<StopDto[]> {
   return stops;
 }
 
-export async function getAllSiriStops(): Promise<StopDto[]> {
-  return loadStops();
+export async function getCachedStopsAsync() {
+  return loadStopsAsync();
 }

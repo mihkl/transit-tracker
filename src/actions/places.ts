@@ -1,11 +1,10 @@
 "use server";
 
 import { headers } from "next/headers";
-import { searchPlaces as googleSearchPlaces } from "@/server/google-routes";
-import type { PlaceSearchResult } from "@/lib/types";
+import { searchPlacesAsync as searchPlacesAsync } from "@/server/google-routes";
 import { checkRateLimit } from "@/lib/rate-limit";
 
-export async function searchPlacesAction(q: string): Promise<PlaceSearchResult[]> {
+export async function searchPlacesActionAsync(q: string) {
   if (!q.trim() || q.length < 2) return [];
 
   const forwarded = (await headers()).get("x-forwarded-for") ?? "";
@@ -14,7 +13,7 @@ export async function searchPlacesAction(q: string): Promise<PlaceSearchResult[]
     return [];
   }
 
-  const raw = await googleSearchPlaces(q);
+  const raw = await searchPlacesAsync(q);
   const seen = new Set<string>();
   return raw.filter((r) => {
     const key = `${r.name}|${r.address}`;

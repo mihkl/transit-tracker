@@ -21,7 +21,7 @@ export const MODE_LABELS: Record<TransitMode, string> = {
 } as const;
 
 /** Resolves a transport type color from either lowercase ("bus") or uppercase ("BUS") keys. */
-export function getTransportColor(type: string): string {
+export function getTransportColor(type: string) {
   const direct = type.toLowerCase() as TransportType;
   if (TYPE_COLORS[direct]) return TYPE_COLORS[direct];
   return TYPE_COLORS[modeToTransportType(normalizeTransitMode(type))] || TYPE_COLORS.unknown;

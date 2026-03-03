@@ -11,7 +11,9 @@ interface StopPopupProps {
 }
 
 export function StopPopup({ stop, arrivals, loading }: StopPopupProps) {
-  const formatDelayBadge = (seconds: number) => {
+  const formatDelayBadge = (arrival: StopArrival) => {
+    if (!arrival.hasRealtime) return "Scheduled";
+    const seconds = arrival.delaySeconds;
     const abs = Math.abs(seconds);
     if (abs < 30) return "On time";
     if (abs < 60) return seconds > 0 ? `+${abs}s` : `-${abs}s`;
@@ -19,7 +21,9 @@ export function StopPopup({ stop, arrivals, loading }: StopPopupProps) {
     return seconds > 0 ? `+${min}m` : `-${min}m`;
   };
 
-  const delayTone = (seconds: number) => {
+  const delayTone = (arrival: StopArrival) => {
+    if (!arrival.hasRealtime) return "text-foreground/60 bg-foreground/[0.06]";
+    const seconds = arrival.delaySeconds;
     if (Math.abs(seconds) < 30) return "text-emerald-700 bg-emerald-50";
     if (seconds > 0) return "text-red-700 bg-red-50";
     return "text-blue-700 bg-blue-50";
@@ -72,9 +76,9 @@ export function StopPopup({ stop, arrivals, loading }: StopPopupProps) {
 
                   <div className="mt-1 flex items-center gap-1.5 flex-wrap">
                     <span
-                      className={`px-1.5 py-0.5 rounded-md text-[10px] font-semibold ${delayTone(dep.delaySeconds)}`}
+                      className={`px-1.5 py-0.5 rounded-md text-[10px] font-semibold ${delayTone(dep)}`}
                     >
-                      {formatDelayBadge(dep.delaySeconds)}
+                      {formatDelayBadge(dep)}
                     </span>
 
                     {dep.stopSequence != null && dep.totalStops != null && dep.totalStops > 0 && (

@@ -36,7 +36,7 @@ interface TrafficCacheEntry {
 const trafficCache = new Map<string, TrafficCacheEntry>();
 const TRAFFIC_CACHE_TTL = 30_000;
 
-export async function getTrafficFlow(): Promise<TrafficFlowTileInfo> {
+export async function getTrafficFlowAsync() {
   const cacheKey = "flow:tileinfo:relative0";
   const cached = trafficCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < TRAFFIC_CACHE_TTL) {
@@ -81,12 +81,12 @@ interface RawTomTomIncident {
   properties: { iconCategory: number };
 }
 
-export async function getTrafficIncidents(bounds: {
+export async function getTrafficIncidentsAsync(bounds: {
   minLat: number;
   minLng: number;
   maxLat: number;
   maxLng: number;
-}): Promise<TrafficIncidentCollection> {
+}) {
   const { minLat, minLng, maxLat, maxLng } = bounds;
   const cacheKey = `incidents:${minLat},${minLng},${maxLat},${maxLng}`;
   const cached = trafficCache.get(cacheKey);

@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { RoutePlanResponse, StopDto } from "@/lib/types";
 import type { LineType } from "@/lib/domain";
+import { toLocalDateTimeString } from "@/lib/format-utils";
 
 export type SelectedLine = { lineNumber: string; type: LineType } | null;
 export type PlannerPoint = { lat: number; lng: number; name?: string } | null;
@@ -51,23 +52,16 @@ interface TransitStoreActions {
   setTimeOption: (option: TimeOption) => void;
   setSelectedDateTime: (value: string) => void;
   setMobileTab: (tab: MobileTab) => void;
-  handleMobileTabChange: (tab: MobileTab) => void;
   goToMapTab: () => void;
   setShowMobileLayers: (show: boolean) => void;
-  toggleShowMobileLayers: () => void;
   bumpMapKey: () => void;
   clearPlanner: () => void;
 }
 
 type TransitStore = TransitStoreState & TransitStoreActions;
 
-export function toLocalDateTimeString(date: Date): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
-function getInitialState(): TransitStoreState {
-  return {
+function getInitialState() {
+  const state: TransitStoreState = {
     selectedLine: null,
     selectedStop: null,
     showTraffic: false,
@@ -89,6 +83,7 @@ function getInitialState(): TransitStoreState {
     showMobileLayers: false,
     mapKey: 0,
   };
+  return state;
 }
 
 const initialState = getInitialState();
@@ -114,21 +109,8 @@ export const useTransitStore = create<TransitStore>((set) => ({
   setTimeOption: (timeOption) => set({ timeOption }),
   setSelectedDateTime: (selectedDateTime) => set({ selectedDateTime }),
   setMobileTab: (mobileTab) => set({ mobileTab }),
-  handleMobileTabChange: (tab) =>
-    set((state) => {
-      if (tab === "layers") {
-        return { showMobileLayers: !state.showMobileLayers };
-      }
-      return {
-        mobileTab: tab,
-        showMobileLayers: false,
-        ...(tab === "directions" ? { showPlanner: true } : {}),
-      };
-    }),
   goToMapTab: () => set({ mobileTab: "map", showMobileLayers: false }),
   setShowMobileLayers: (showMobileLayers) => set({ showMobileLayers }),
-  toggleShowMobileLayers: () =>
-    set((state) => ({ showMobileLayers: !state.showMobileLayers })),
   bumpMapKey: () => set((state) => ({ mapKey: state.mapKey + 1 })),
   clearPlanner: () =>
     set({

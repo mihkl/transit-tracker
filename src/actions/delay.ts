@@ -1,34 +1,22 @@
 "use server";
 
 import { transitState } from "@/server/transit-state";
-import { matchTransitLeg } from "@/server/delay-matcher";
-import type { DelayInfo } from "@/lib/types";
-import type { TransitMode } from "@/lib/domain";
+import { matchTransitLegAsync } from "@/server/delay-matcher";
 
 export interface LegDelayParams {
   line?: string;
-  type?: TransitMode;
-  depStop?: string;
   depLat?: number;
   depLng?: number;
-  arrStop?: string;
-  arrLat?: number;
-  arrLng?: number;
   scheduledDep?: string;
 }
 
-export async function getLegDelay(params: LegDelayParams): Promise<DelayInfo | null> {
-  await transitState.initialize();
-  const delay = await matchTransitLeg(
+export async function getLegDelayAsync(params: LegDelayParams) {
+  await transitState.initializeAsync();
+  const delay = await matchTransitLegAsync(
     params.line,
-    params.type,
-    params.depStop,
     params.depLat,
     params.depLng,
     params.scheduledDep,
-    params.arrStop,
-    params.arrLat,
-    params.arrLng,
   );
   return delay ?? null;
 }
