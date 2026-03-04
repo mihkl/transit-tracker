@@ -114,14 +114,17 @@ export async function getTrafficIncidentsAsync(bounds: {
   url.searchParams.set("bbox", `${minLng},${minLat},${maxLng},${maxLat}`);
   url.searchParams.set(
     "fields",
-    "{incidents{id,type,geometry{type,coordinates},properties{iconCategory}}}",
+    "{incidents{type,geometry{type,coordinates},properties{iconCategory}}}",
   );
   url.searchParams.set("key", apiKey);
   url.searchParams.set("language", "en-GB");
   url.searchParams.set("timeValidityFilter", "present");
 
   const response = await fetch(url.toString(), { headers: { Accept: "application/json" } });
-  if (!response.ok) throw new Error(`TomTom API error: ${response.status}`);
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    throw new Error(`TomTom API error: ${response.status} - ${body}`);
+  }
 
   const raw = await response.json();
   const parsed = tomTomIncidentsResponseSchema.safeParse(raw);
