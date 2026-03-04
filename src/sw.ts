@@ -2,9 +2,9 @@
 export type {};
 declare const self: ServiceWorkerGlobalScope;
 
-const CACHE_NAME = "transit-tracker-v2";
+const CACHE_NAME = "transit-tracker-v3";
 
-const PRECACHE_URLS = ["/", "/icon-192x192.png", "/icon-512x512.png"];
+const PRECACHE_URLS = ["/icon-192x192.png", "/icon-512x512.png"];
 
 interface ReminderPayload {
   title?: string;
@@ -225,6 +225,12 @@ self.addEventListener("fetch", (event) => {
   // Skip large GTFS schedule file
   if (url.pathname.endsWith("schedule.json")) return;
 
+  // Keep app shell/navigation always fresh to avoid stale UI in installed PWA mode.
+  if (request.mode === "navigate") {
+    event.respondWith(fetch(request));
+    return;
+  }
+
   // Cache-first for immutable static assets
   if (
     url.pathname.startsWith("/_next/static/") ||
@@ -244,14 +250,6 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Network-first for navigation and everything else
-  event.respondWith(
-    fetch(request)
-      .then((response) => {
-        const clone = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
-        return response;
-      })
-      .catch(() => caches.match(request) as Promise<Response>),
-  );
+  // Dynamic requests should stay network-backed to avoid stale RSC/app payloads.
+  event.respondWith(fetch(request));
 });
