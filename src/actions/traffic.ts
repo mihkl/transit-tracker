@@ -78,7 +78,7 @@ const INCIDENT_ICON_CATEGORIES: Record<number, string> = {
 };
 
 const rawTomTomIncidentSchema = z.object({
-  id: z.string(),
+  id: z.string().optional(),
   type: z.string().catch("unknown"),
   geometry: z.object({
     type: z.string(),
@@ -114,7 +114,7 @@ export async function getTrafficIncidentsAsync(bounds: {
   url.searchParams.set("bbox", `${minLng},${minLat},${maxLng},${maxLat}`);
   url.searchParams.set(
     "fields",
-    "{incidents{type,geometry{type,coordinates},properties{iconCategory}}}",
+    "{incidents{id,type,geometry{type,coordinates},properties{iconCategory}}}",
   );
   url.searchParams.set("key", apiKey);
   url.searchParams.set("language", "en-GB");
@@ -149,7 +149,7 @@ export async function getTrafficIncidentsAsync(bounds: {
       type: "Feature",
       geometry: { type: "Point", coordinates },
       properties: {
-        id: incident.id,
+        id: incident.id ?? crypto.randomUUID(),
         type: incident.type || "unknown",
         iconCategory: incident.properties.iconCategory ?? 0,
         description:
