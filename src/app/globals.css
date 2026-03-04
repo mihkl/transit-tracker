@@ -70,6 +70,16 @@
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
+.above-bottom-nav {
+  bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+}
+
+@media (min-width: 768px) {
+  .above-bottom-nav {
+    bottom: 1.5rem;
+  }
+}
+
 /* High contrast mode */
 @media (prefers-contrast: high) {
   :root {

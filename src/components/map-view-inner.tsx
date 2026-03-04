@@ -563,7 +563,7 @@ export function MapViewInner({
       {userLocation && (
         <button
           onClick={handleLocateMe}
-          className="absolute bottom-22 md:bottom-6 left-3 z-10 w-12 h-12 rounded-xl bg-white shadow-fab flex items-center justify-center text-foreground/60 hover:text-foreground/80 active:scale-95 transition-all duration-150"
+          className="fixed md:absolute above-bottom-nav left-3 z-10 w-12 h-12 rounded-xl bg-white shadow-fab flex items-center justify-center text-foreground/60 hover:text-foreground/80 active:scale-95 transition-all duration-150"
           title="Center on my location"
         >
           <Icon name="crosshair" className="w-5 h-5" />
