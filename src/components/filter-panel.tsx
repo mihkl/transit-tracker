@@ -25,7 +25,7 @@ export function FilterPanel({ vehicleCount, lines }: FilterPanelProps) {
   return (
     <>
       {/* Desktop only — search bar + controls in one row */}
-      <div className="hidden md:flex absolute top-3 right-3 z-[1000] items-center gap-2 px-2 py-1.5 bg-white rounded-2xl shadow-panel">
+      <div className="hidden md:flex absolute top-3 right-3 z-1000 items-center gap-2 px-2 py-1.5 bg-white rounded-2xl shadow-panel">
         <div className="w-64">
           <UnifiedSearch lines={lines} vehicleCount={vehicleCount} embedded />
         </div>

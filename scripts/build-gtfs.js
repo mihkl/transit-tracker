@@ -7,6 +7,38 @@ function ensureDir(p) {
   if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
 }
 
+function parseDelimitedLine(line, delimiter) {
+  const values = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+
+    if (char === '"') {
+      const nextChar = line[i + 1];
+      if (inQuotes && nextChar === '"') {
+        current += '"';
+        i += 1;
+        continue;
+      }
+      inQuotes = !inQuotes;
+      continue;
+    }
+
+    if (char === delimiter && !inQuotes) {
+      values.push(current);
+      current = "";
+      continue;
+    }
+
+    current += char;
+  }
+
+  values.push(current);
+  return values;
+}
+
 async function* readCsv(filePath) {
   const stream = fs.createReadStream(filePath, { encoding: "utf-8" });
   let leftover = "";
@@ -31,11 +63,11 @@ async function parseCsvRows(filePath) {
     let line = rawLine;
     if (!headers) {
       if (line.charCodeAt(0) === 0xfeff) line = line.slice(1);
-      headers = line.split(",");
+      headers = parseDelimitedLine(line, ",");
       continue;
     }
     if (!line.trim()) continue;
-    const values = line.split(",");
+    const values = parseDelimitedLine(line, ",");
     const rec = {};
     for (let i = 0; i < headers.length && i < values.length; i++) {
       rec[headers[i]] = values[i];
@@ -57,7 +89,7 @@ async function fetchSiriStopsRows() {
   const lines = text.split(/\r?\n/).filter(Boolean);
   if (lines.length <= 1) return [];
 
-  const headers = lines[0].replace(/^\uFEFF/, "").split(";");
+  const headers = parseDelimitedLine(lines[0].replace(/^\uFEFF/, ""), ";");
   const idx = {
     id: headers.indexOf("ID"),
     siriId: headers.indexOf("SiriID"),
@@ -70,7 +102,7 @@ async function fetchSiriStopsRows() {
 
   const rows = [];
   for (let i = 1; i < lines.length; i++) {
-    const values = lines[i].split(";");
+    const values = parseDelimitedLine(lines[i], ";");
     const siriId = (values[idx.siriId] || "").trim();
     const rawId = (values[idx.id] || "").trim();
     if (!siriId) continue;

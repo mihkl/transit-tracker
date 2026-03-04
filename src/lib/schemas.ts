@@ -65,6 +65,17 @@ export const routePlanRequestSchema = z
     message: "Only one of departureTime or arrivalTime can be set",
   });
 
+export const placesQuerySchema = z.string().trim().min(2).max(120);
+
+export const stopIdSchema = z.string().trim().min(1).max(64);
+
+export const legDelayParamsSchema = z.object({
+  line: z.string().trim().min(1).max(32).optional(),
+  depLat: z.number().optional(),
+  depLng: z.number().optional(),
+  scheduledDep: z.string().trim().min(1).optional(),
+});
+
 export const lineDtoSchema = z.object({
   lineNumber: z.string(),
   type: lineTypeSchema,

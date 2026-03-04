@@ -2,6 +2,7 @@
 
 import { transitState } from "@/server/transit-state";
 import { matchTransitLegAsync } from "@/server/delay-matcher";
+import { legDelayParamsSchema } from "@/lib/schemas";
 
 export interface LegDelayParams {
   line?: string;
@@ -11,12 +12,13 @@ export interface LegDelayParams {
 }
 
 export async function getLegDelayAsync(params: LegDelayParams) {
+  const parsedParams = legDelayParamsSchema.parse(params);
   await transitState.initializeAsync();
   const delay = await matchTransitLegAsync(
-    params.line,
-    params.depLat,
-    params.depLng,
-    params.scheduledDep,
+    parsedParams.line,
+    parsedParams.depLat,
+    parsedParams.depLng,
+    parsedParams.scheduledDep,
   );
   return delay ?? null;
 }

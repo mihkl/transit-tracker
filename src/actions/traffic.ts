@@ -1,5 +1,8 @@
 "use server";
 
+import { env } from "@/lib/env";
+import { z } from "zod";
+
 export interface TrafficFlowTileInfo {
   tileUrlTemplate: string;
   attribution: string;
@@ -43,10 +46,10 @@ export async function getTrafficFlowAsync() {
     return cached.data as TrafficFlowTileInfo;
   }
 
-  const apiKey = process.env.TOMTOM_API_KEY;
+  const apiKey = env.TOMTOM_API_KEY;
   if (!apiKey) throw new Error("TomTom API key not configured");
 
-  const baseUrl = process.env.TOMTOM_BASE_URL || "https://api.tomtom.com";
+  const baseUrl = env.TOMTOM_BASE_URL;
   const result: TrafficFlowTileInfo = {
     tileUrlTemplate: `${baseUrl}/traffic/map/4/tile/flow/relative0/{z}/{x}/{y}.png?key=${apiKey}`,
     attribution: "© TomTom",
@@ -74,12 +77,21 @@ const INCIDENT_ICON_CATEGORIES: Record<number, string> = {
   14: "Broken Down Vehicle",
 };
 
-interface RawTomTomIncident {
-  id: string;
-  type: string;
-  geometry: { type: string; coordinates: number[] | number[][] };
-  properties: { iconCategory: number };
-}
+const rawTomTomIncidentSchema = z.object({
+  id: z.string(),
+  type: z.string().catch("unknown"),
+  geometry: z.object({
+    type: z.string(),
+    coordinates: z.union([z.array(z.number()), z.array(z.array(z.number()))]),
+  }),
+  properties: z.object({
+    iconCategory: z.number().catch(0),
+  }),
+});
+
+const tomTomIncidentsResponseSchema = z.object({
+  incidents: z.array(rawTomTomIncidentSchema).optional(),
+});
 
 export async function getTrafficIncidentsAsync(bounds: {
   minLat: number;
@@ -94,10 +106,10 @@ export async function getTrafficIncidentsAsync(bounds: {
     return cached.data as TrafficIncidentCollection;
   }
 
-  const apiKey = process.env.TOMTOM_SERVER_API_KEY;
+  const apiKey = env.TOMTOM_SERVER_API_KEY;
   if (!apiKey) throw new Error("TomTom API key not configured");
 
-  const baseUrl = process.env.TOMTOM_BASE_URL || "https://api.tomtom.com";
+  const baseUrl = env.TOMTOM_BASE_URL;
   const url = new URL(`${baseUrl}/traffic/services/5/incidentDetails`);
   url.searchParams.set("bbox", `${minLng},${minLat},${maxLng},${maxLat}`);
   url.searchParams.set(
@@ -111,7 +123,14 @@ export async function getTrafficIncidentsAsync(bounds: {
   const response = await fetch(url.toString(), { headers: { Accept: "application/json" } });
   if (!response.ok) throw new Error(`TomTom API error: ${response.status}`);
 
-  const data: { incidents?: RawTomTomIncident[] } = await response.json();
+  const raw = await response.json();
+  const parsed = tomTomIncidentsResponseSchema.safeParse(raw);
+  if (!parsed.success) {
+    throw new Error(
+      `TomTom incidents response validation failed: ${parsed.error.issues[0]?.message ?? parsed.error.message}`,
+    );
+  }
+  const data = parsed.data;
   const features: TrafficIncidentFeature[] = [];
 
   for (const incident of data.incidents ?? []) {

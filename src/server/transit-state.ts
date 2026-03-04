@@ -6,6 +6,7 @@ import type {
   VehicleState,
 } from "@/lib/types";
 import type { LineType, TypeFilter, TransportType } from "@/lib/domain";
+import { env } from "@/lib/env";
 import { normalizeLineType, GPS_TYPE_TO_TRANSPORT, LINE_TYPE_TO_GPS_TYPES } from "@/lib/domain";
 import { lineDtoSchema, vehicleDtoSchema } from "@/lib/schemas";
 import { loadGtfs } from "./gtfs-loader";
@@ -287,6 +288,6 @@ const globalForTransit = globalThis as unknown as {
 
 export const transitState = globalForTransit.transitState ?? new TransitState();
 
-if (process.env.NODE_ENV !== "production") {
+if (env.NODE_ENV !== "production") {
   globalForTransit.transitState = transitState;
 }

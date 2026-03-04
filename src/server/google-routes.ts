@@ -1,4 +1,6 @@
 import type { GoogleRoutesResponse, PlaceSearchResult } from "@/lib/types";
+import { env } from "@/lib/env";
+import { z } from "zod";
 
 const ROUTES_URL = "https://routes.googleapis.com/directions/v2:computeRoutes";
 const API_TIMEOUT = 10_000;
@@ -51,8 +53,149 @@ interface PlacesNewDetailsResponse {
   movedPlaceId?: string;
 }
 
+const googleRoutesResponseSchema: z.ZodType<GoogleRoutesResponse> = z.object({
+  routes: z.array(
+    z.object({
+      duration: z.string(),
+      distanceMeters: z.number(),
+      polyline: z.object({ encodedPolyline: z.string() }).optional(),
+      legs: z.array(
+        z.object({
+          duration: z.string(),
+          distanceMeters: z.number(),
+          polyline: z.object({ encodedPolyline: z.string() }).optional(),
+          steps: z.array(
+            z.object({
+              travelMode: z.string(),
+              staticDuration: z.string(),
+              distanceMeters: z.number(),
+              polyline: z.object({ encodedPolyline: z.string() }).optional(),
+              transitDetails: z
+                .object({
+                  stopDetails: z
+                    .object({
+                      arrivalStop: z
+                        .object({
+                          name: z.string(),
+                          location: z
+                            .object({
+                              latLng: z
+                                .object({
+                                  latitude: z.number(),
+                                  longitude: z.number(),
+                                })
+                                .optional(),
+                            })
+                            .optional(),
+                        })
+                        .optional(),
+                      departureStop: z
+                        .object({
+                          name: z.string(),
+                          location: z
+                            .object({
+                              latLng: z
+                                .object({
+                                  latitude: z.number(),
+                                  longitude: z.number(),
+                                })
+                                .optional(),
+                            })
+                            .optional(),
+                        })
+                        .optional(),
+                      arrivalTime: z.string().optional(),
+                      departureTime: z.string().optional(),
+                    })
+                    .optional(),
+                  transitLine: z
+                    .object({
+                      name: z.string(),
+                      nameShort: z.string(),
+                      vehicle: z.object({ type: z.string() }).optional(),
+                    })
+                    .optional(),
+                  stopCount: z.number(),
+                  localizedValues: z
+                    .object({
+                      departureTime: z
+                        .object({
+                          time: z.object({ text: z.string().optional() }).optional(),
+                          timeZone: z.string(),
+                        })
+                        .optional(),
+                      arrivalTime: z
+                        .object({
+                          time: z.object({ text: z.string().optional() }).optional(),
+                          timeZone: z.string(),
+                        })
+                        .optional(),
+                    })
+                    .optional(),
+                })
+                .optional(),
+            }),
+          ),
+        }),
+      ),
+    }),
+  ),
+});
+
+const placesNewSearchResponseSchema: z.ZodType<PlacesNewSearchResponse> = z.object({
+  places: z
+    .array(
+      z.object({
+        id: z.string().optional(),
+        displayName: z.object({ text: z.string().optional() }).optional(),
+        formattedAddress: z.string().optional(),
+        location: z
+          .object({
+            latitude: z.number(),
+            longitude: z.number(),
+          })
+          .optional(),
+      }),
+    )
+    .optional(),
+});
+
+const placesNewDetailsResponseSchema: z.ZodType<PlacesNewDetailsResponse> = z.object({
+  id: z.string().optional(),
+  displayName: z.object({ text: z.string().optional() }).optional(),
+  formattedAddress: z.string().optional(),
+  location: z
+    .object({
+      latitude: z.number(),
+      longitude: z.number(),
+    })
+    .optional(),
+  businessStatus: z.string().optional(),
+  movedPlace: z.string().optional(),
+  movedPlaceId: z.string().optional(),
+});
+
+const geocodingResponseSchema = z.object({
+  results: z.array(
+    z.object({
+      formatted_address: z.string(),
+      geometry: z.object({
+        location: z.object({ lat: z.number(), lng: z.number() }),
+      }),
+      address_components: z.array(
+        z.object({
+          long_name: z.string(),
+          short_name: z.string(),
+          types: z.array(z.string()),
+        }),
+      ),
+    }),
+  ),
+  status: z.string(),
+});
+
 function getApiKey() {
-  return process.env.GOOGLE_ROUTES_API_KEY || "";
+  return env.GOOGLE_ROUTES_API_KEY || "";
 }
 
 function isWithinHarjumaa(lat: number, lng: number) {
@@ -134,7 +277,16 @@ export async function computeRoutesAsync(
   }
 
   try {
-    return JSON.parse(body) as GoogleRoutesResponse;
+    const parsedJson: unknown = JSON.parse(body);
+    const parsed = googleRoutesResponseSchema.safeParse(parsedJson);
+    if (!parsed.success) {
+      console.error(
+        "Google Routes API response validation error:",
+        parsed.error.issues[0]?.message ?? parsed.error.message,
+      );
+      return null;
+    }
+    return parsed.data;
   } catch {
     console.error("Google Routes API returned invalid JSON:", body);
     return null;
@@ -186,7 +338,16 @@ async function searchPlacesNewAsync(query: string, apiKey: string) {
     return [];
   }
 
-  const searchData = JSON.parse(searchBody) as PlacesNewSearchResponse;
+  const searchRaw: unknown = JSON.parse(searchBody);
+  const parsedSearch = placesNewSearchResponseSchema.safeParse(searchRaw);
+  if (!parsedSearch.success) {
+    console.error(
+      "Places Text Search (New) validation error:",
+      parsedSearch.error.issues[0]?.message ?? parsedSearch.error.message,
+    );
+    return [];
+  }
+  const searchData = parsedSearch.data;
   const searchPlaces = (searchData.places ?? []).filter((p) => !!p.id);
   if (searchPlaces.length === 0) return [];
 
@@ -241,7 +402,16 @@ async function fetchPlaceDetailsNewAsync(placeId: string, apiKey: string, depth 
     return null;
   }
 
-  const data = JSON.parse(body) as PlacesNewDetailsResponse;
+  const detailsRaw: unknown = JSON.parse(body);
+  const parsedDetails = placesNewDetailsResponseSchema.safeParse(detailsRaw);
+  if (!parsedDetails.success) {
+    console.error(
+      "Place Details (New) validation error:",
+      parsedDetails.error.issues[0]?.message ?? parsedDetails.error.message,
+    );
+    return null;
+  }
+  const data = parsedDetails.data;
   const hasMoved =
     data.businessStatus === "CLOSED_PERMANENTLY" && (data.movedPlaceId || data.movedPlace);
 
@@ -270,10 +440,16 @@ async function searchPlacesGeocodingAsync(query: string, apiKey: string) {
     return [];
   }
 
-  const data = JSON.parse(body) as {
-    results: GoogleGeocodingResult[];
-    status: string;
-  };
+  const geocodeRaw: unknown = JSON.parse(body);
+  const parsedGeocode = geocodingResponseSchema.safeParse(geocodeRaw);
+  if (!parsedGeocode.success) {
+    console.error(
+      "Google Geocoding response validation error:",
+      parsedGeocode.error.issues[0]?.message ?? parsedGeocode.error.message,
+    );
+    return [];
+  }
+  const data = parsedGeocode.data;
 
   if (data.status !== "OK" && data.status !== "ZERO_RESULTS") {
     console.error(`Google Geocoding status: ${data.status}`);

@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import { env } from "@/lib/env";
 import type { GtfsRoute, GtfsStop, GtfsShapePoint, RoutePattern } from "@/lib/types";
 
 function readJson<T>(filePath: string) {
@@ -7,8 +8,7 @@ function readJson<T>(filePath: string) {
 }
 
 export function loadGtfs() {
-  const dir =
-    process.env.GTFS_PREPROCESSED_DIR || path.join(process.cwd(), "public", "gtfs-preprocessed");
+  const dir = env.GTFS_PREPROCESSED_DIR || path.join(process.cwd(), "public", "gtfs-preprocessed");
   console.log(`Loading preprocessed GTFS from ${path.resolve(dir)}...`);
 
   const routesArr = readJson<GtfsRoute[]>(path.join(dir, "routes.json"));

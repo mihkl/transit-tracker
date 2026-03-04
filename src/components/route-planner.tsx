@@ -1,19 +1,19 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Footprints, X, ArrowUpDown, Search, Bell, ChevronLeft } from "lucide-react";
 import { Icon } from "@/components/icon";
 import { PlaceSearchInput } from "./place-search-input";
-import type { SavedLocation } from "./place-search-input";
 import { RouteLegCard, TransferBadge } from "./route-leg-card";
 import { formatDuration, formatTime } from "@/lib/format-utils";
 import { getTransportColor } from "@/lib/constants";
-import { useTransferViability, type TransferInfo } from "@/hooks/use-transfer-viability";
-import { useLeaveReminder } from "@/hooks/use-leave-reminder";
+import type { TransferInfo } from "@/hooks/use-transfer-viability";
 import { useDragDismiss } from "@/hooks/use-drag-dismiss";
-import { useSavedPlannerItems } from "@/hooks/use-saved-planner-items";
+import { usePlannerSavedLocations } from "@/hooks/use-planner-saved-locations";
+import { useRoutePlannerSelection } from "@/hooks/use-route-planner-selection";
+import { useRoutePlannerInsights } from "@/hooks/use-route-planner-insights";
 import type { RoutePlanResponse, PlannedRoute, RouteLeg } from "@/lib/types";
 import { SavedPlannerPanel } from "@/components/saved-planner-panel";
 
@@ -83,7 +83,7 @@ function LegChain({ legs }: { legs: RouteLeg[] }) {
             <Icon name="chevron-right-sm" size={8} className="text-foreground/20 shrink-0" />
           )}
           {leg.mode === "WALK" ? (
-            <div className="flex items-center gap-1 text-foreground/60 rounded-full px-1.5 py-0.5 bg-foreground/[0.03]">
+            <div className="flex items-center gap-1 text-foreground/60 rounded-full px-1.5 py-0.5 bg-foreground/3">
               <Footprints size={12} className="shrink-0" />
               <span className="text-[11px] font-medium">{formatDuration(leg.duration)}</span>
             </div>
@@ -162,7 +162,7 @@ function RouteCard({
     <div
       className={`rounded-xl border transition-all duration-150 overflow-hidden ${
         isSelected
-          ? "border-primary/30 bg-primary/[0.05] shadow-[0_8px_24px_-16px_rgba(0,96,255,0.5)]"
+          ? "border-primary/30 bg-primary/5 shadow-[0_8px_24px_-16px_rgba(0,96,255,0.5)]"
           : "border-foreground/8 bg-white hover:border-foreground/15"
       }`}
     >
@@ -279,9 +279,9 @@ function MobileRouteOption({
   return (
     <button
       onClick={onClick}
-      className={`w-full text-left rounded-2xl border p-4 min-h-[88px] transition-all duration-150 shadow-sm ${
+      className={`w-full text-left rounded-2xl border p-4 min-h-22 transition-all duration-150 shadow-sm ${
         isSelected
-          ? "border-primary/30 bg-primary/[0.05] shadow-[0_10px_24px_-16px_rgba(0,96,255,0.65)]"
+          ? "border-primary/30 bg-primary/5 shadow-[0_10px_24px_-16px_rgba(0,96,255,0.65)]"
           : "border-foreground/8 bg-white active:bg-foreground/2"
       }`}
     >
@@ -346,8 +346,22 @@ export function RoutePlanner({
   openSelectedRouteDetails = false,
   onConsumeOpenSelectedRouteDetails,
 }: RoutePlannerProps) {
-  const [expandedRoute, setExpandedRoute] = useState<number | null>(null);
-  const [mobileDetail, setMobileDetail] = useState<number | null>(null);
+  const {
+    hasRoutes,
+    selectedRoute,
+    expandedRoute,
+    mobileDetailRoute,
+    detailSheetRef,
+    handleRouteClick,
+    handleMobileRouteClick,
+    closeMobileDetail,
+  } = useRoutePlannerSelection({
+    routePlan,
+    selectedRouteIndex,
+    onSelectRoute,
+    openSelectedRouteDetails,
+    onConsumeOpenSelectedRouteDetails,
+  });
   const {
     dragY: fullDragY,
     isDragging: isFullDragging,
@@ -372,138 +386,14 @@ export function RoutePlanner({
     velocityThreshold: 0.7,
     onDismiss: onClose,
   });
-  const detailSheetRef = useRef<HTMLDivElement | null>(null);
-  const lastDetailSheetHeightRef = useRef(0);
-
-  // Saved routes & places
-  const savedItems = useSavedPlannerItems();
-  const allSavedLocations = useMemo(() => {
-    return savedItems.locations.map((loc) => ({
-      lat: loc.lat,
-      lng: loc.lng,
-      name: loc.name,
-      nickname: loc.nickname,
-    }));
-  }, [savedItems.locations]);
-
-  const isLocationSaved = useCallback(
-    (lat: number, lng: number) => {
-      return savedItems.locations.some(
-        (loc) => Math.abs(loc.lat - lat) < 0.0001 && Math.abs(loc.lng - lng) < 0.0001,
-      );
-    },
-    [savedItems.locations],
-  );
-
-  const handleSaveLocation = useCallback(
-    async (point: { lat: number; lng: number; name: string }, nickname?: string) => {
-      await savedItems.saveLocation(point, nickname);
-    },
-    [savedItems],
-  );
-
-  const hasRoutes = !!routePlan?.routes?.length;
-  const mobileDetailRoute =
-    mobileDetail !== null && hasRoutes ? routePlan.routes[mobileDetail] : null;
-  const selectedRoute = routePlan?.routes[selectedRouteIndex] ?? null;
+  const { savedItems, allSavedLocations, isLocationSaved, handleSaveLocation } =
+    usePlannerSavedLocations();
 
   // Live transfer viability for the selected route
-  const transfers = useTransferViability(selectedRoute);
-  const transfersByArrivingLeg = new Map(transfers.map((t) => [t.arrivingLeg, t]));
+  const { transfersByArrivingLeg, reminderProps, isLiveAdjusted, minutesUntil } =
+    useRoutePlannerInsights(selectedRoute);
 
-  // Leave reminder for the selected route
-  const {
-    leaveInfo,
-    isSet: isReminderSet,
-    isLiveAdjusted,
-    minutesUntil,
-    lastError,
-    scheduleReminder,
-    clearReminder,
-  } = useLeaveReminder(selectedRoute);
 
-  const reminderProps: ReminderProps | undefined = leaveInfo
-    ? {
-        isSet: isReminderSet,
-        minutesUntil,
-        isLiveAdjusted,
-        error: lastError,
-        onSchedule: scheduleReminder,
-        onClear: clearReminder,
-      }
-    : undefined;
-
-  const handleRouteClick = (i: number) => {
-    onSelectRoute(i);
-    setExpandedRoute((prev) => (prev === i ? null : i));
-  };
-
-  const handleMobileRouteClick = (i: number) => {
-    onSelectRoute(i);
-    setMobileDetail(i);
-  };
-
-  useEffect(() => {
-    if (!openSelectedRouteDetails || !hasRoutes || !routePlan) return;
-    let cancelled = false;
-    Promise.resolve().then(() => {
-      if (cancelled) return;
-      const idx =
-        selectedRouteIndex >= 0 && selectedRouteIndex < routePlan.routes.length
-          ? selectedRouteIndex
-          : 0;
-      onSelectRoute(idx);
-      setExpandedRoute(idx);
-      setMobileDetail(idx);
-      onConsumeOpenSelectedRouteDetails?.();
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    openSelectedRouteDetails,
-    hasRoutes,
-    routePlan,
-    selectedRouteIndex,
-    onSelectRoute,
-    onConsumeOpenSelectedRouteDetails,
-  ]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (!mobileDetailRoute) {
-      document.documentElement.style.removeProperty("--mobile-route-sheet-height");
-      lastDetailSheetHeightRef.current = 0;
-      return;
-    }
-    const el = detailSheetRef.current;
-    if (!el) return;
-
-    const applyHeight = (h: number) => {
-      const rounded = Math.max(0, Math.round(h));
-      document.documentElement.style.setProperty("--mobile-route-sheet-height", `${rounded}px`);
-      if (Math.abs(rounded - lastDetailSheetHeightRef.current) > 8) {
-        lastDetailSheetHeightRef.current = rounded;
-        onSelectRoute(selectedRouteIndex);
-      }
-    };
-
-    applyHeight(el.getBoundingClientRect().height);
-    const ro = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        applyHeight(entry.contentRect.height);
-      }
-    });
-    ro.observe(el);
-
-    return () => {
-      ro.disconnect();
-      document.documentElement.style.removeProperty("--mobile-route-sheet-height");
-      lastDetailSheetHeightRef.current = 0;
-    };
-  }, [mobileDetailRoute, onSelectRoute, selectedRouteIndex]);
-
-  /* ── Shared form block ─────────────────────────────── */
   const formBlock = (
     <div className="p-4 pt-3 space-y-3.5 md:px-5 md:pt-4 md:pb-4 md:space-y-4">
       <div className="md:hidden flex justify-center -mt-1">
@@ -539,14 +429,14 @@ export function RoutePlanner({
           <div className="shrink-0 flex flex-col gap-2">
             <button
               onClick={onSwap}
-              className="h-10 w-10 rounded-xl border border-foreground/8 hover:bg-foreground/[0.04] active:bg-foreground/[0.08] transition-colors text-foreground/60 hover:text-foreground/70 bg-white flex items-center justify-center"
+              className="h-10 w-10 rounded-xl border border-foreground/8 hover:bg-foreground/4 active:bg-foreground/8 transition-colors text-foreground/60 hover:text-foreground/70 bg-white flex items-center justify-center"
               title="Swap"
             >
               <ArrowUpDown size={16} />
             </button>
             <button
               onClick={() => onClear?.()}
-              className="h-10 w-10 rounded-xl border border-foreground/10 bg-white text-[11px] font-medium text-foreground/60 active:bg-foreground/[0.04] flex items-center justify-center"
+              className="h-10 w-10 rounded-xl border border-foreground/10 bg-white text-[11px] font-medium text-foreground/60 active:bg-foreground/4 flex items-center justify-center"
             >
               Reset
             </button>
@@ -627,7 +517,7 @@ export function RoutePlanner({
         {/* Mobile detail sheet */}
         <div
           ref={detailSheetRef}
-          className={`md:hidden absolute bottom-0 left-0 right-0 z-[1100] bg-white rounded-t-3xl shadow-sheet border-t border-foreground/8 ${
+          className={`md:hidden absolute bottom-0 left-0 right-0 z-1100 bg-white rounded-t-3xl shadow-sheet border-t border-foreground/8 ${
             isDetailDragging ? "" : "transition-transform duration-250 ease-out"
           }`}
           style={{ transform: `translateY(${detailDragY}px)` }}
@@ -643,8 +533,8 @@ export function RoutePlanner({
           </div>
           <div className="flex items-center gap-2 px-4 py-3.5 border-b border-foreground/6">
             <button
-              onClick={() => setMobileDetail(null)}
-              className="h-8 w-8 rounded-full text-foreground/55 hover:text-foreground/75 hover:bg-foreground/[0.06] active:bg-foreground/[0.1] inline-flex items-center justify-center shrink-0 transition-colors"
+              onClick={closeMobileDetail}
+              className="h-8 w-8 rounded-full text-foreground/55 hover:text-foreground/75 hover:bg-foreground/6 active:bg-foreground/10 inline-flex items-center justify-center shrink-0 transition-colors"
               aria-label="Back to all routes"
             >
               <ChevronLeft size={16} />
@@ -718,7 +608,7 @@ export function RoutePlanner({
 
       {/* Mobile fullscreen */}
       <div
-        className={`md:hidden absolute inset-0 z-[1100] flex flex-col bg-white ${
+        className={`md:hidden absolute inset-0 z-1100 flex flex-col bg-white ${
           isFullDragging ? "" : "transition-transform duration-250 ease-out"
         }`}
         style={{ transform: `translateY(${fullDragY}px)` }}
@@ -732,7 +622,7 @@ export function RoutePlanner({
         <div className="h-px bg-foreground/6" />
 
         <div className="flex-1 min-h-0 overflow-y-auto pb-20">
-          {hasRoutes && (
+          {hasRoutes && routePlan && (
             <div className="p-3 space-y-2.5">
               {routePlan.routes.map((route, i) => {
                 return (
@@ -781,7 +671,7 @@ function desktopSidebar({
   transfersByArrivingLeg: Map<RouteLeg, TransferInfo>;
 }) {
   return (
-    <div className="hidden md:flex w-[360px] border-r border-foreground/6 bg-gradient-to-b from-white to-foreground/[0.015] flex-col shrink-0">
+    <div className="hidden md:flex w-90 border-r border-foreground/6 bg-linear-to-b from-white to-foreground/1.5 flex-col shrink-0">
       <div className="flex items-center justify-end px-4 h-12 border-b border-foreground/6 shrink-0">
         <button
           onClick={onClose}

@@ -199,7 +199,7 @@ export function SavedPlannerPanel({
           {/* Saved locations */}
           {locations.length > 0 && (
             <div className="mb-1">
-              <div className="px-4 mb-1 text-[11px] uppercase tracking-wider text-foreground/40 font-semibold">
+              <div className="px-4 mb-1 mt-4 text-[11px] uppercase tracking-wider text-foreground/40 font-semibold">
                 Places
               </div>
               <div>

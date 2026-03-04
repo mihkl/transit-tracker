@@ -53,7 +53,7 @@ export function VehiclePopup({
       )}
 
       {vehicle.nextStop && (
-        <div className="rounded-xl bg-foreground/[0.04] px-3 py-2.5 mb-3">
+        <div className="rounded-xl bg-foreground/4 px-3 py-2.5 mb-3">
           <div className="text-xs text-foreground/55 font-medium mb-0.5">Next stop</div>
           <div className="text-sm font-semibold text-foreground/90 mb-1">
             {vehicle.nextStop.name}
@@ -82,7 +82,7 @@ export function VehiclePopup({
           </span>
         </div>
         {vehicle.totalStops > 0 && (
-          <div className="h-1.5 rounded-full bg-foreground/[0.08] overflow-hidden">
+          <div className="h-1.5 rounded-full bg-foreground/8 overflow-hidden">
             <div
               className="h-full rounded-full transition-all duration-500 ease-out"
               style={{ width: `${progress}%`, backgroundColor: color }}

@@ -8,7 +8,9 @@
     "prebuild": "node ./scripts/build-gtfs.js && npm run build:sw",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run lint && npm run typecheck"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",

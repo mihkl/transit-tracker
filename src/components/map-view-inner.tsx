@@ -3,7 +3,7 @@
 import { useMemo, useCallback, useRef, useState, useEffect } from "react";
 import Map, { Marker, Source, Layer, Popup, type MapRef } from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
-import type { VehicleDto, RoutePlanResponse, StopArrival, StopDto } from "@/lib/types";
+import type { VehicleDto, RoutePlanResponse, StopDto } from "@/lib/types";
 import { TALLINN_CENTER, DEFAULT_ZOOM, TYPE_COLORS } from "@/lib/constants";
 import { BottomSheet } from "@/components/bottom-sheet";
 import type { MapLayerMouseEvent } from "maplibre-gl";
@@ -21,6 +21,8 @@ import { useTrafficData } from "@/hooks/use-traffic-data";
 import { Icon } from "@/components/icon";
 import { useUserLocation } from "@/hooks/use-user-location";
 import { useStops } from "@/hooks/use-stops";
+import { useVehicleEta } from "@/hooks/use-vehicle-eta";
+import { useStopPopupArrivals } from "@/hooks/use-stop-popup-arrivals";
 import { MAP_LAYER_IDS } from "@/lib/domain";
 import {
   addVehicleArrowImage,
@@ -32,12 +34,6 @@ import {
   fitMapToPoints,
   ROUTE_LEG_COLOR_EXPRESSION,
 } from "@/components/map/map-view-helpers";
-
-import { getStopArrivalsAsync } from "@/actions";
-
-async function fetchArrivalsAsync(stopId: string) {
-  return getStopArrivalsAsync(stopId);
-}
 
 const INITIAL_VIEW_STATE = {
   longitude: TALLINN_CENTER[1],
@@ -83,10 +79,15 @@ export function MapViewInner({
   const mapRef = useRef<MapRef>(null);
   const [viewState, setViewState] = useState(INITIAL_VIEW_STATE);
   const [popupVehicle, setPopupVehicle] = useState<VehicleDto | null>(null);
-  const [popupStop, setPopupStop] = useState<StopDto | null>(null);
-  const [stopArrivals, setStopArrivals] = useState<StopArrival[]>([]);
-  const [arrivalsLoading, setArrivalsLoading] = useState(false);
-  const [vehicleEta, setVehicleEta] = useState<number | null>(null);
+  const {
+    popupStop,
+    setPopupStop,
+    stopArrivals,
+    arrivalsLoading,
+    openStopPopupAsync,
+    clearStopPopup,
+  } = useStopPopupArrivals();
+  const vehicleEta = useVehicleEta(popupVehicle);
   const [hoveringInteractive, setHoveringInteractive] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const isDesktop = useIsDesktop();
@@ -195,19 +196,9 @@ export function MapViewInner({
   }, [focusedVehicleId, shapes, isDesktop]);
 
   const handleStopClick = useCallback(async (stop: StopDto) => {
-    setPopupStop(stop);
     setPopupVehicle(null);
-    setArrivalsLoading(true);
-    setStopArrivals([]);
-
-    try {
-      setStopArrivals(await fetchArrivalsAsync(stop.stopId));
-    } catch (err) {
-      console.error("Failed to fetch departures:", err);
-    } finally {
-      setArrivalsLoading(false);
-    }
-  }, []);
+    await openStopPopupAsync(stop);
+  }, [openStopPopupAsync]);
 
   const handleMapClick = useCallback(
     (e: MapLayerMouseEvent) => {
@@ -249,7 +240,7 @@ export function MapViewInner({
       setPopupVehicle(null);
       setPopupStop(null);
     },
-    [pickingPoint, onMapClick, onDeselectVehicle, onVehicleClick, allStops, handleStopClick],
+    [pickingPoint, onMapClick, onDeselectVehicle, onVehicleClick, allStops, handleStopClick, setPopupStop],
   );
 
   useEffect(() => {
@@ -260,12 +251,11 @@ export function MapViewInner({
         latitude: selectedStop.latitude,
         zoom: Math.max(prev.zoom, 15),
       }));
-      handleStopClick(selectedStop);
+      void handleStopClick(selectedStop);
     } else {
-      setPopupStop(null);
-      setStopArrivals([]);
+      clearStopPopup();
     }
-  }, [selectedStop, handleStopClick]);
+  }, [selectedStop, handleStopClick, clearStopPopup]);
 
   useEffect(() => {
     if (!popupVehicle) return;
@@ -279,66 +269,6 @@ export function MapViewInner({
     setPopupVehicle(updated);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vehicles, popupVehicle?.id]);
-
-  useEffect(() => {
-    if (popupVehicle && !popupVehicle.isOnRoute) {
-      setVehicleEta(null);
-      return;
-    }
-
-    const stopId = popupVehicle?.nextStop?.stopId;
-    if (!popupVehicle || !stopId) {
-      setVehicleEta(null);
-      return;
-    }
-
-    const lineNumber = popupVehicle.lineNumber;
-    let cancelled = false;
-
-    const fetchEtaAsync = async () => {
-      try {
-        const arrivals = await fetchArrivalsAsync(stopId);
-        if (cancelled) return;
-        const match = arrivals.find((a) => a.route === lineNumber);
-        setVehicleEta(match?.secondsUntilArrival ?? null);
-      } catch {
-        if (!cancelled) setVehicleEta(null);
-      }
-    };
-
-    setVehicleEta(null);
-    fetchEtaAsync();
-    const intervalId = setInterval(fetchEtaAsync, 5_000);
-
-    return () => {
-      cancelled = true;
-      clearInterval(intervalId);
-    };
-  }, [popupVehicle?.isOnRoute, popupVehicle?.nextStop?.stopId, popupVehicle?.lineNumber]);
-
-  useEffect(() => {
-    if (!popupStop) return;
-
-    const refreshAsync = async () => {
-      try {
-        setStopArrivals(await fetchArrivalsAsync(popupStop.stopId));
-      } catch (err) {
-        console.error("Failed to refresh departures:", err);
-      }
-    };
-
-    const intervalId = setInterval(refreshAsync, 5_000);
-
-    const handleVisibility = () => {
-      if (!document.hidden) refreshAsync();
-    };
-    document.addEventListener("visibilitychange", handleVisibility);
-
-    return () => {
-      clearInterval(intervalId);
-      document.removeEventListener("visibilitychange", handleVisibility);
-    };
-  }, [popupStop]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -400,9 +330,9 @@ export function MapViewInner({
 
   const handleBottomSheetClose = useCallback(() => {
     setPopupVehicle(null);
-    setPopupStop(null);
+    clearStopPopup();
     onDeselectVehicle();
-  }, [onDeselectVehicle]);
+  }, [onDeselectVehicle, clearStopPopup]);
 
   const handleLocateMe = useCallback(() => {
     if (!userLocation || !mapRef.current) return;
@@ -633,7 +563,7 @@ export function MapViewInner({
       {userLocation && (
         <button
           onClick={handleLocateMe}
-          className="absolute bottom-[88px] md:bottom-6 left-3 z-10 w-12 h-12 rounded-xl bg-white shadow-fab flex items-center justify-center text-foreground/60 hover:text-foreground/80 active:scale-95 transition-all duration-150"
+          className="absolute bottom-22 md:bottom-6 left-3 z-10 w-12 h-12 rounded-xl bg-white shadow-fab flex items-center justify-center text-foreground/60 hover:text-foreground/80 active:scale-95 transition-all duration-150"
           title="Center on my location"
         >
           <Icon name="crosshair" className="w-5 h-5" />

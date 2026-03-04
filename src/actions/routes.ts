@@ -7,6 +7,7 @@ import { matchTransitLegAsync } from "@/server/delay-matcher";
 import type { RoutePlanRequest, RoutePlanResponse, PlannedRoute, RouteLeg } from "@/lib/types";
 import { parseDurationSeconds } from "@/lib/route-time";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { getClientIdentifier } from "@/lib/request-client";
 import { normalizeTransitMode } from "@/lib/domain";
 import { routePlanRequestSchema, routePlanResponseSchema } from "@/lib/schemas";
 
@@ -16,8 +17,7 @@ function normalizeVehicleType(type: string) {
 
 export async function planRouteAsync(req: RoutePlanRequest) {
   const parsedReq = routePlanRequestSchema.parse(req);
-  const forwarded = (await headers()).get("x-forwarded-for") ?? "";
-  const ip = forwarded.split(",").at(-1)?.trim() ?? "unknown";
+  const ip = getClientIdentifier(await headers());
   if (!checkRateLimit(`planRoute:${ip}`, 20, 60_000)) {
     throw new Error("Too many requests. Please wait a moment.");
   }

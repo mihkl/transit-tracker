@@ -33,7 +33,7 @@ export function BottomNavigation() {
   );
 
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-[1200] bg-white/95 backdrop-blur-lg border-t border-foreground/8 safe-bottom">
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-1200 bg-white/95 backdrop-blur-lg border-t border-foreground/8 safe-bottom">
       <div className="h-16 flex items-stretch">
         {tabs.map(({ id, label, icon: IconComp }) => {
           const active = id === "layers" ? showMobileLayers : mobileTab === id;
