@@ -12,6 +12,9 @@
 
 # testing
 /coverage
+/playwright-report/
+/test-results/
+/blob-report/
 
 # next.js
 /.next/
@@ -49,3 +52,4 @@ next-env.d.ts
 .serena/.gitignore
 package-lock.json
 todo.md
+thesis/draft.md

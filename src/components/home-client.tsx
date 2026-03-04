@@ -254,7 +254,6 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
             onDeselectVehicle={handleDeselectVehicle}
           />
           <HomeMobileOverlays
-            isDesktop={isDesktop}
             lines={lines}
             vehicleCount={vehicles.length}
             onToggleVehicles={handleToggleVehicles}

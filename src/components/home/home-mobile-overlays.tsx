@@ -9,14 +9,12 @@ import { useTransitStore } from "@/store/use-transit-store";
 import type { LineDto } from "@/lib/types";
 
 interface HomeMobileOverlaysProps {
-  isDesktop: boolean;
   lines: LineDto[];
   vehicleCount: number;
   onToggleVehicles: () => void;
 }
 
 export function HomeMobileOverlays({
-  isDesktop,
   lines,
   vehicleCount,
   onToggleVehicles,
@@ -51,8 +49,6 @@ export function HomeMobileOverlays({
     [setShowMobileLayers],
   );
 
-  if (isDesktop) return null;
-
   return (
     <>
       <BottomSheet open={mobileTab === "nearby"} onClose={goToMapTab}>
@@ -60,12 +56,12 @@ export function HomeMobileOverlays({
       </BottomSheet>
 
       {mobileTab === "search" && (
-        <div className="absolute inset-0 z-[1100] bg-white">
+        <div className="absolute inset-0 z-[1100] bg-white md:hidden">
           <MobileSearchView lines={lines} vehicleCount={vehicleCount} />
         </div>
       )}
 
-      <div className="absolute bottom-20 right-2 z-[1150] pointer-events-none">
+      <div className="absolute bottom-20 right-2 z-[1150] pointer-events-none md:hidden">
         <div
           ref={mobileLayersMenuRef}
           className={`flex flex-col items-end gap-2 transition-all duration-200 ${
