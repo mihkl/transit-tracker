@@ -61,7 +61,7 @@ export function HomeMobileOverlays({
         </div>
       )}
 
-      <div className="absolute bottom-20 right-2 z-[1150] pointer-events-none md:hidden">
+      <div className="absolute right-2 z-1250 pointer-events-none md:hidden" style={{ bottom: "calc(5rem + env(safe-area-inset-bottom, 0px))" }}>
         <div
           ref={mobileLayersMenuRef}
           className={`flex flex-col items-end gap-2 transition-all duration-200 ${
