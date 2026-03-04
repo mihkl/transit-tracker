@@ -32,9 +32,5 @@ export default defineConfig({
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
-    env: {
-      ...process.env,
-      GTFS_PREPROCESSED_DIR: process.env.GTFS_PREPROCESSED_DIR ?? gtfsFixtureDir,
-    },
   },
 });
