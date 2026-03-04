@@ -62,8 +62,13 @@
   }
   body {
     @apply bg-background text-foreground;
-    overscroll-behavior-y: contain;
   }
+}
+
+html, body {
+  overflow: hidden;
+  overscroll-behavior-y: contain;
+  height: 100%;
 }
 
 /* Safe area for bottom navigation on notched devices */
