@@ -12,10 +12,12 @@ import { useAnimatedVehicles } from "@/hooks/use-animated-vehicles";
 import { useUserLocation } from "@/hooks/use-user-location";
 import { useIsDesktop } from "@/hooks/use-is-desktop";
 import { useTransitStore } from "@/store/use-transit-store";
-import type { RoutePlanRequest, RouteLeg, LineDto } from "@/lib/types";
+import type { RoutePlanRequest, RoutePlanResponse, RouteLeg, LineDto } from "@/lib/types";
 import type { PickingPoint } from "@/store/use-transit-store";
 import { modeToTransportType, normalizeLineType } from "@/lib/domain";
 import { planRouteAsync } from "@/actions";
+import { mergeAndDedupeRoutes, fastestRoutes, lessWalkingRoutes, fewerTransfersRoutes } from "@/lib/route-filter";
+
 
 type ShapesMap = Record<string, number[][]>;
 
@@ -50,6 +52,8 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
     setMobileTab,
     goToMapTab,
     clearPlanner,
+    routingMode,
+    setRouteCache,
   } = useTransitStore();
   const userLocation = useUserLocation();
 
@@ -96,8 +100,9 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
     setSelectedRouteIndex(0);
     setSelectedLine(null);
     setSelectedStop(null);
+    setRouteCache({ fastest: null, lessWalking: null, fewerTransfers: null });
     try {
-      const req: RoutePlanRequest = {
+      const baseReq: RoutePlanRequest = {
         originLat: origin.lat,
         originLng: origin.lng,
         destinationLat: destination.lat,
@@ -106,13 +111,31 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
 
       if ((timeOption === "depart" && selectedDateTime) || timeOption === "now") {
         const dt = timeOption === "now" ? new Date() : new Date(selectedDateTime);
-        req.departureTime = dt.toISOString();
+        baseReq.departureTime = dt.toISOString();
       } else if (timeOption === "arrive" && selectedDateTime) {
-        req.arrivalTime = new Date(selectedDateTime).toISOString();
+        baseReq.arrivalTime = new Date(selectedDateTime).toISOString();
       }
 
-      const data = await planRouteAsync(req);
-      setRoutePlan(data);
+      const [fewerTransfersData, lessWalkingData] = await Promise.all([
+        planRouteAsync({ ...baseReq, routingPreference: "FEWER_TRANSFERS" }),
+        planRouteAsync({ ...baseReq, routingPreference: "LESS_WALKING" }),
+      ]);
+
+      const merged = mergeAndDedupeRoutes(fewerTransfersData, lessWalkingData);
+      const fastestData: RoutePlanResponse = { routes: fastestRoutes(merged) };
+
+      const cache = {
+        fewerTransfers: { routes: fewerTransfersRoutes(merged) },
+        lessWalking: { routes: lessWalkingRoutes(merged) },
+        fastest: fastestData,
+      };
+      setRouteCache(cache);
+
+      const activePlan =
+        routingMode === "fastest" ? fastestData
+        : routingMode === "less-walking" ? lessWalkingData
+        : fewerTransfersData;
+      setRoutePlan(activePlan);
     } catch (err) {
       console.error("Failed to plan route:", err);
     } finally {
@@ -122,7 +145,9 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
   }, [
     destination,
     origin,
+    routingMode,
     selectedDateTime,
+    setRouteCache,
     setPlanLoading,
     setRoutePlan,
     setSelectedLine,

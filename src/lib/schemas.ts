@@ -60,6 +60,7 @@ export const routePlanRequestSchema = z
     destinationLng: z.number(),
     departureTime: z.string().optional(),
     arrivalTime: z.string().optional(),
+    routingPreference: z.enum(["FEWER_TRANSFERS", "LESS_WALKING"]).optional(),
   })
   .refine((v) => !(v.departureTime && v.arrivalTime), {
     message: "Only one of departureTime or arrivalTime can be set",

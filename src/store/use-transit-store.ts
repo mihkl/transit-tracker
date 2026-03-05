@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { RoutePlanResponse, StopDto } from "@/lib/types";
 import type { LineType } from "@/lib/domain";
+import { resolveRoutePlan, type RoutingMode, type RouteCache } from "@/lib/route-filter";
 import { toLocalDateTimeString } from "@/lib/format-utils";
 
 export type SelectedLine = { lineNumber: string; type: LineType } | null;
@@ -20,6 +21,8 @@ interface TransitStoreState {
   destination: PlannerPoint;
   pickingPoint: PickingPoint;
   routePlan: RoutePlanResponse | null;
+  routeCache: RouteCache;
+  routingMode: RoutingMode;
   planLoading: boolean;
   selectedRouteIndex: number;
   routeFitRequest: number;
@@ -44,6 +47,8 @@ interface TransitStoreActions {
   setDestination: (point: PlannerPoint) => void;
   setPickingPoint: (point: PickingPoint) => void;
   setRoutePlan: (plan: RoutePlanResponse | null) => void;
+  setRouteCache: (cache: RouteCache) => void;
+  setRoutingMode: (mode: RoutingMode) => void;
   setPlanLoading: (loading: boolean) => void;
   setSelectedRouteIndex: (index: number) => void;
   bumpRouteFitRequest: () => void;
@@ -72,6 +77,8 @@ function getInitialState() {
     destination: null,
     pickingPoint: null,
     routePlan: null,
+    routeCache: { fastest: null, lessWalking: null, fewerTransfers: null },
+    routingMode: "fastest",
     planLoading: false,
     selectedRouteIndex: 0,
     routeFitRequest: 0,
@@ -101,6 +108,13 @@ export const useTransitStore = create<TransitStore>((set) => ({
   setDestination: (destination) => set({ destination }),
   setPickingPoint: (pickingPoint) => set({ pickingPoint }),
   setRoutePlan: (routePlan) => set({ routePlan }),
+  setRouteCache: (routeCache) => set({ routeCache }),
+  setRoutingMode: (mode) =>
+    set((state) => ({
+      routingMode: mode,
+      routePlan: resolveRoutePlan(state.routeCache, mode) ?? state.routePlan,
+      selectedRouteIndex: 0,
+    })),
   setPlanLoading: (planLoading) => set({ planLoading }),
   setSelectedRouteIndex: (selectedRouteIndex) => set({ selectedRouteIndex }),
   bumpRouteFitRequest: () => set((state) => ({ routeFitRequest: state.routeFitRequest + 1 })),
@@ -118,6 +132,7 @@ export const useTransitStore = create<TransitStore>((set) => ({
       destination: null,
       pickingPoint: null,
       routePlan: null,
+      routeCache: { fastest: null, lessWalking: null, fewerTransfers: null },
       planLoading: false,
       selectedRouteIndex: 0,
       selectedLine: null,

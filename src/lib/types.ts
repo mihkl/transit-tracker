@@ -142,6 +142,7 @@ export interface RoutePlanRequest {
   destinationLng: number;
   departureTime?: string;
   arrivalTime?: string;
+  routingPreference?: "FEWER_TRANSFERS" | "LESS_WALKING";
 }
 
 export interface RoutePlanResponse {

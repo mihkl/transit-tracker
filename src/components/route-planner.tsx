@@ -3,7 +3,7 @@
 import { Fragment } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Footprints, X, ArrowUpDown, Search, Bell, ChevronLeft } from "lucide-react";
+import { Footprints, Zap, ArrowRightLeft, X, ArrowUpDown, Search, Bell, ChevronLeft } from "lucide-react";
 import { Icon } from "@/components/icon";
 import { PlaceSearchInput } from "./place-search-input";
 import { RouteLegCard, TransferBadge } from "./route-leg-card";
@@ -16,6 +16,8 @@ import { useRoutePlannerSelection } from "@/hooks/use-route-planner-selection";
 import { useRoutePlannerInsights } from "@/hooks/use-route-planner-insights";
 import type { RoutePlanResponse, PlannedRoute, RouteLeg } from "@/lib/types";
 import { SavedPlannerPanel } from "@/components/saved-planner-panel";
+import { useTransitStore } from "@/store/use-transit-store";
+import { ROUTING_MODES } from "@/lib/route-filter";
 
 export type TimeOption = "now" | "depart" | "arrive";
 
@@ -346,6 +348,8 @@ export function RoutePlanner({
   openSelectedRouteDetails = false,
   onConsumeOpenSelectedRouteDetails,
 }: RoutePlannerProps) {
+  const routingMode = useTransitStore((s) => s.routingMode);
+  const setRoutingMode = useTransitStore((s) => s.setRoutingMode);
   const {
     hasRoutes,
     selectedRoute,
@@ -490,6 +494,28 @@ export function RoutePlanner({
             className="h-10 w-full rounded-xl border border-foreground/10 bg-white px-3 text-sm text-foreground/80 font-medium focus:outline-none focus:ring-1 focus:ring-primary/30 transition-all"
           />
         )}
+
+        {/* Routing mode selector */}
+        <div className="flex rounded-xl bg-foreground/4 p-[3px] gap-[3px]">
+          {ROUTING_MODES.map((m) => {
+            const isActive = routingMode === m.value;
+            const IconComponent = m.iconName === "zap" ? Zap : m.iconName === "footprints" ? Footprints : ArrowRightLeft;
+            return (
+              <button
+                key={m.value}
+                onClick={() => setRoutingMode(m.value)}
+                className={`flex-1 flex items-center justify-center gap-1.5 h-[34px] rounded-[9px] text-[11px] font-semibold tracking-tight transition-all duration-200 ${
+                  isActive
+                    ? "bg-white text-foreground/90 shadow-[0_1px_3px_rgba(0,0,0,0.08),0_1px_1px_rgba(0,0,0,0.04)] ring-1 ring-black/[0.04]"
+                    : "text-foreground/40 hover:text-foreground/60 active:bg-foreground/[0.03]"
+                }`}
+              >
+                <IconComponent size={12} className={isActive ? "text-primary" : ""} strokeWidth={2.5} />
+                <span>{m.label}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
@@ -624,16 +650,14 @@ export function RoutePlanner({
         <div className="flex-1 min-h-0 overflow-y-auto pb-20">
           {hasRoutes && routePlan && (
             <div className="p-3 space-y-2.5">
-              {routePlan.routes.map((route, i) => {
-                return (
-                  <MobileRouteOption
-                    key={i}
-                    route={route}
-                    isSelected={i === selectedRouteIndex}
-                    onClick={() => handleMobileRouteClick(i)}
-                  />
-                );
-              })}
+              {routePlan.routes.map((route, i) => (
+                <MobileRouteOption
+                  key={i}
+                  route={route}
+                  isSelected={i === selectedRouteIndex}
+                  onClick={() => handleMobileRouteClick(i)}
+                />
+              ))}
             </div>
           )}
           {noResults && <NoRoutesMessage className="px-4 py-12 text-center text-sm text-foreground/55 font-medium" />}

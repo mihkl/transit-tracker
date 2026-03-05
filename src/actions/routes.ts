@@ -35,6 +35,7 @@ export async function planRouteAsync(req: RoutePlanRequest) {
     parsedReq.destinationLng,
     parsedReq.departureTime,
     parsedReq.arrivalTime,
+    parsedReq.routingPreference ?? "FEWER_TRANSFERS",
   );
 
   if (!googleResponse || !googleResponse.routes?.length) {

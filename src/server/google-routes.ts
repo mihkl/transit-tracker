@@ -219,6 +219,7 @@ export async function computeRoutesAsync(
   destLng: number,
   departureTime?: string,
   arrivalTime?: string,
+  routingPreference: "FEWER_TRANSFERS" | "LESS_WALKING" = "FEWER_TRANSFERS",
 ) {
   const apiKey = getApiKey();
 
@@ -232,7 +233,7 @@ export async function computeRoutesAsync(
     travelMode: "TRANSIT",
     computeAlternativeRoutes: true,
     transitPreferences: {
-      routingPreference: "FEWER_TRANSFERS",
+      routingPreference,
     },
   };
 
