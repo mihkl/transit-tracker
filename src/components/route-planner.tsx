@@ -632,37 +632,52 @@ export function RoutePlanner({
         transfersByArrivingLeg,
       })}
 
-      {/* Mobile fullscreen */}
-      <div
-        className={`md:hidden absolute inset-0 z-1100 flex flex-col bg-white ${
-          isFullDragging ? "" : "transition-transform duration-250 ease-out"
-        }`}
-        style={{ transform: `translateY(${fullDragY}px)` }}
-        onTouchStart={(e) => beginFullDrag(e.touches[0].clientY, e.touches[0].clientX)}
-        onTouchMove={(e) => updateFullDrag(e.touches[0].clientY, e.touches[0].clientX)}
-        onTouchEnd={endFullDrag}
-        onTouchCancel={endFullDrag}
-      >
-        {formBlock}
-
-        <div className="h-px bg-foreground/6" />
-
-        <div className="flex-1 min-h-0 overflow-y-auto pb-20">
-          {hasRoutes && routePlan && (
-            <div className="p-3 space-y-2.5">
-              {routePlan.routes.map((route, i) => (
-                <MobileRouteOption
-                  key={i}
-                  route={route}
-                  isSelected={i === selectedRouteIndex}
-                  onClick={() => handleMobileRouteClick(i)}
-                />
-              ))}
-            </div>
-          )}
-          {noResults && <NoRoutesMessage className="px-4 py-12 text-center text-sm text-foreground/55 font-medium" />}
+      {/* Mobile: bottom sheet (before search) or fullscreen (after search) */}
+      {!hasRoutes && !noResults ? (
+        <div
+          className={`md:hidden absolute bottom-0 left-0 right-0 z-1100 bg-white rounded-t-3xl shadow-sheet border-t border-foreground/8 ${
+            isFullDragging ? "" : "transition-transform duration-250 ease-out"
+          }`}
+          style={{ transform: `translateY(${fullDragY}px)` }}
+          onTouchStart={(e) => beginFullDrag(e.touches[0].clientY, e.touches[0].clientX)}
+          onTouchMove={(e) => updateFullDrag(e.touches[0].clientY, e.touches[0].clientX)}
+          onTouchEnd={endFullDrag}
+          onTouchCancel={endFullDrag}
+        >
+          {formBlock}
         </div>
-      </div>
+      ) : (
+        <div
+          className={`md:hidden absolute inset-0 z-1100 flex flex-col bg-white ${
+            isFullDragging ? "" : "transition-transform duration-250 ease-out"
+          }`}
+          style={{ transform: `translateY(${fullDragY}px)` }}
+          onTouchStart={(e) => beginFullDrag(e.touches[0].clientY, e.touches[0].clientX)}
+          onTouchMove={(e) => updateFullDrag(e.touches[0].clientY, e.touches[0].clientX)}
+          onTouchEnd={endFullDrag}
+          onTouchCancel={endFullDrag}
+        >
+          {formBlock}
+
+          <div className="h-px bg-foreground/6" />
+
+          <div className="flex-1 min-h-0 overflow-y-auto pb-20">
+            {hasRoutes && routePlan && (
+              <div className="p-3 space-y-2.5">
+                {routePlan.routes.map((route, i) => (
+                  <MobileRouteOption
+                    key={i}
+                    route={route}
+                    isSelected={i === selectedRouteIndex}
+                    onClick={() => handleMobileRouteClick(i)}
+                  />
+                ))}
+              </div>
+            )}
+            {noResults && <NoRoutesMessage className="px-4 py-12 text-center text-sm text-foreground/55 font-medium" />}
+          </div>
+        </div>
+      )}
     </>
   );
 }
