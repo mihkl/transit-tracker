@@ -9,6 +9,7 @@ const envSchema = z.object({
   VAPID_PRIVATE_KEY: z.string().trim().min(1).optional(),
   VAPID_SUBJECT: z.string().trim().min(1).optional(),
   PUSH_DB_PATH: z.string().trim().min(1).optional(),
+  PUSH_DEBUG_TOKEN: z.string().trim().min(1).optional(),
   GTFS_PREPROCESSED_DIR: z.string().trim().min(1).optional(),
   GOOGLE_ROUTES_API_KEY: z.string().trim().min(1).optional(),
 });

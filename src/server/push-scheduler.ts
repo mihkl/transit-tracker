@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { and, asc, eq, isNotNull, like, lte, or } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull, like, lte, or } from "drizzle-orm";
 import { resolve } from "node:path";
 import webpush from "web-push";
 import type { PushSubscription } from "web-push";
@@ -350,6 +350,67 @@ export async function cancelNotification(endpoint: string, jobPrefix?: string) {
         like(pushNotifications.jobKey, `${jobPrefix}%`),
       ),
     );
+}
+
+export async function getPushDebugSnapshot(limit = 30, status?: string) {
+  await initializePushStore();
+
+  const safeLimit = Math.max(1, Math.min(limit, 100));
+  const rows = await pushDb
+    .select()
+    .from(pushNotifications)
+    .where(status ? eq(pushNotifications.status, status) : undefined)
+    .orderBy(desc(pushNotifications.notifyAt))
+    .limit(safeLimit);
+
+  const allStatuses = await pushDb
+    .select({
+      status: pushNotifications.status,
+    })
+    .from(pushNotifications);
+
+  const counts = allStatuses.reduce<Record<string, number>>((acc, row) => {
+    acc[row.status] = (acc[row.status] ?? 0) + 1;
+    return acc;
+  }, {});
+
+  return {
+    total: allStatuses.length,
+    counts,
+    rows: rows.map((row) => {
+      let payload: PushPayload | null = null;
+      try {
+        payload = JSON.parse(row.payloadJson) as PushPayload;
+      } catch {
+        payload = null;
+      }
+
+      return {
+        id: row.id,
+        endpointSuffix: row.endpoint.slice(-48),
+        jobKey: row.jobKey,
+        status: row.status,
+        attemptCount: row.attemptCount,
+        notifyAt: row.notifyAt,
+        nextAttemptAt: row.nextAttemptAt,
+        claimedAt: row.claimedAt,
+        sentAt: row.sentAt,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+        lastError: row.lastError,
+        payload: payload
+          ? {
+              title: payload.title,
+              body: payload.body,
+              tag: payload.tag,
+              url: payload.url,
+              category: payload.category,
+              jobPrefix: payload.jobPrefix,
+            }
+          : null,
+      };
+    }),
+  };
 }
 
 export const vapidPublicKey = VAPID_PUBLIC_KEY;
