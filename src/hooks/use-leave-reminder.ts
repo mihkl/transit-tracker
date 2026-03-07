@@ -150,7 +150,7 @@ async function schedulePushAsync(
   title: string,
   body: string,
   jobKey: string,
-  endpoint: string,
+  jobPrefix = jobKey,
 ) {
   const response = await fetch("/api/push", {
     method: "POST",
@@ -164,8 +164,8 @@ async function schedulePushAsync(
       url: "/?trip=1",
       timestamp: notifyAt,
       category: "leave-reminder",
-      endpoint,
       jobKey,
+      jobPrefix,
     }),
   });
 
@@ -395,7 +395,7 @@ export function useLeaveReminder(route: PlannedRoute | null) {
         reminderText.title,
         reminderText.body,
         "leave-main",
-        sub.endpoint,
+        "leave-main",
       );
 
       saveReminder({
@@ -445,7 +445,7 @@ export function useLeaveReminder(route: PlannedRoute | null) {
 
         if (needsReschedule) {
           const text = buildLeaveReminderText(baseInfo, nextNotifyAt, delaySeconds);
-          await schedulePushAsync(sub, nextNotifyAt, text.title, text.body, "leave-main", sub.endpoint);
+          await schedulePushAsync(sub, nextNotifyAt, text.title, text.body, "leave-main", "leave-main");
           if (cancelled) return;
           setNotifyAtMs(nextNotifyAt);
         }
@@ -468,7 +468,7 @@ export function useLeaveReminder(route: PlannedRoute | null) {
             delayText.title,
             delayText.body,
             `delay-update-${Date.now()}`,
-            sub.endpoint,
+            "delay-update-",
           );
           if (cancelled) return;
           lastDelayPushAt = Date.now();
@@ -555,3 +555,4 @@ export function useLeaveReminder(route: PlannedRoute | null) {
     clearReminder,
   };
 }
+

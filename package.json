@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build:sw": "esbuild src/sw.ts --bundle --platform=browser --outfile=public/sw.js",
+    "db:generate": "drizzle-kit generate",
+    "db:studio": "drizzle-kit studio",
     "prebuild": "node ./scripts/build-gtfs.js && npm run build:sw",
     "build": "next build",
     "start": "next start",
@@ -15,9 +17,11 @@
     "test:e2e:headed": "playwright test --headed"
   },
   "dependencies": {
+    "@libsql/client": "^0.17.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
+    "drizzle-orm": "^0.45.1",
     "lucide-react": "^0.563.0",
     "maplibre-gl": "^5.18.0",
     "next": "16.1.6",
@@ -33,10 +37,11 @@
   "devDependencies": {
     "@playwright/test": "^1.58.2",
     "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
+    "@types/node": "^25.3.5",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/web-push": "^3.6.4",
+    "drizzle-kit": "^0.31.9",
     "esbuild": "^0.27.3",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",

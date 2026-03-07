@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { scheduleNotification, cancelNotification, vapidPublicKey } from "@/server/push-scheduler";
+import { cancelNotification, scheduleNotification, vapidPublicKey } from "@/server/push-scheduler";
 
 export const dynamic = "force-dynamic";
 
@@ -62,7 +62,9 @@ function parseScheduleBody(value: unknown) {
   const tag = toSafeString(value.tag, MAX_TAG_LEN);
   const url = toSafeString(value.url, MAX_URL_LEN);
   const category = toSafeString(value.category, MAX_CATEGORY_LEN);
+  const endpoint = toSafeString(value.endpoint, MAX_ENDPOINT_LEN);
   const jobKey = toSafeString(value.jobKey, MAX_JOB_KEY_LEN);
+  const jobPrefix = toSafeString(value.jobPrefix, MAX_JOB_PREFIX_LEN);
 
   const timestamp =
     typeof value.timestamp === "number" && Number.isFinite(value.timestamp)
@@ -78,7 +80,9 @@ function parseScheduleBody(value: unknown) {
     url,
     timestamp,
     category,
+    endpoint,
     jobKey,
+    jobPrefix,
   };
 }
 
@@ -133,7 +137,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    scheduleNotification(
+    await scheduleNotification(
       body.subscription,
       body.notifyAt,
       {
@@ -143,6 +147,8 @@ export async function POST(req: NextRequest) {
         url: body.url,
         timestamp: body.timestamp,
         category: body.category,
+        endpoint: body.endpoint ?? body.subscription.endpoint,
+        jobPrefix: body.jobPrefix ?? body.jobKey ?? "default",
       },
       body.jobKey ?? "default",
     );
@@ -178,6 +184,6 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: "Missing endpoint" }, { status: 400 });
   }
 
-  cancelNotification(endpoint, jobPrefix);
+  await cancelNotification(endpoint, jobPrefix);
   return NextResponse.json({ ok: true });
 }

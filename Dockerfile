@@ -23,6 +23,7 @@ ENV HOSTNAME=0.0.0.0
 
 # public/ includes gtfs-preprocessed/ and sw.js generated during build
 COPY --from=builder /app/public ./public
+COPY --from=builder /app/drizzle ./drizzle
 
 # Standalone server bundle
 COPY --from=builder /app/.next/standalone ./
