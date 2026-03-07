@@ -26,7 +26,6 @@ interface ReminderBaseInfo extends LeaveInfo {
 }
 
 interface StoredReminder {
-  endpoint: string;
   notifyAt: number;
   routeKey?: string;
   lastDelaySeconds?: number | null;
@@ -540,7 +539,6 @@ export function useLeaveReminder(route: PlannedRoute | null) {
       );
 
       saveReminder({
-        endpoint: sub.endpoint,
         notifyAt: nextNotifyAt,
         routeKey,
         lastDelaySeconds: delaySeconds,
@@ -641,7 +639,6 @@ export function useLeaveReminder(route: PlannedRoute | null) {
 
         saveReminder({
           ...stored,
-          endpoint: sub.endpoint,
           notifyAt: nextNotifyAt,
           routeKey,
           lastDelaySeconds: delaySeconds,
@@ -690,20 +687,17 @@ export function useLeaveReminder(route: PlannedRoute | null) {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            endpoint: sub.endpoint,
+            subscription: sub.toJSON(),
             jobPrefix: "delay-update-",
           }),
         });
         await fetch("/api/push", {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ endpoint: sub.endpoint, jobPrefix: "leave-main" }),
-        });
-      } else if (stored?.endpoint) {
-        await fetch("/api/push", {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ endpoint: stored.endpoint }),
+          body: JSON.stringify({
+            subscription: sub.toJSON(),
+            jobPrefix: "leave-main",
+          }),
         });
       }
     } catch {}

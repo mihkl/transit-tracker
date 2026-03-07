@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
-import Script from "next/script";
 import { Geist, Geist_Mono } from "next/font/google";
+import { ServiceWorkerRegister } from "@/components/service-worker-register";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -36,31 +36,7 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         {children}
-        <Script
-          id="sw-register"
-          strategy="afterInteractive"
-          dangerouslySetInnerHTML={{
-            __html: `
-              if ('serviceWorker' in navigator) {
-                let refreshing = false;
-                navigator.serviceWorker.addEventListener('controllerchange', () => {
-                  if (refreshing) return;
-                  refreshing = true;
-                  window.location.reload();
-                });
-
-                (async () => {
-                  try {
-                    const reg = await navigator.serviceWorker.register('/sw.js');
-                    void reg.update();
-                  } catch (err) {
-                    console.error('SW registration failed', err);
-                  }
-                })();
-              }
-            `,
-          }}
-        />
+        <ServiceWorkerRegister />
       </body>
     </html>
   );

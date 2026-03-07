@@ -1,6 +1,10 @@
 "use server";
 
+import { headers } from "next/headers";
 import { env } from "@/lib/env";
+import { consumeRateLimit } from "@/lib/rate-limit";
+import { getClientIdentifier } from "@/lib/request-client";
+import { trafficBoundsSchema } from "@/lib/schemas";
 import { z } from "zod";
 
 export interface TrafficFlowTileInfo {
@@ -99,8 +103,31 @@ export async function getTrafficIncidentsAsync(bounds: {
   maxLat: number;
   maxLng: number;
 }) {
-  const { minLat, minLng, maxLat, maxLng } = bounds;
-  const cacheKey = `incidents:${minLat},${minLng},${maxLat},${maxLng}`;
+  const parsedBounds = trafficBoundsSchema.parse(bounds);
+  const requester = getClientIdentifier(await headers());
+  const limit = await consumeRateLimit("traffic", `traffic:${requester}`);
+  if (!limit.ok) {
+    throw new Error("Too many traffic requests. Please wait a moment.");
+  }
+
+  const minLat = Math.max(-90, Math.min(90, parsedBounds.minLat));
+  const minLng = Math.max(-180, Math.min(180, parsedBounds.minLng));
+  const maxLat = Math.max(-90, Math.min(90, parsedBounds.maxLat));
+  const maxLng = Math.max(-180, Math.min(180, parsedBounds.maxLng));
+
+  if (maxLat - minLat > 2 || maxLng - minLng > 2) {
+    throw new Error("Traffic bounds are too large");
+  }
+
+  const round = (value: number) => Number(value.toFixed(3));
+  const normalizedBounds = {
+    minLat: round(minLat),
+    minLng: round(minLng),
+    maxLat: round(maxLat),
+    maxLng: round(maxLng),
+  };
+
+  const cacheKey = `incidents:${normalizedBounds.minLat},${normalizedBounds.minLng},${normalizedBounds.maxLat},${normalizedBounds.maxLng}`;
   const cached = trafficCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < TRAFFIC_CACHE_TTL) {
     return cached.data as TrafficIncidentCollection;
@@ -111,7 +138,10 @@ export async function getTrafficIncidentsAsync(bounds: {
 
   const baseUrl = env.TOMTOM_BASE_URL;
   const url = new URL(`${baseUrl}/traffic/services/5/incidentDetails`);
-  url.searchParams.set("bbox", `${minLng},${minLat},${maxLng},${maxLat}`);
+  url.searchParams.set(
+    "bbox",
+    `${normalizedBounds.minLng},${normalizedBounds.minLat},${normalizedBounds.maxLng},${normalizedBounds.maxLat}`,
+  );
   url.searchParams.set(
     "fields",
     "{incidents{type,geometry{type,coordinates},properties{iconCategory}}}",

@@ -7,5 +7,6 @@ export function getClientIdentifier(requestHeaders: Headers) {
     .at(0);
 
   const realIp = requestHeaders.get("x-real-ip")?.trim();
-  return forwardedIp || realIp || "unknown";
+  const candidate = forwardedIp || realIp || requestHeaders.get("cf-connecting-ip")?.trim() || "unknown";
+  return candidate.replace(/^\[?::ffff:/i, "").replace(/\]?$/, "").replace(/:\d+$/, "") || "unknown";
 }

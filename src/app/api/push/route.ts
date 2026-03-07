@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { env } from "@/lib/env";
+import { consumeRateLimit } from "@/lib/rate-limit";
+import { getClientIdentifier } from "@/lib/request-client";
 import { cancelNotification, scheduleNotification, vapidPublicKey } from "@/server/push-scheduler";
 
 export const dynamic = "force-dynamic";
@@ -10,8 +13,10 @@ const MAX_TAG_LEN = 80;
 const MAX_URL_LEN = 500;
 const MAX_CATEGORY_LEN = 80;
 const MAX_JOB_KEY_LEN = 80;
-const MAX_JOB_PREFIX_LEN = 80;
 const MAX_ENDPOINT_LEN = 2000;
+const LEAVE_MAIN_JOB_KEY = "leave-main";
+const LEAVE_MAIN_SNOOZE_PREFIX = "leave-main-snooze-";
+const DELAY_UPDATE_PREFIX = "delay-update-";
 
 interface PushSubscriptionJson {
   endpoint: string;
@@ -48,6 +53,37 @@ function toSafeString(value: unknown, maxLen: number) {
   return trimmed.slice(0, maxLen);
 }
 
+function toSafeAppPath(value: unknown) {
+  const path = toSafeString(value, MAX_URL_LEN);
+  if (!path) return undefined;
+  if (!path.startsWith("/") || path.startsWith("//")) return undefined;
+  return path;
+}
+
+function toSafeJobKey(value: unknown) {
+  const key = toSafeString(value, MAX_JOB_KEY_LEN);
+  if (!key) return null;
+  if (key === LEAVE_MAIN_JOB_KEY) return key;
+  if (key.startsWith(LEAVE_MAIN_SNOOZE_PREFIX)) {
+    return /^leave-main-snooze-\d+$/.test(key) ? key : null;
+  }
+  if (key.startsWith(DELAY_UPDATE_PREFIX)) {
+    return /^delay-update-\d+$/.test(key) ? key : null;
+  }
+  return null;
+}
+
+function toSafeJobPrefix(value: unknown) {
+  const prefix = toSafeString(value, MAX_JOB_KEY_LEN);
+  if (!prefix) return undefined;
+  if (prefix === LEAVE_MAIN_JOB_KEY || prefix === DELAY_UPDATE_PREFIX) return prefix;
+  return undefined;
+}
+
+function toJobPrefix(jobKey: string) {
+  return jobKey.startsWith(DELAY_UPDATE_PREFIX) ? DELAY_UPDATE_PREFIX : LEAVE_MAIN_JOB_KEY;
+}
+
 function parseScheduleBody(value: unknown) {
   if (!isObject(value)) return null;
   if (!isPushSubscriptionJson(value.subscription)) return null;
@@ -60,11 +96,10 @@ function parseScheduleBody(value: unknown) {
 
   const body = toSafeString(value.body, MAX_TEXT_LEN) ?? "";
   const tag = toSafeString(value.tag, MAX_TAG_LEN);
-  const url = toSafeString(value.url, MAX_URL_LEN);
+  const url = toSafeAppPath(value.url);
   const category = toSafeString(value.category, MAX_CATEGORY_LEN);
-  const endpoint = toSafeString(value.endpoint, MAX_ENDPOINT_LEN);
-  const jobKey = toSafeString(value.jobKey, MAX_JOB_KEY_LEN);
-  const jobPrefix = toSafeString(value.jobPrefix, MAX_JOB_PREFIX_LEN);
+  const jobKey = toSafeJobKey(value.jobKey);
+  if (!jobKey) return null;
 
   const timestamp =
     typeof value.timestamp === "number" && Number.isFinite(value.timestamp)
@@ -80,21 +115,29 @@ function parseScheduleBody(value: unknown) {
     url,
     timestamp,
     category,
-    endpoint,
     jobKey,
-    jobPrefix,
   };
 }
 
-function isSameOrigin(req: NextRequest) {
-  const origin = req.headers.get("origin");
-  if (!origin) return false;
-  const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? "";
+function getRequestOrigin(req: NextRequest) {
+  const origin = req.headers.get("origin") ?? req.headers.get("referer");
+  if (!origin) return null;
   try {
-    return new URL(origin).host === host;
+    return new URL(origin).origin;
   } catch {
-    return false;
+    return null;
   }
+}
+
+function isAllowedOrigin(req: NextRequest) {
+  const requestOrigin = getRequestOrigin(req);
+  if (!requestOrigin) return env.NODE_ENV !== "production";
+
+  if (env.APP_ORIGIN) {
+    return requestOrigin === env.APP_ORIGIN;
+  }
+
+  return env.NODE_ENV !== "production" && requestOrigin === req.nextUrl.origin;
 }
 
 export function GET() {
@@ -108,7 +151,7 @@ export function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  if (!isSameOrigin(req)) {
+  if (!isAllowedOrigin(req)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -126,6 +169,20 @@ export async function POST(req: NextRequest) {
   const body = parseScheduleBody(rawBody);
   if (!body) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+  }
+
+  const requester = getClientIdentifier(req.headers);
+  const limit = await consumeRateLimit("push-write", `push:${requester}`);
+  if (!limit.ok) {
+    return NextResponse.json(
+      { error: "Too many push requests. Please wait a moment." },
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(limit.retryAfterSec),
+        },
+      },
+    );
   }
 
   const delay = body.notifyAt - Date.now();
@@ -147,22 +204,24 @@ export async function POST(req: NextRequest) {
         url: body.url,
         timestamp: body.timestamp,
         category: body.category,
-        endpoint: body.endpoint ?? body.subscription.endpoint,
-        jobPrefix: body.jobPrefix ?? body.jobKey ?? "default",
+        jobPrefix: toJobPrefix(body.jobKey),
       },
-      body.jobKey ?? "default",
+      body.jobKey,
     );
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Failed to schedule push";
     const status = msg.includes("limit") || msg.includes("capacity") ? 429 : 500;
-    return NextResponse.json({ error: msg }, { status });
+    return NextResponse.json(
+      { error: msg },
+      status === 429 ? { status, headers: { "Retry-After": "60" } } : { status },
+    );
   }
 
   return NextResponse.json({ ok: true });
 }
 
 export async function DELETE(req: NextRequest) {
-  if (!isSameOrigin(req)) {
+  if (!isAllowedOrigin(req)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -177,13 +236,29 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  const endpoint = toSafeString(rawBody.endpoint, MAX_ENDPOINT_LEN);
-  const jobPrefix = toSafeString(rawBody.jobPrefix, MAX_JOB_PREFIX_LEN);
+  const subscription = isPushSubscriptionJson(rawBody.subscription)
+    ? rawBody.subscription
+    : null;
+  const jobPrefix = toSafeJobPrefix(rawBody.jobPrefix);
 
-  if (!endpoint) {
-    return NextResponse.json({ error: "Missing endpoint" }, { status: 400 });
+  if (!subscription || subscription.endpoint.length > MAX_ENDPOINT_LEN) {
+    return NextResponse.json({ error: "Missing subscription" }, { status: 400 });
   }
 
-  await cancelNotification(endpoint, jobPrefix);
+  const requester = getClientIdentifier(req.headers);
+  const limit = await consumeRateLimit("push-delete", `push-delete:${requester}`);
+  if (!limit.ok) {
+    return NextResponse.json(
+      { error: "Too many push cancellation requests. Please wait a moment." },
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(limit.retryAfterSec),
+        },
+      },
+    );
+  }
+
+  await cancelNotification(subscription.endpoint, jobPrefix);
   return NextResponse.json({ ok: true });
 }

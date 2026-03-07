@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { and, asc, desc, eq, isNotNull, like, lte, or } from "drizzle-orm";
+import { and, asc, count, desc, eq, isNotNull, like, lte, or, type SQL } from "drizzle-orm";
 import { resolve } from "node:path";
 import webpush from "web-push";
 import type { PushSubscription } from "web-push";
@@ -21,11 +21,8 @@ interface PushPayload {
   url?: string;
   timestamp?: number;
   category?: string;
-  endpoint?: string;
   jobPrefix?: string;
 }
-
-type PushNotificationRow = typeof pushNotifications.$inferSelect;
 
 interface ClaimedNotification {
   id: string;
@@ -49,7 +46,11 @@ const MAX_ATTEMPTS = 5;
 const IMMEDIATE_DISPATCH_WINDOW_MS = 5_000;
 const PRUNE_SENT_AFTER_MS = 3 * 24 * 60 * 60 * 1000;
 const PRUNE_FAILED_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
+const MAX_ACTIVE_NOTIFICATIONS = 5_000;
+const MAX_ACTIVE_PER_ENDPOINT = 12;
+const MAX_ACTIVE_DELAY_UPDATES_PER_ENDPOINT = 4;
 const STATE_KEY = "__transitPushSchedulerState__";
+const DELAY_UPDATE_PREFIX = "delay-update-";
 
 function getState() {
   const scoped = globalThis as typeof globalThis & {
@@ -83,6 +84,69 @@ function toNotificationId(endpoint: string, jobKey: string) {
   return createHash("sha256").update(`${endpoint}::${jobKey}`).digest("hex");
 }
 
+function isDelayUpdateJob(jobKey: string) {
+  return jobKey.startsWith(DELAY_UPDATE_PREFIX);
+}
+
+async function getExistingNotificationId(endpoint: string, jobKey: string) {
+  const existing = await pushDb
+    .select({
+      id: pushNotifications.id,
+    })
+    .from(pushNotifications)
+    .where(
+      and(eq(pushNotifications.endpoint, endpoint), eq(pushNotifications.jobKey, jobKey)),
+    )
+    .limit(1);
+
+  return existing[0]?.id ?? null;
+}
+
+async function countActiveNotifications(where: SQL<unknown> | undefined) {
+  const rows = await pushDb
+    .select({
+      count: count(),
+    })
+    .from(pushNotifications)
+    .where(where);
+
+  return rows[0]?.count ?? 0;
+}
+
+async function enforceNotificationLimits(endpoint: string, jobKey: string) {
+  const existingId = await getExistingNotificationId(endpoint, jobKey);
+  if (existingId) return;
+
+  const activeStatuses = or(
+    eq(pushNotifications.status, "pending"),
+    eq(pushNotifications.status, "sending"),
+  );
+
+  const [totalActive, endpointActive, delayActive] = await Promise.all([
+    countActiveNotifications(activeStatuses),
+    countActiveNotifications(and(activeStatuses, eq(pushNotifications.endpoint, endpoint))),
+    isDelayUpdateJob(jobKey)
+      ? countActiveNotifications(
+          and(
+            activeStatuses,
+            eq(pushNotifications.endpoint, endpoint),
+            like(pushNotifications.jobKey, `${DELAY_UPDATE_PREFIX}%`),
+          ),
+        )
+      : Promise.resolve(0),
+  ]);
+
+  if (totalActive >= MAX_ACTIVE_NOTIFICATIONS) {
+    throw new Error("Push queue is at capacity");
+  }
+  if (endpointActive >= MAX_ACTIVE_PER_ENDPOINT) {
+    throw new Error("Push subscription has reached its pending limit");
+  }
+  if (isDelayUpdateJob(jobKey) && delayActive >= MAX_ACTIVE_DELAY_UPDATES_PER_ENDPOINT) {
+    throw new Error("Too many pending delay updates for this subscription");
+  }
+}
+
 async function upsertNotification(
   subscription: PushSubscription,
   notifyAt: number,
@@ -92,6 +156,7 @@ async function upsertNotification(
 ) {
   const now = Date.now();
   const endpoint = subscription.endpoint;
+  await enforceNotificationLimits(endpoint, jobKey);
 
   await pushDb
     .insert(pushNotifications)

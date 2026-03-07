@@ -2,7 +2,7 @@
 
 import { headers } from "next/headers";
 import { searchPlacesAsync as searchPlacesAsync } from "@/server/google-routes";
-import { checkRateLimit } from "@/lib/rate-limit";
+import { consumeRateLimit } from "@/lib/rate-limit";
 import { getClientIdentifier } from "@/lib/request-client";
 import { placesQuerySchema } from "@/lib/schemas";
 
@@ -11,7 +11,8 @@ export async function searchPlacesActionAsync(q: string) {
   if (!parsedQuery.success) return [];
 
   const ip = getClientIdentifier(await headers());
-  if (!checkRateLimit(`searchPlaces:${ip}`, 60, 60_000)) {
+  const limit = await consumeRateLimit("places", `searchPlaces:${ip}`);
+  if (!limit.ok) {
     return [];
   }
 

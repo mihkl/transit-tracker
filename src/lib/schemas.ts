@@ -70,6 +70,17 @@ export const placesQuerySchema = z.string().trim().min(2).max(120);
 
 export const stopIdSchema = z.string().trim().min(1).max(64);
 
+export const trafficBoundsSchema = z
+  .object({
+    minLat: z.number().finite().min(-90).max(90),
+    minLng: z.number().finite().min(-180).max(180),
+    maxLat: z.number().finite().min(-90).max(90),
+    maxLng: z.number().finite().min(-180).max(180),
+  })
+  .refine((value) => value.minLat < value.maxLat && value.minLng < value.maxLng, {
+    message: "Invalid map bounds",
+  });
+
 export const legDelayParamsSchema = z.object({
   line: z.string().trim().min(1).max(32).optional(),
   depLat: z.number().optional(),

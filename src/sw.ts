@@ -14,7 +14,6 @@ interface ReminderPayload {
   timestamp?: number;
   category?: "leave-reminder";
   complete?: boolean;
-  endpoint?: string;
   jobPrefix?: string;
 }
 
@@ -52,7 +51,6 @@ self.addEventListener("push", (event) => {
           title: data.title ?? "Time to leave",
           body: data.body ?? "",
           tag,
-          endpoint: data.endpoint,
           jobPrefix: data.jobPrefix,
         },
         actions: [
@@ -89,7 +87,6 @@ async function rescheduleByMinutesAsync(
     body?: string;
     tag?: string;
     url?: string;
-    endpoint?: string;
     jobPrefix?: string;
   },
 ) {
@@ -111,9 +108,7 @@ async function rescheduleByMinutesAsync(
         url: data.url ?? "/",
         timestamp: notifyAt,
         category: "leave-reminder",
-        endpoint: data.endpoint,
-        jobPrefix: data.jobPrefix,
-        jobKey: data.jobPrefix ? `${data.jobPrefix}snooze-${notifyAt}` : `snooze-${notifyAt}`,
+        jobKey: `leave-main-snooze-${notifyAt}`,
       }),
     });
 
@@ -123,13 +118,19 @@ async function rescheduleByMinutesAsync(
   }
 }
 
-async function cancelScheduledUpdatesAsync(endpoint?: string, jobPrefix?: string) {
-  if (!endpoint || !jobPrefix) return;
+async function cancelScheduledUpdatesAsync(jobPrefix?: string) {
+  if (!jobPrefix) return;
   try {
+    const subscription = await self.registration.pushManager.getSubscription();
+    if (!subscription) return;
+
     await fetch("/api/push", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ endpoint, jobPrefix }),
+      body: JSON.stringify({
+        subscription: subscription.toJSON(),
+        jobPrefix,
+      }),
     });
   } catch {
     // Ignore cancellation failures.
@@ -150,13 +151,12 @@ self.addEventListener("notificationclick", (event) => {
         title?: string;
         body?: string;
         tag?: string;
-        endpoint?: string;
         jobPrefix?: string;
       };
       const target = data.url || "/";
 
       if (event.action === "dismiss") {
-        await cancelScheduledUpdatesAsync(data.endpoint, data.jobPrefix);
+        await cancelScheduledUpdatesAsync(data.jobPrefix);
         return;
       }
 
@@ -184,10 +184,9 @@ self.addEventListener("notificationclose", (event) => {
     return;
   }
   const data = (event.notification.data ?? {}) as {
-    endpoint?: string;
     jobPrefix?: string;
   };
-  event.waitUntil(cancelScheduledUpdatesAsync(data.endpoint, data.jobPrefix));
+  event.waitUntil(cancelScheduledUpdatesAsync(data.jobPrefix));
 });
 
 // --- Lifecycle ---
