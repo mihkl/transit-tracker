@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import type { PlannedRoute, RouteLeg } from "@/lib/types";
-import { useLeaveReminder } from "@/hooks/use-leave-reminder";
+import { useLeaveReminder, type ReminderStatusMessage } from "@/hooks/use-leave-reminder";
 import { useTransferViability, type TransferInfo } from "@/hooks/use-transfer-viability";
 
 export interface RouteReminderState {
@@ -10,6 +10,7 @@ export interface RouteReminderState {
   minutesUntil: number | null;
   isLiveAdjusted: boolean;
   error: string | null;
+  status: ReminderStatusMessage | null;
   onSchedule: () => void;
   onClear: () => void;
 }
@@ -27,6 +28,7 @@ export function useRoutePlannerInsights(selectedRoute: PlannedRoute | null) {
     isLiveAdjusted,
     minutesUntil,
     lastError,
+    reminderStatus,
     scheduleReminder,
     clearReminder,
   } = useLeaveReminder(selectedRoute);
@@ -37,6 +39,7 @@ export function useRoutePlannerInsights(selectedRoute: PlannedRoute | null) {
         minutesUntil,
         isLiveAdjusted,
         error: lastError,
+        status: reminderStatus,
         onSchedule: scheduleReminder,
         onClear: clearReminder,
       }

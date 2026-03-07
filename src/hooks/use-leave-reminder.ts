@@ -13,6 +13,11 @@ export interface LeaveInfo {
   departureStop: string;
 }
 
+export interface ReminderStatusMessage {
+  tone: "info" | "warning" | "error";
+  message: string;
+}
+
 interface ReminderBaseInfo extends LeaveInfo {
   baseLeaveTimeMs: number;
   walkBeforeSeconds: number;
@@ -42,6 +47,63 @@ const RESCHEDULE_THRESHOLD_MS = 60_000;
 const ADAPTIVE_POLL_MS = 20_000;
 const DELAY_NOTIFY_THRESHOLD_S = 120;
 const DELAY_NOTIFY_COOLDOWN_MS = 5 * 60_000;
+const SW_READY_TIMEOUT_MS = 8_000;
+
+function getPermissionBlockedMessage() {
+  return "Notifications are blocked for this site. Enable them in browser settings and try again.";
+}
+
+function isAppleMobileDevice() {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent;
+  return (
+    /iPhone|iPad|iPod/i.test(ua) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
+  );
+}
+
+function isStandaloneApp() {
+  if (typeof window === "undefined" || typeof navigator === "undefined") return false;
+  return (
+    window.matchMedia?.("(display-mode: standalone)")?.matches === true ||
+    (navigator as Navigator & { standalone?: boolean }).standalone === true
+  );
+}
+
+function getPushSupportStatus(): ReminderStatusMessage | null {
+  if (typeof window === "undefined" || typeof navigator === "undefined") return null;
+  if (!window.isSecureContext) {
+    return {
+      tone: "error",
+      message: "Notifications require a secure HTTPS connection.",
+    };
+  }
+  if (!("Notification" in window)) {
+    return {
+      tone: "error",
+      message: "This browser does not support notifications.",
+    };
+  }
+  if (!("serviceWorker" in navigator)) {
+    return {
+      tone: "error",
+      message: "This browser does not support service workers, so push reminders cannot work.",
+    };
+  }
+  if (!("PushManager" in window)) {
+    return {
+      tone: "error",
+      message: "This browser mode does not support web push notifications.",
+    };
+  }
+  if (isAppleMobileDevice() && !isStandaloneApp()) {
+    return {
+      tone: "warning",
+      message: "On iPhone and iPad, install the app to the Home Screen and open it from there to enable notifications.",
+    };
+  }
+  return null;
+}
 
 function formatTime(dateMs: number) {
   return new Date(dateMs).toLocaleTimeString([], {
@@ -245,18 +307,32 @@ function urlBase64ToUint8Array(base64String: string) {
 }
 
 async function getPushSubscriptionAsync() {
-  if (
-    typeof navigator === "undefined" ||
-    !("serviceWorker" in navigator) ||
-    !("PushManager" in window)
-  )
+  const supportStatus = getPushSupportStatus();
+  if (supportStatus) {
     return {
       subscription: null,
-      error: "Push is not available in this browser context.",
+      error: supportStatus.message,
     };
+  }
+
   try {
-    const reg = await navigator.serviceWorker.ready;
-    const existing = await reg.pushManager.getSubscription();
+    const existingReg = await navigator.serviceWorker.getRegistration();
+    const reg =
+      existingReg ??
+      (await navigator.serviceWorker.register("/sw.js").catch(() => {
+        throw new Error("service-worker-register-failed");
+      }));
+    void reg.update().catch(() => {});
+
+    const readyReg = await Promise.race<ServiceWorkerRegistration>([
+      navigator.serviceWorker.ready,
+      new Promise<ServiceWorkerRegistration>((_, reject) => {
+        window.setTimeout(() => reject(new Error("service-worker-ready-timeout")), SW_READY_TIMEOUT_MS);
+      }),
+    ]);
+
+    const activeReg = readyReg ?? reg;
+    const existing = await activeReg.pushManager.getSubscription();
     if (existing) return { subscription: existing, error: null };
 
     const keyResp = await fetch("/api/push");
@@ -275,15 +351,55 @@ async function getPushSubscriptionAsync() {
       };
     }
 
-    const subscription = await reg.pushManager.subscribe({
+    const applicationServerKey = urlBase64ToUint8Array(pubKey);
+    const permissionState =
+      typeof activeReg.pushManager.permissionState === "function"
+        ? await activeReg.pushManager
+            .permissionState({
+              userVisibleOnly: true,
+              applicationServerKey,
+            })
+            .catch(() => null)
+        : null;
+
+    if (permissionState === "denied") {
+      return {
+        subscription: null,
+        error: getPermissionBlockedMessage(),
+      };
+    }
+
+    const subscription = await activeReg.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(pubKey),
+      applicationServerKey,
     });
     return { subscription, error: null };
-  } catch {
+  } catch (error) {
+    if (error instanceof Error) {
+      if (error.message === "service-worker-ready-timeout") {
+        return {
+          subscription: null,
+          error: "Push setup timed out before the service worker became ready. Try again in a moment.",
+        };
+      }
+      if (error.name === "NotAllowedError") {
+        return {
+          subscription: null,
+          error: getPermissionBlockedMessage(),
+        };
+      }
+      if (error.name === "NotSupportedError" && isAppleMobileDevice() && !isStandaloneApp()) {
+        return {
+          subscription: null,
+          error:
+            "Push is only available on iPhone and iPad after installing the app to the Home Screen and opening it from there.",
+        };
+      }
+    }
     return {
       subscription: null,
-      error: "Could not enable push notifications. Private/incognito mode may block this.",
+      error:
+        "Could not enable push notifications. Private/incognito mode or device browser settings may be blocking them.",
     };
   }
 }
@@ -295,6 +411,7 @@ export function useLeaveReminder(route: PlannedRoute | null) {
   const [notifyAtMs, setNotifyAtMs] = useState<number | null>(null);
   const [isLiveAdjusted, setIsLiveAdjusted] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
+  const [supportStatus, setSupportStatus] = useState<ReminderStatusMessage | null>(null);
 
   const baseInfo = useMemo(() => (route ? getReminderBaseInfo(route) : null), [route]);
 
@@ -322,8 +439,23 @@ export function useLeaveReminder(route: PlannedRoute | null) {
     : null;
 
   useEffect(() => {
-    if (typeof window === "undefined" || !("Notification" in window)) return;
-    Promise.resolve().then(() => setPermission(Notification.permission));
+    if (typeof window === "undefined") return;
+
+    const syncPermissionState = () => {
+      setSupportStatus(getPushSupportStatus());
+      if ("Notification" in window) {
+        setPermission(Notification.permission);
+      }
+    };
+
+    syncPermissionState();
+    window.addEventListener("focus", syncPermissionState);
+    document.addEventListener("visibilitychange", syncPermissionState);
+
+    return () => {
+      window.removeEventListener("focus", syncPermissionState);
+      document.removeEventListener("visibilitychange", syncPermissionState);
+    };
   }, []);
 
   useEffect(() => {
@@ -363,13 +495,22 @@ export function useLeaveReminder(route: PlannedRoute | null) {
     if (!route || !baseInfo || typeof window === "undefined" || !("Notification" in window)) return;
 
     try {
+      setLastError(null);
+
+      const currentSupportStatus = getPushSupportStatus();
+      setSupportStatus(currentSupportStatus);
+      if (currentSupportStatus) {
+        setLastError(currentSupportStatus.message);
+        return;
+      }
+
       let perm = permission;
       if (perm === "default") {
         perm = await Notification.requestPermission();
         setPermission(perm);
       }
       if (perm !== "granted") {
-        setLastError("Notification permission is blocked.");
+        setLastError(getPermissionBlockedMessage());
         return;
       }
 
@@ -417,6 +558,30 @@ export function useLeaveReminder(route: PlannedRoute | null) {
       setLastError("Failed to schedule reminder. Please try again.");
     }
   }, [route, baseInfo, permission, routeKey]);
+
+  const reminderStatus = useMemo<ReminderStatusMessage | null>(() => {
+    if (lastError) {
+      return {
+        tone: "error",
+        message: lastError,
+      };
+    }
+    if (isSet) return null;
+    if (supportStatus) return supportStatus;
+    if (permission === "denied") {
+      return {
+        tone: "error",
+        message: getPermissionBlockedMessage(),
+      };
+    }
+    if (permission === "default") {
+      return {
+        tone: "info",
+        message: "We will ask for notification permission when you tap this.",
+      };
+    }
+    return null;
+  }, [isSet, lastError, permission, supportStatus]);
 
   // Adaptive mode: keep one main reminder updated and only push delay updates sparingly.
   useEffect(() => {
@@ -551,6 +716,7 @@ export function useLeaveReminder(route: PlannedRoute | null) {
     permission,
     minutesUntil,
     lastError,
+    reminderStatus,
     scheduleReminder,
     clearReminder,
   };

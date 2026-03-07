@@ -139,8 +139,18 @@ interface ReminderProps {
   minutesUntil: number | null;
   isLiveAdjusted: boolean;
   error: string | null;
+  status: {
+    tone: "info" | "warning" | "error";
+    message: string;
+  } | null;
   onSchedule: () => void;
   onClear: () => void;
+}
+
+function getReminderStatusClassName(tone: "info" | "warning" | "error") {
+  if (tone === "error") return "text-rose-700";
+  if (tone === "warning") return "text-amber-700";
+  return "text-sky-700";
 }
 
 function RouteCard({
@@ -209,9 +219,11 @@ function RouteCard({
                     : "Set smart leave reminder"}
                 </span>
               </button>
-              {!reminderProps.isSet && reminderProps.error && (
-                <div className="px-1 text-[11px] text-amber-700 font-medium">
-                  {reminderProps.error}
+              {!reminderProps.isSet && reminderProps.status && (
+                <div
+                  className={`px-1 text-[11px] font-medium ${getReminderStatusClassName(reminderProps.status.tone)}`}
+                >
+                  {reminderProps.status.message}
                 </div>
               )}
             </>
@@ -600,8 +612,21 @@ export function RoutePlanner({
                 <span className="text-xs text-primary font-semibold">
                   {minutesUntil !== null && minutesUntil > 0
                     ? `Leave in ${minutesUntil} min${isLiveAdjusted ? " · auto-adjusting live" : ""}`
-                    : "Reminder active"}
+                  : "Reminder active"}
                 </span>
+              </div>
+            )}
+            {!reminderProps?.isSet && reminderProps?.status && (
+              <div
+                className={`px-3 py-2.5 rounded-xl border text-[11px] font-medium ${
+                  reminderProps.status.tone === "error"
+                    ? "border-rose-200 bg-rose-50/80 text-rose-700"
+                    : reminderProps.status.tone === "warning"
+                      ? "border-amber-200 bg-amber-50/80 text-amber-700"
+                      : "border-sky-200 bg-sky-50/80 text-sky-700"
+                }`}
+              >
+                {reminderProps.status.message}
               </div>
             )}
             <LegList

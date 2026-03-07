@@ -49,14 +49,14 @@ export default function RootLayout({
                   window.location.reload();
                 });
 
-                window.addEventListener('load', async () => {
+                (async () => {
                   try {
                     const reg = await navigator.serviceWorker.register('/sw.js');
-                    await reg.update();
+                    void reg.update();
                   } catch (err) {
                     console.error('SW registration failed', err);
                   }
-                });
+                })();
               }
             `,
           }}
