@@ -7,7 +7,7 @@ import { matchTransitLegAsync } from "@/server/delay-matcher";
 import type { RoutePlanRequest, RoutePlanResponse, PlannedRoute, RouteLeg } from "@/lib/types";
 import { parseDurationSeconds } from "@/lib/route-time";
 import { consumeRateLimit } from "@/lib/rate-limit";
-import { getRateLimitIdentifier } from "@/lib/request-client";
+import { getRateLimitContext } from "@/lib/request-client";
 import { normalizeTransitMode } from "@/lib/domain";
 import { routePlanRequestSchema, routePlanResponseSchema } from "@/lib/schemas";
 import { captureExpectedMessage, captureUnexpectedError } from "@/lib/monitoring";
@@ -27,13 +27,19 @@ export async function planRouteAsync(
 ): Promise<RoutePlanActionResult> {
   try {
     const parsedReq = routePlanRequestSchema.parse(req);
-    const requester = getRateLimitIdentifier(await headers(), clientId);
-    const limit = await consumeRateLimit("routes", `planRoute:${requester}`);
+    const requester = getRateLimitContext(await headers(), clientId);
+    const limit = await consumeRateLimit("routes", `planRoute:${requester.requester}`);
     if (!limit.ok) {
       captureExpectedMessage("Route planning rate limit exceeded", {
         area: "routes",
         clientId,
-        tags: { requester },
+        tags: {
+          requester_type: requester.requesterType,
+          client_id_provided: requester.clientIdProvided,
+          client_id_accepted: requester.clientIdAccepted,
+          rate_limit_backend: limit.backend,
+          rate_limit_reason: limit.reason,
+        },
         extra: { request: parsedReq },
       });
       return { data: null, error: "Too many requests. Please wait a moment." };

@@ -1,5 +1,14 @@
 import { createHash } from "node:crypto";
 
+export type RateLimitRequesterType = "client" | "ip" | "fingerprint" | "unknown";
+
+interface RateLimitContext {
+  requester: string;
+  requesterType: RateLimitRequesterType;
+  clientIdProvided: boolean;
+  clientIdAccepted: boolean;
+}
+
 function sanitizeClientId(value?: string | null) {
   const trimmed = value?.trim();
   if (!trimmed) return null;
@@ -23,15 +32,29 @@ export function getClientIdentifier(requestHeaders: Headers) {
   return candidate.replace(/^\[?::ffff:/i, "").replace(/\]?$/, "").replace(/:\d+$/, "") || "unknown";
 }
 
-export function getRateLimitIdentifier(requestHeaders: Headers, explicitClientId?: string | null) {
+export function getRateLimitContext(
+  requestHeaders: Headers,
+  explicitClientId?: string | null,
+): RateLimitContext {
+  const clientIdProvided = !!explicitClientId?.trim();
   const clientId = sanitizeClientId(explicitClientId);
   if (clientId) {
-    return `client:${clientId}`;
+    return {
+      requester: `client:${clientId}`,
+      requesterType: "client",
+      clientIdProvided,
+      clientIdAccepted: true,
+    };
   }
 
   const ip = getClientIdentifier(requestHeaders);
   if (ip !== "unknown") {
-    return `ip:${ip}`;
+    return {
+      requester: `ip:${ip}`,
+      requesterType: "ip",
+      clientIdProvided,
+      clientIdAccepted: false,
+    };
   }
 
   const fingerprintSource = [
@@ -43,9 +66,23 @@ export function getRateLimitIdentifier(requestHeaders: Headers, explicitClientId
     .join("|");
 
   if (!fingerprintSource) {
-    return "unknown";
+    return {
+      requester: "unknown",
+      requesterType: "unknown",
+      clientIdProvided,
+      clientIdAccepted: false,
+    };
   }
 
   const fingerprint = createHash("sha256").update(fingerprintSource).digest("hex").slice(0, 32);
-  return `fp:${fingerprint}`;
+  return {
+    requester: `fp:${fingerprint}`,
+    requesterType: "fingerprint",
+    clientIdProvided,
+    clientIdAccepted: false,
+  };
+}
+
+export function getRateLimitIdentifier(requestHeaders: Headers, explicitClientId?: string | null) {
+  return getRateLimitContext(requestHeaders, explicitClientId).requester;
 }

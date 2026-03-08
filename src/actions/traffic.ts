@@ -3,7 +3,7 @@
 import { headers } from "next/headers";
 import { env } from "@/lib/env";
 import { consumeRateLimit } from "@/lib/rate-limit";
-import { getRateLimitIdentifier } from "@/lib/request-client";
+import { getRateLimitContext } from "@/lib/request-client";
 import { trafficBoundsSchema } from "@/lib/schemas";
 import { captureExpectedMessage, captureUnexpectedError } from "@/lib/monitoring";
 import { z } from "zod";
@@ -115,14 +115,23 @@ export async function getTrafficIncidentsAsync(bounds: {
 }, clientId?: string): Promise<TrafficIncidentsActionResult> {
   try {
     const parsedBounds = trafficBoundsSchema.parse(bounds);
-    const requester = getRateLimitIdentifier(await headers(), clientId);
-    const limit = await consumeRateLimit("traffic", `traffic:${requester}`);
+    const requester = getRateLimitContext(await headers(), clientId);
+    const limit = await consumeRateLimit("traffic", `traffic:${requester.requester}`);
     if (!limit.ok) {
       captureExpectedMessage("Traffic incidents rate limit exceeded", {
         area: "traffic",
         clientId,
-        tags: { requester },
-        extra: { bounds },
+        tags: {
+          requester_type: requester.requesterType,
+          client_id_provided: requester.clientIdProvided,
+          client_id_accepted: requester.clientIdAccepted,
+          rate_limit_backend: limit.backend,
+          rate_limit_reason: limit.reason,
+        },
+        extra: {
+          bounds,
+          retryAfterSec: limit.retryAfterSec,
+        },
       });
       return {
         data: emptyTrafficIncidents(),
