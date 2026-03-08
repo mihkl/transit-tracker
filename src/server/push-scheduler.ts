@@ -9,6 +9,13 @@ import { DELAY_UPDATE_PREFIX } from "@/lib/push-constants";
 import { pushDb } from "@/server/push-db";
 import { pushNotifications } from "@/server/push-schema";
 
+export class PushCapacityError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "PushCapacityError";
+  }
+}
+
 const { VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT } = env;
 
 if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY && VAPID_SUBJECT) {
@@ -137,13 +144,13 @@ async function enforceNotificationLimits(endpoint: string, jobKey: string) {
   ]);
 
   if (totalActive >= MAX_ACTIVE_NOTIFICATIONS) {
-    throw new Error("Push queue is at capacity");
+    throw new PushCapacityError("Push queue is at capacity");
   }
   if (endpointActive >= MAX_ACTIVE_PER_ENDPOINT) {
-    throw new Error("Push subscription has reached its pending limit");
+    throw new PushCapacityError("Push subscription has reached its pending limit");
   }
   if (isDelayUpdateJob(jobKey) && delayActive >= MAX_ACTIVE_DELAY_UPDATES_PER_ENDPOINT) {
-    throw new Error("Too many pending delay updates for this subscription");
+    throw new PushCapacityError("Too many pending delay updates for this subscription");
   }
 }
 
@@ -428,19 +435,23 @@ export async function getPushDebugSnapshot(limit = 30, status?: string) {
     .orderBy(desc(pushNotifications.notifyAt))
     .limit(safeLimit);
 
-  const allStatuses = await pushDb
+  const statusCounts = await pushDb
     .select({
       status: pushNotifications.status,
+      count: count(),
     })
-    .from(pushNotifications);
+    .from(pushNotifications)
+    .groupBy(pushNotifications.status);
 
-  const counts = allStatuses.reduce<Record<string, number>>((acc, row) => {
-    acc[row.status] = (acc[row.status] ?? 0) + 1;
-    return acc;
-  }, {});
+  const counts: Record<string, number> = {};
+  let total = 0;
+  for (const row of statusCounts) {
+    counts[row.status] = row.count;
+    total += row.count;
+  }
 
   return {
-    total: allStatuses.length,
+    total,
     counts,
     rows: rows.map((row) => {
       let payload: PushPayload | null = null;

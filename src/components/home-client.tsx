@@ -258,8 +258,7 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
           isDesktop={isDesktop}
           userLocation={userLocation}
           onStartPicking={(pt) => {
-            const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
-            if (pt && isMobile) {
+            if (pt && !isDesktop) {
               pickingFromPlannerRef.current = true;
               setShowPlanner(false);
               setMobileTab("map");

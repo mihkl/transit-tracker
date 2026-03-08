@@ -209,8 +209,7 @@ function isWithinHarjumaa(lat: number, lng: number) {
 }
 
 export function isConfigured() {
-  const key = getApiKey();
-  return !!key && key !== "YOUR_GOOGLE_API_KEY_HERE";
+  return !!getApiKey();
 }
 
 export async function computeRoutesAsync(

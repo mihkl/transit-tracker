@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { env } from "@/lib/env";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { getClientIdentifier } from "@/lib/request-client";
-import { cancelNotification, scheduleNotification, vapidPublicKey } from "@/server/push-scheduler";
+import { cancelNotification, scheduleNotification, vapidPublicKey, PushCapacityError } from "@/server/push-scheduler";
 import { LEAVE_MAIN_JOB_KEY, LEAVE_MAIN_SNOOZE_PREFIX, DELAY_UPDATE_PREFIX } from "@/lib/push-constants";
 
 export const dynamic = "force-dynamic";
@@ -207,12 +207,14 @@ export async function POST(req: NextRequest) {
       body.jobKey,
     );
   } catch (err) {
+    if (err instanceof PushCapacityError) {
+      return NextResponse.json(
+        { error: err.message },
+        { status: 429, headers: { "Retry-After": "60" } },
+      );
+    }
     const msg = err instanceof Error ? err.message : "Failed to schedule push";
-    const status = msg.includes("limit") || msg.includes("capacity") ? 429 : 500;
-    return NextResponse.json(
-      { error: msg },
-      status === 429 ? { status, headers: { "Retry-After": "60" } } : { status },
-    );
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true });
