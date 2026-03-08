@@ -216,7 +216,7 @@ function isRateLimitRejection(result: unknown): result is { msBeforeNext: number
   );
 }
 
-export async function consumeRateLimit(name: LimitName, key: string): Promise<LimitResult> {
+export async function consumeRateLimit(name: LimitName, key: string) {
   const scoped = getGlobalScope();
   const limiterState = await getLimiterState(name);
 

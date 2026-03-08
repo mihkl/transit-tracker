@@ -24,7 +24,7 @@ export interface RoutePlanActionResult {
 export async function planRouteAsync(
   req: RoutePlanRequest,
   clientId?: string,
-): Promise<RoutePlanActionResult> {
+) {
   try {
     const parsedReq = routePlanRequestSchema.parse(req);
     const requester = getRateLimitContext(await headers(), clientId);

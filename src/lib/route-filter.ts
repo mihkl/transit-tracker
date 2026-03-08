@@ -19,7 +19,7 @@ export const ROUTING_MODES: {
   { value: "fewer-transfers", label: "Fewer transfers", iconName: "arrow-right-left" },
 ];
 
-function routeFingerprint(route: PlannedRoute): string {
+function routeFingerprint(route: PlannedRoute) {
   return route.legs
     .filter((l) => l.mode !== "WALK")
     .map((l) => `${l.lineNumber ?? l.mode}:${l.departureStop ?? ""}→${l.arrivalStop ?? ""}`)
@@ -29,7 +29,7 @@ function routeFingerprint(route: PlannedRoute): string {
 export function mergeAndDedupeRoutes(
   a: RoutePlanResponse | null,
   b: RoutePlanResponse | null,
-): PlannedRoute[] {
+) {
   const all = [...(a?.routes ?? []), ...(b?.routes ?? [])];
   const seen = new Set<string>();
   const unique: PlannedRoute[] = [];
@@ -43,31 +43,31 @@ export function mergeAndDedupeRoutes(
   return unique;
 }
 
-export function fastestRoutes(routes: PlannedRoute[], limit = 5): PlannedRoute[] {
+export function fastestRoutes(routes: PlannedRoute[], limit = 5) {
   return [...routes]
     .sort((a, b) => parseDurationSeconds(a.duration) - parseDurationSeconds(b.duration))
     .slice(0, limit);
 }
 
-function totalWalkMeters(route: PlannedRoute): number {
+function totalWalkMeters(route: PlannedRoute) {
   return route.legs
     .filter((l) => l.mode === "WALK")
     .reduce((sum, l) => sum + Number(l.distanceMeters), 0);
 }
 
-export function lessWalkingRoutes(routes: PlannedRoute[], limit = 5): PlannedRoute[] {
+export function lessWalkingRoutes(routes: PlannedRoute[], limit = 5) {
   return [...routes].sort((a, b) => totalWalkMeters(a) - totalWalkMeters(b)).slice(0, limit);
 }
 
-function transitLegCount(route: PlannedRoute): number {
+function transitLegCount(route: PlannedRoute) {
   return route.legs.filter((l) => l.mode !== "WALK").length;
 }
 
-export function fewerTransfersRoutes(routes: PlannedRoute[], limit = 5): PlannedRoute[] {
+export function fewerTransfersRoutes(routes: PlannedRoute[], limit = 5) {
   return [...routes].sort((a, b) => transitLegCount(a) - transitLegCount(b)).slice(0, limit);
 }
 
-export function resolveRoutePlan(cache: RouteCache, mode: RoutingMode): RoutePlanResponse | null {
+export function resolveRoutePlan(cache: RouteCache, mode: RoutingMode) {
   return mode === "fastest"
     ? cache.fastest
     : mode === "less-walking"

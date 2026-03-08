@@ -112,7 +112,7 @@ export async function getTrafficIncidentsAsync(bounds: {
   minLng: number;
   maxLat: number;
   maxLng: number;
-}, clientId?: string): Promise<TrafficIncidentsActionResult> {
+}, clientId?: string) {
   try {
     const parsedBounds = trafficBoundsSchema.parse(bounds);
     const requester = getRateLimitContext(await headers(), clientId);

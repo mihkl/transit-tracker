@@ -33,7 +33,7 @@ function getTransportTypes(typeFilter: LineType) {
   return new Set(LINE_TYPE_TO_GPS_TYPES[typeFilter] ?? LINE_TYPE_TO_GPS_TYPES.all);
 }
 
-function getTypeNameFromGps(transportType: number): TransportType {
+function getTypeNameFromGps(transportType: number) {
   return GPS_TYPE_TO_TRANSPORT[transportType] ?? "unknown";
 }
 
@@ -51,7 +51,7 @@ function gridKey(lat: number, lng: number) {
   return `${Math.floor(lat / GRID_CELL_DEG)}_${Math.floor(lng / GRID_CELL_DEG)}`;
 }
 
-function buildStopGrid(stops: Map<string, GtfsStop>): StopGrid {
+function buildStopGrid(stops: Map<string, GtfsStop>) {
   const grid: StopGrid = new Map();
   for (const stop of stops.values()) {
     const key = gridKey(stop.latitude, stop.longitude);

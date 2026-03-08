@@ -16,7 +16,7 @@ export interface PlaceSearchActionResult {
 export async function searchPlacesActionAsync(
   q: string,
   clientId?: string,
-): Promise<PlaceSearchActionResult> {
+) {
   const parsedQuery = placesQuerySchema.safeParse(q);
   if (!parsedQuery.success) {
     return { results: [], error: null };
