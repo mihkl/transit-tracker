@@ -2,6 +2,11 @@
 export type {};
 declare const self: ServiceWorkerGlobalScope;
 
+const PUSH_API_PATH = "/api/push";
+const LEAVE_REMINDER_TAG = "leave-reminder";
+const LEAVE_MAIN_SNOOZE_PREFIX = "leave-main-snooze-";
+const LEAVE_REMINDER_CATEGORY = "leave-reminder";
+
 const CACHE_NAME = "transit-tracker-v3";
 
 const PRECACHE_URLS = ["/icon-192x192.png", "/icon-512x512.png"];
@@ -12,7 +17,7 @@ interface ReminderPayload {
   tag?: string;
   url?: string;
   timestamp?: number;
-  category?: "leave-reminder";
+  category?: typeof LEAVE_REMINDER_CATEGORY;
   complete?: boolean;
   jobPrefix?: string;
 }
@@ -29,7 +34,7 @@ self.addEventListener("push", (event) => {
 
   event.waitUntil(
     (async () => {
-      const tag = data.tag ?? "leave-reminder";
+      const tag = data.tag ?? LEAVE_REMINDER_TAG;
       if (data.complete) {
         const active = await self.registration.getNotifications({ tag });
         await Promise.all(active.map((n) => n.close()));
@@ -96,7 +101,7 @@ async function rescheduleByMinutesAsync(
     if (!subscription) return false;
 
     const notifyAt = Date.now() + minutes * 60_000;
-    const response = await fetch("/api/push", {
+    const response = await fetch(PUSH_API_PATH, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -104,11 +109,11 @@ async function rescheduleByMinutesAsync(
         notifyAt,
         title: data.title ?? "Time to leave",
         body: data.body ?? "Open Transit Tracker for updated directions.",
-        tag: data.tag ?? "leave-reminder",
+        tag: data.tag ?? LEAVE_REMINDER_TAG,
         url: data.url ?? "/",
         timestamp: notifyAt,
-        category: "leave-reminder",
-        jobKey: `leave-main-snooze-${notifyAt}`,
+        category: LEAVE_REMINDER_CATEGORY,
+        jobKey: `${LEAVE_MAIN_SNOOZE_PREFIX}${notifyAt}`,
       }),
     });
 
@@ -124,7 +129,7 @@ async function cancelScheduledUpdatesAsync(jobPrefix?: string) {
     const subscription = await self.registration.pushManager.getSubscription();
     if (!subscription) return;
 
-    await fetch("/api/push", {
+    await fetch(PUSH_API_PATH, {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -167,7 +172,7 @@ self.addEventListener("notificationclick", (event) => {
             body: "Could not schedule a new reminder. Open the app to retry.",
             icon: "/icon-192x192.png",
             badge: "/icons/notification-badge.svg",
-            tag: "leave-reminder-error",
+            tag: `${LEAVE_REMINDER_TAG}-error`,
           });
         }
         return;

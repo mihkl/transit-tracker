@@ -5,6 +5,7 @@ import webpush from "web-push";
 import type { PushSubscription } from "web-push";
 import { migrate } from "drizzle-orm/libsql/migrator";
 import { env } from "@/lib/env";
+import { DELAY_UPDATE_PREFIX } from "@/lib/push-constants";
 import { pushDb } from "@/server/push-db";
 import { pushNotifications } from "@/server/push-schema";
 
@@ -50,7 +51,6 @@ const MAX_ACTIVE_NOTIFICATIONS = 5_000;
 const MAX_ACTIVE_PER_ENDPOINT = 12;
 const MAX_ACTIVE_DELAY_UPDATES_PER_ENDPOINT = 4;
 const STATE_KEY = "__transitPushSchedulerState__";
-const DELAY_UPDATE_PREFIX = "delay-update-";
 
 function getState() {
   const scoped = globalThis as typeof globalThis & {

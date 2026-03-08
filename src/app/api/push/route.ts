@@ -3,6 +3,7 @@ import { env } from "@/lib/env";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { getClientIdentifier } from "@/lib/request-client";
 import { cancelNotification, scheduleNotification, vapidPublicKey } from "@/server/push-scheduler";
+import { LEAVE_MAIN_JOB_KEY, LEAVE_MAIN_SNOOZE_PREFIX, DELAY_UPDATE_PREFIX } from "@/lib/push-constants";
 
 export const dynamic = "force-dynamic";
 
@@ -14,9 +15,6 @@ const MAX_URL_LEN = 500;
 const MAX_CATEGORY_LEN = 80;
 const MAX_JOB_KEY_LEN = 80;
 const MAX_ENDPOINT_LEN = 2000;
-const LEAVE_MAIN_JOB_KEY = "leave-main";
-const LEAVE_MAIN_SNOOZE_PREFIX = "leave-main-snooze-";
-const DELAY_UPDATE_PREFIX = "delay-update-";
 
 interface PushSubscriptionJson {
   endpoint: string;

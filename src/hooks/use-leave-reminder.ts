@@ -4,6 +4,13 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import type { PlannedRoute, RouteLeg } from "@/lib/types";
 import { parseDurationSeconds } from "@/lib/route-time";
 import { fetchLegDelayAsync } from "@/lib/leg-delay";
+import {
+  PUSH_API_PATH,
+  LEAVE_MAIN_JOB_KEY,
+  DELAY_UPDATE_PREFIX,
+  LEAVE_REMINDER_TAG,
+  LEAVE_REMINDER_CATEGORY,
+} from "@/lib/push-constants";
 
 export interface LeaveInfo {
   leaveTime: Date;
@@ -213,7 +220,7 @@ async function schedulePushAsync(
   jobKey: string,
   jobPrefix = jobKey,
 ) {
-  const response = await fetch("/api/push", {
+  const response = await fetch(PUSH_API_PATH, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -221,10 +228,10 @@ async function schedulePushAsync(
       notifyAt,
       title,
       body,
-      tag: "leave-reminder",
+      tag: LEAVE_REMINDER_TAG,
       url: "/?trip=1",
       timestamp: notifyAt,
-      category: "leave-reminder",
+      category: LEAVE_REMINDER_CATEGORY,
       jobKey,
       jobPrefix,
     }),
@@ -334,7 +341,7 @@ async function getPushSubscriptionAsync() {
     const existing = await activeReg.pushManager.getSubscription();
     if (existing) return { subscription: existing, error: null };
 
-    const keyResp = await fetch("/api/push");
+    const keyResp = await fetch(PUSH_API_PATH);
     if (!keyResp.ok) {
       return {
         subscription: null,
@@ -534,8 +541,8 @@ export function useLeaveReminder(route: PlannedRoute | null) {
         nextNotifyAt,
         reminderText.title,
         reminderText.body,
-        "leave-main",
-        "leave-main",
+        LEAVE_MAIN_JOB_KEY,
+        LEAVE_MAIN_JOB_KEY,
       );
 
       saveReminder({
@@ -608,7 +615,7 @@ export function useLeaveReminder(route: PlannedRoute | null) {
 
         if (needsReschedule) {
           const text = buildLeaveReminderText(baseInfo, nextNotifyAt, delaySeconds);
-          await schedulePushAsync(sub, nextNotifyAt, text.title, text.body, "leave-main", "leave-main");
+          await schedulePushAsync(sub, nextNotifyAt, text.title, text.body, LEAVE_MAIN_JOB_KEY, LEAVE_MAIN_JOB_KEY);
           if (cancelled) return;
           setNotifyAtMs(nextNotifyAt);
         }
@@ -630,8 +637,8 @@ export function useLeaveReminder(route: PlannedRoute | null) {
             Date.now() + 1_000,
             delayText.title,
             delayText.body,
-            `delay-update-${Date.now()}`,
-            "delay-update-",
+            `${DELAY_UPDATE_PREFIX}${Date.now()}`,
+            DELAY_UPDATE_PREFIX,
           );
           if (cancelled) return;
           lastDelayPushAt = Date.now();
@@ -683,20 +690,20 @@ export function useLeaveReminder(route: PlannedRoute | null) {
       const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.getSubscription();
       if (sub) {
-        await fetch("/api/push", {
+        await fetch(PUSH_API_PATH, {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             subscription: sub.toJSON(),
-            jobPrefix: "delay-update-",
+            jobPrefix: DELAY_UPDATE_PREFIX,
           }),
         });
-        await fetch("/api/push", {
+        await fetch(PUSH_API_PATH, {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             subscription: sub.toJSON(),
-            jobPrefix: "leave-main",
+            jobPrefix: LEAVE_MAIN_JOB_KEY,
           }),
         });
       }
