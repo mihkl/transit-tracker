@@ -1,7 +1,7 @@
 import { RateLimiterMemory, RateLimiterRedis } from "rate-limiter-flexible";
 import { createClient } from "redis";
 import { env } from "@/lib/env";
-import { captureExpectedMessage } from "@/lib/monitoring";
+import { captureExpectedMessage, captureUnexpectedError } from "@/lib/monitoring";
 
 type LimitName = "places" | "routes" | "traffic" | "push-write" | "push-delete";
 type RateLimitBackend = "redis" | "memory";
@@ -206,7 +206,17 @@ function toKey(key: string) {
   return key.trim() || "unknown";
 }
 
+function isRateLimitRejection(result: unknown): result is { msBeforeNext: number } {
+  return (
+    typeof result === "object" &&
+    result !== null &&
+    "msBeforeNext" in result &&
+    typeof result.msBeforeNext === "number"
+  );
+}
+
 export async function consumeRateLimit(name: LimitName, key: string): Promise<LimitResult> {
+  const scoped = getGlobalScope();
   const limiterState = await getLimiterState(name);
 
   try {
@@ -218,17 +228,61 @@ export async function consumeRateLimit(name: LimitName, key: string): Promise<Li
       reason: limiterState.reason,
     };
   } catch (result) {
-    const retryAfterMs =
-      typeof result === "object" &&
-      result !== null &&
-      "msBeforeNext" in result &&
-      typeof result.msBeforeNext === "number"
-        ? result.msBeforeNext
-        : 60_000;
+    if (isRateLimitRejection(result)) {
+      return {
+        ok: false,
+        retryAfterSec: Math.max(1, Math.ceil(result.msBeforeNext / 1000)),
+        backend: limiterState.backend,
+        reason: limiterState.reason,
+      };
+    }
+
+    captureUnexpectedError(result, {
+      area: "rate-limit",
+      extra: {
+        limiter: name,
+        backend: limiterState.backend,
+        reason: limiterState.reason,
+      },
+    });
+
+    if (limiterState.backend === "redis") {
+      const fallback = createMemoryLimiter(name, "connect_error");
+      scoped[RATE_LIMITER_KEY] ??= {};
+      scoped[RATE_LIMITER_KEY]![name] = fallback;
+
+      try {
+        await fallback.limiter.consume(toKey(key));
+        return {
+          ok: true,
+          retryAfterSec: 0,
+          backend: fallback.backend,
+          reason: fallback.reason,
+        };
+      } catch (fallbackResult) {
+        if (isRateLimitRejection(fallbackResult)) {
+          return {
+            ok: false,
+            retryAfterSec: Math.max(1, Math.ceil(fallbackResult.msBeforeNext / 1000)),
+            backend: fallback.backend,
+            reason: fallback.reason,
+          };
+        }
+
+        captureUnexpectedError(fallbackResult, {
+          area: "rate-limit",
+          extra: {
+            limiter: name,
+            backend: fallback.backend,
+            reason: fallback.reason,
+          },
+        });
+      }
+    }
 
     return {
-      ok: false,
-      retryAfterSec: Math.max(1, Math.ceil(retryAfterMs / 1000)),
+      ok: true,
+      retryAfterSec: 0,
       backend: limiterState.backend,
       reason: limiterState.reason,
     };
