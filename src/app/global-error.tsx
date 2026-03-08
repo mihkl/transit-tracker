@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { captureUnexpectedError } from "@/lib/monitoring";
+import { ErrorFallback } from "@/components/error-fallback";
 
 export default function GlobalError({
   error,
@@ -18,14 +19,8 @@ export default function GlobalError({
 
   return (
     <html lang="en">
-      <body className="h-dvh flex flex-col items-center justify-center gap-3 bg-background p-6">
-        <p className="text-sm text-foreground/50 text-center">Something went wrong</p>
-        <button
-          onClick={() => window.location.reload()}
-          className="px-4 py-2.5 bg-primary text-primary-foreground rounded-xl text-sm font-semibold"
-        >
-          Reload
-        </button>
+      <body>
+        <ErrorFallback />
       </body>
     </html>
   );
