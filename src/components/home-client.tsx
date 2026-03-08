@@ -12,6 +12,7 @@ import { useAnimatedVehicles } from "@/hooks/use-animated-vehicles";
 import { useUserLocation } from "@/hooks/use-user-location";
 import { useIsDesktop } from "@/hooks/use-is-desktop";
 import { useTransitStore } from "@/store/use-transit-store";
+import { dismissOverlay, navigateTo } from "@/lib/navigation";
 import type { RoutePlanRequest, RoutePlanResponse, RouteLeg, LineDto } from "@/lib/types";
 import type { PickingPoint } from "@/store/use-transit-store";
 import { modeToTransportType, normalizeLineType } from "@/lib/domain";
@@ -51,8 +52,6 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
     setFocusedVehicleId,
     timeOption,
     selectedDateTime,
-    setMobileTab,
-    goToMapTab,
     clearPlanner,
     routingMode,
     setRouteCache,
@@ -187,10 +186,10 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
       if (pickingFromPlannerRef.current) {
         pickingFromPlannerRef.current = false;
         setShowPlanner(true);
-        setMobileTab("directions");
+        navigateTo("directions");
       }
     },
-    [destination, origin, planRouteIfReady, setDestination, setMobileTab, setOrigin, setPickingPoint, setShowPlanner],
+    [destination, origin, planRouteIfReady, setDestination, setOrigin, setPickingPoint, setShowPlanner],
   );
 
   const handleSwap = useCallback(() => {
@@ -239,8 +238,8 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
 
   const handlePlannerClose = useCallback(() => {
     setShowPlanner(false);
-    if (!isDesktop) goToMapTab();
-  }, [goToMapTab, isDesktop, setShowPlanner]);
+    if (!isDesktop) dismissOverlay(null);
+  }, [isDesktop, setShowPlanner]);
 
   const handleRouteSelect = useCallback((index: number) => {
     setSelectedRouteIndex(index);
@@ -261,7 +260,7 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
             if (pt && !isDesktop) {
               pickingFromPlannerRef.current = true;
               setShowPlanner(false);
-              setMobileTab("map");
+              navigateTo(null);
             } else {
               pickingFromPlannerRef.current = false;
             }

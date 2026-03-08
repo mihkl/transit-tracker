@@ -2,7 +2,8 @@
 
 import { useEffect } from "react";
 import { useTransitStore } from "@/store/use-transit-store";
-import { useNavigationHistory } from "@/hooks/use-navigation-history";
+import { useHashRouter } from "@/hooks/use-hash-router";
+import { navigateTo } from "@/lib/navigation";
 import type { PlannedRoute, RoutePlanResponse } from "@/lib/types";
 
 const ROUTE_SNAPSHOT_KEY = "transit-reminder-route-snapshot";
@@ -18,10 +19,9 @@ export function HomeStateEffects() {
   const setRoutePlan = useTransitStore((s) => s.setRoutePlan);
   const setSelectedRouteIndex = useTransitStore((s) => s.setSelectedRouteIndex);
   const setOpenSelectedRouteDetails = useTransitStore((s) => s.setOpenSelectedRouteDetails);
-  const setMobileTab = useTransitStore((s) => s.setMobileTab);
   const bumpMapKey = useTransitStore((s) => s.bumpMapKey);
 
-  useNavigationHistory();
+  useHashRouter();
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -40,17 +40,17 @@ export function HomeStateEffects() {
       setRoutePlan({ routes: [snapshot.route] } as RoutePlanResponse);
       setSelectedRouteIndex(0);
       setOpenSelectedRouteDetails(true);
-      setMobileTab("directions");
+      navigateTo("directions", { replace: true });
     } catch {
       // Ignore malformed snapshot.
     } finally {
       params.delete("trip");
       const next = params.toString();
-      const nextUrl = `${window.location.pathname}${next ? `?${next}` : ""}${window.location.hash}`;
-      // Preserve existing history state (nav state) while cleaning the URL
+      const hash = window.location.hash;
+      const nextUrl = `${window.location.pathname}${next ? `?${next}` : ""}${hash}`;
       window.history.replaceState(window.history.state, "", nextUrl);
     }
-  }, [setMobileTab, setOpenSelectedRouteDetails, setRoutePlan, setSelectedRouteIndex, setShowPlanner]);
+  }, [setOpenSelectedRouteDetails, setRoutePlan, setSelectedRouteIndex, setShowPlanner]);
 
   useEffect(() => {
     const STALE_MS = 5 * 60 * 1000;

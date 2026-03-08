@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { RoutePlanResponse, StopDto } from "@/lib/types";
 import type { LineType } from "@/lib/domain";
+import type { Overlay } from "@/lib/navigation";
 import { resolveRoutePlan, type RoutingMode, type RouteCache } from "@/lib/route-filter";
 import { toLocalDateTimeString } from "@/lib/format-utils";
 
@@ -8,7 +9,6 @@ export type SelectedLine = { lineNumber: string; type: LineType } | null;
 export type PlannerPoint = { lat: number; lng: number; name?: string } | null;
 export type PickingPoint = "origin" | "destination" | null;
 export type TimeOption = "now" | "depart" | "arrive";
-export type MobileTab = "map" | "search" | "nearby" | "directions" | "layers";
 
 interface TransitStoreState {
   selectedLine: SelectedLine;
@@ -31,7 +31,7 @@ interface TransitStoreState {
   openSelectedRouteDetails: boolean;
   timeOption: TimeOption;
   selectedDateTime: string;
-  mobileTab: MobileTab;
+  activeOverlay: Overlay;
   showMobileLayers: boolean;
   mapKey: number;
 }
@@ -58,8 +58,7 @@ interface TransitStoreActions {
   setOpenSelectedRouteDetails: (open: boolean) => void;
   setTimeOption: (option: TimeOption) => void;
   setSelectedDateTime: (value: string) => void;
-  setMobileTab: (tab: MobileTab) => void;
-  goToMapTab: () => void;
+  setActiveOverlay: (overlay: Overlay) => void;
   setShowMobileLayers: (show: boolean) => void;
   bumpMapKey: () => void;
   clearPlanner: () => void;
@@ -89,7 +88,7 @@ function getInitialState() {
     openSelectedRouteDetails: false,
     timeOption: "now",
     selectedDateTime: toLocalDateTimeString(new Date()),
-    mobileTab: "map",
+    activeOverlay: null,
     showMobileLayers: false,
     mapKey: 0,
   };
@@ -126,8 +125,7 @@ export const useTransitStore = create<TransitStore>((set) => ({
   setOpenSelectedRouteDetails: (openSelectedRouteDetails) => set({ openSelectedRouteDetails }),
   setTimeOption: (timeOption) => set({ timeOption }),
   setSelectedDateTime: (selectedDateTime) => set({ selectedDateTime }),
-  setMobileTab: (mobileTab) => set({ mobileTab }),
-  goToMapTab: () => set({ mobileTab: "map", showMobileLayers: false }),
+  setActiveOverlay: (activeOverlay) => set({ activeOverlay }),
   setShowMobileLayers: (showMobileLayers) => set({ showMobileLayers }),
   bumpMapKey: () => set((state) => ({ mapKey: state.mapKey + 1 })),
   clearPlanner: () =>

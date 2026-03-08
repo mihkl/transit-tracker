@@ -45,9 +45,11 @@ export function HomeRoutePlannerLayer({
   const setTimeOption = useTransitStore((s) => s.setTimeOption);
   const selectedDateTime = useTransitStore((s) => s.selectedDateTime);
   const setSelectedDateTime = useTransitStore((s) => s.setSelectedDateTime);
-  const mobileTab = useTransitStore((s) => s.mobileTab);
+  const activeOverlay = useTransitStore((s) => s.activeOverlay);
 
-  const showPlannerComponent = isDesktop ? showPlanner : mobileTab === "directions";
+  const showPlannerComponent = isDesktop
+    ? showPlanner
+    : activeOverlay === "directions" || activeOverlay === "route-detail";
   if (!showPlannerComponent) return null;
 
   return (

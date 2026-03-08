@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
-import { Bus, Car, MapPin } from "lucide-react";
+import { useCallback } from "react";
+import { Bus, Car, Layers, MapPin } from "lucide-react";
 import { BottomSheet } from "@/components/bottom-sheet";
 import { QuickActionsPanel } from "@/components/quick-actions-panel";
 import { MobileSearchView } from "@/components/mobile-search-view";
 import { useTransitStore } from "@/store/use-transit-store";
+import { dismissOverlay } from "@/lib/navigation";
 import type { LineDto } from "@/lib/types";
 
 interface HomeMobileOverlaysProps {
@@ -19,8 +20,7 @@ export function HomeMobileOverlays({
   vehicleCount,
   onToggleVehicles,
 }: HomeMobileOverlaysProps) {
-  const mobileTab = useTransitStore((s) => s.mobileTab);
-  const goToMapTab = useTransitStore((s) => s.goToMapTab);
+  const activeOverlay = useTransitStore((s) => s.activeOverlay);
   const showMobileLayers = useTransitStore((s) => s.showMobileLayers);
   const setShowMobileLayers = useTransitStore((s) => s.setShowMobileLayers);
   const showVehicles = useTransitStore((s) => s.showVehicles);
@@ -28,18 +28,6 @@ export function HomeMobileOverlays({
   const toggleTraffic = useTransitStore((s) => s.toggleTraffic);
   const showStops = useTransitStore((s) => s.showStops);
   const toggleStops = useTransitStore((s) => s.toggleStops);
-  const mobileLayersMenuRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (showMobileLayers) return;
-    const active = document.activeElement;
-    if (
-      active instanceof HTMLElement &&
-      mobileLayersMenuRef.current?.contains(active)
-    ) {
-      active.blur();
-    }
-  }, [showMobileLayers]);
 
   const handleLayerClick = useCallback(
     (action: () => void) => {
@@ -49,27 +37,29 @@ export function HomeMobileOverlays({
     [setShowMobileLayers],
   );
 
+  const closeToMap = useCallback(() => dismissOverlay(null), []);
+
   return (
     <>
-      <BottomSheet open={mobileTab === "nearby"} onClose={goToMapTab}>
+      <BottomSheet open={activeOverlay === "nearby"} onClose={closeToMap}>
         <QuickActionsPanel />
       </BottomSheet>
 
-      {mobileTab === "search" && (
+      {activeOverlay === "search" && (
         <div className="absolute inset-0 z-[1100] bg-white md:hidden">
           <MobileSearchView lines={lines} vehicleCount={vehicleCount} />
         </div>
       )}
 
       <div className="fixed right-2 z-1250 pointer-events-none md:hidden" style={{ bottom: "calc(5rem + env(safe-area-inset-bottom, 0px))" }}>
-        <div
-          ref={mobileLayersMenuRef}
-          className={`flex flex-col items-end gap-2 transition-all duration-200 ${
-            showMobileLayers
-              ? "opacity-100 translate-y-0 scale-100"
-              : "opacity-0 translate-y-2 scale-95"
-          }`}
-        >
+        <div className="flex flex-col items-end gap-2">
+          <div
+            className={`flex flex-col items-end gap-2 transition-all duration-200 ${
+              showMobileLayers
+                ? "opacity-100 translate-y-0 scale-100"
+                : "opacity-0 translate-y-2 scale-95 pointer-events-none"
+            }`}
+          >
           <button
             onClick={() => handleLayerClick(onToggleVehicles)}
             className={`pointer-events-auto h-10 min-w-[102px] px-2 rounded-xl border flex items-center justify-center gap-1.5 text-sm font-semibold shadow-lg transition-colors ${
@@ -107,6 +97,20 @@ export function HomeMobileOverlays({
           >
             <span>Stops</span>
             <MapPin className="h-4 w-4" />
+          </button>
+          </div>
+
+          {/* Layers FAB */}
+          <button
+            onClick={() => setShowMobileLayers(!showMobileLayers)}
+            className={`pointer-events-auto h-12 w-12 rounded-full border flex items-center justify-center shadow-lg transition-colors ${
+              showMobileLayers
+                ? "border-primary bg-primary text-white shadow-primary/25"
+                : "border-foreground/10 bg-white/95 text-foreground/60 backdrop-blur-md"
+            }`}
+            aria-label="Toggle layers"
+          >
+            <Layers size={22} strokeWidth={showMobileLayers ? 2.5 : 1.8} />
           </button>
         </div>
       </div>

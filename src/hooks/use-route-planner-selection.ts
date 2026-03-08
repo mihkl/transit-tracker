@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PlannedRoute, RoutePlanResponse } from "@/lib/types";
+import { useTransitStore } from "@/store/use-transit-store";
+import { dismissOverlay, navigateTo, getRouteDetailIndex } from "@/lib/navigation";
 
 interface UseRoutePlannerSelectionParams {
   routePlan: RoutePlanResponse | null;
@@ -19,14 +21,20 @@ export function useRoutePlannerSelection({
   onConsumeOpenSelectedRouteDetails,
 }: UseRoutePlannerSelectionParams) {
   const [expandedRoute, setExpandedRoute] = useState<number | null>(null);
-  const [mobileDetail, setMobileDetail] = useState<number | null>(null);
+  const activeOverlay = useTransitStore((s) => s.activeOverlay);
+
+  // Derive detail index from the browser history entry so back/forward restores it
+  const mobileDetailIdx =
+    activeOverlay === "route-detail" ? getRouteDetailIndex() : null;
+
   const detailSheetRef = useRef<HTMLDivElement | null>(null);
   const lastDetailSheetHeightRef = useRef(0);
 
   const hasRoutes = !!routePlan?.routes?.length;
   const selectedRoute = routePlan?.routes[selectedRouteIndex] ?? null;
   const mobileDetailRoute: PlannedRoute | null =
-    mobileDetail !== null && hasRoutes ? routePlan.routes[mobileDetail] : null;
+    mobileDetailIdx !== null && hasRoutes
+      ? routePlan.routes[mobileDetailIdx] ?? null : null;
 
   const handleRouteClick = useCallback(
     (index: number) => {
@@ -39,13 +47,13 @@ export function useRoutePlannerSelection({
   const handleMobileRouteClick = useCallback(
     (index: number) => {
       onSelectRoute(index);
-      setMobileDetail(index);
+      navigateTo("route-detail", { routeDetailIndex: index });
     },
     [onSelectRoute],
   );
 
   const closeMobileDetail = useCallback(() => {
-    setMobileDetail(null);
+    dismissOverlay("directions");
   }, []);
 
   useEffect(() => {
@@ -60,7 +68,7 @@ export function useRoutePlannerSelection({
           : 0;
       onSelectRoute(index);
       setExpandedRoute(index);
-      setMobileDetail(index);
+      navigateTo("route-detail", { replace: true, routeDetailIndex: index });
       onConsumeOpenSelectedRouteDetails?.();
     });
 

@@ -402,7 +402,7 @@ export function RoutePlanner({
   } = useDragDismiss({
     thresholdPx: 120,
     velocityThreshold: 0.7,
-    onDismiss: onClose,
+    onDismiss: closeMobileDetail,
   });
   const { savedItems, allSavedLocations, isLocationSaved, handleSaveLocation } =
     usePlannerSavedLocations();

@@ -5,6 +5,7 @@ import { Search, X } from "lucide-react";
 import type { LineDto, StopDto } from "@/lib/types";
 import { useStops } from "@/hooks/use-stops";
 import { useTransitStore } from "@/store/use-transit-store";
+import { dismissOverlay, navigateTo } from "@/lib/navigation";
 import { useTransitSearch } from "@/hooks/use-transit-search";
 import { ActiveFilterPill } from "@/components/search/active-filter-pill";
 import { SearchResultsList } from "@/components/search/search-results-list";
@@ -24,14 +25,13 @@ export function MobileSearchView({
   const setSelectedLine = useTransitStore((s) => s.setSelectedLine);
   const setSelectedStop = useTransitStore((s) => s.setSelectedStop);
   const setShowVehicles = useTransitStore((s) => s.setShowVehicles);
-  const goToMapTab = useTransitStore((s) => s.goToMapTab);
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const { stops } = useStops();
   const { dragY, isDragging, beginDrag, updateDrag, endDrag } = useDragDismiss({
     thresholdPx: 130,
     velocityThreshold: 0.8,
-    onDismiss: goToMapTab,
+    onDismiss: () => dismissOverlay(null),
     maxStartY: 140,
     axisLockRatio: 1.2,
   });
@@ -53,20 +53,20 @@ export function MobileSearchView({
     setSelectedStop(null);
     setSelectedLine({ lineNumber: line.lineNumber, type: line.type });
     setShowVehicles(true);
-    goToMapTab();
+    navigateTo(null);
   };
 
   const handleSelectAllTrains = () => {
     setSelectedStop(null);
     setSelectedLine({ lineNumber: "", type: "train" });
     setShowVehicles(true);
-    goToMapTab();
+    navigateTo(null);
   };
 
   const handleSelectStop = (stop: StopDto) => {
     setSelectedLine(null);
     setSelectedStop(stop);
-    goToMapTab();
+    navigateTo(null);
   };
 
   const handleClearFilter = () => {

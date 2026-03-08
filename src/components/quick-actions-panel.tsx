@@ -8,6 +8,7 @@ import { LocateFixed } from "lucide-react";
 import type { StopDto } from "@/lib/types";
 import type { LineType } from "@/lib/domain";
 import { useTransitStore } from "@/store/use-transit-store";
+import { navigateTo } from "@/lib/navigation";
 
 const STOP_TYPE_MAP: Record<string, LineType> = {
   B: "bus",
@@ -26,7 +27,6 @@ function stopAccentColor(stop: StopDto) {
 export function QuickActionsPanel() {
   const setSelectedLine = useTransitStore((s) => s.setSelectedLine);
   const setSelectedStop = useTransitStore((s) => s.setSelectedStop);
-  const goToMapTab = useTransitStore((s) => s.goToMapTab);
   const [requestingLocation, setRequestingLocation] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
   const userLocation = useUserLocation();
@@ -99,7 +99,7 @@ export function QuickActionsPanel() {
               onClick={() => {
                 setSelectedLine(null);
                 setSelectedStop(stop);
-                goToMapTab();
+                navigateTo(null);
               }}
               className="w-full text-left rounded-2xl border border-foreground/8 bg-white p-4 min-h-[80px] active:scale-[0.98] transition-all duration-150"
               style={{ borderLeftWidth: 4, borderLeftColor: color }}
