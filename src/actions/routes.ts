@@ -7,7 +7,7 @@ import { matchTransitLegAsync } from "@/server/delay-matcher";
 import type { RoutePlanRequest, RoutePlanResponse, PlannedRoute, RouteLeg } from "@/lib/types";
 import { parseDurationSeconds } from "@/lib/route-time";
 import { consumeRateLimit } from "@/lib/rate-limit";
-import { getClientIdentifier } from "@/lib/request-client";
+import { getRateLimitIdentifier } from "@/lib/request-client";
 import { normalizeTransitMode } from "@/lib/domain";
 import { routePlanRequestSchema, routePlanResponseSchema } from "@/lib/schemas";
 
@@ -15,10 +15,10 @@ function normalizeVehicleType(type: string) {
   return normalizeTransitMode(type);
 }
 
-export async function planRouteAsync(req: RoutePlanRequest) {
+export async function planRouteAsync(req: RoutePlanRequest, clientId?: string) {
   const parsedReq = routePlanRequestSchema.parse(req);
-  const ip = getClientIdentifier(await headers());
-  const limit = await consumeRateLimit("routes", `planRoute:${ip}`);
+  const requester = getRateLimitIdentifier(await headers(), clientId);
+  const limit = await consumeRateLimit("routes", `planRoute:${requester}`);
   if (!limit.ok) {
     throw new Error("Too many requests. Please wait a moment.");
   }

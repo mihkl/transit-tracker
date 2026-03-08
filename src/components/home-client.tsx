@@ -17,6 +17,7 @@ import type { PickingPoint } from "@/store/use-transit-store";
 import { modeToTransportType, normalizeLineType } from "@/lib/domain";
 import { planRouteAsync } from "@/actions";
 import { mergeAndDedupeRoutes, fastestRoutes, lessWalkingRoutes, fewerTransfersRoutes } from "@/lib/route-filter";
+import { getBrowserClientId } from "@/lib/browser-client-id";
 
 
 type ShapesMap = Record<string, number[][]>;
@@ -116,9 +117,10 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
         baseReq.arrivalTime = new Date(selectedDateTime).toISOString();
       }
 
+      const clientId = getBrowserClientId() ?? undefined;
       const [fewerTransfersData, lessWalkingData] = await Promise.all([
-        planRouteAsync({ ...baseReq, routingPreference: "FEWER_TRANSFERS" }),
-        planRouteAsync({ ...baseReq, routingPreference: "LESS_WALKING" }),
+        planRouteAsync({ ...baseReq, routingPreference: "FEWER_TRANSFERS" }, clientId),
+        planRouteAsync({ ...baseReq, routingPreference: "LESS_WALKING" }, clientId),
       ]);
 
       const merged = mergeAndDedupeRoutes(fewerTransfersData, lessWalkingData);

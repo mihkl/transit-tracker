@@ -3,7 +3,7 @@
 import { headers } from "next/headers";
 import { env } from "@/lib/env";
 import { consumeRateLimit } from "@/lib/rate-limit";
-import { getClientIdentifier } from "@/lib/request-client";
+import { getRateLimitIdentifier } from "@/lib/request-client";
 import { trafficBoundsSchema } from "@/lib/schemas";
 import { z } from "zod";
 
@@ -42,6 +42,10 @@ interface TrafficCacheEntry {
 
 const trafficCache = new Map<string, TrafficCacheEntry>();
 const TRAFFIC_CACHE_TTL = 30_000;
+
+function emptyTrafficIncidents(): TrafficIncidentCollection {
+  return { type: "FeatureCollection", features: [] };
+}
 
 export async function getTrafficFlowAsync() {
   const cacheKey = "flow:tileinfo:relative0";
@@ -102,9 +106,9 @@ export async function getTrafficIncidentsAsync(bounds: {
   minLng: number;
   maxLat: number;
   maxLng: number;
-}) {
+}, clientId?: string) {
   const parsedBounds = trafficBoundsSchema.parse(bounds);
-  const requester = getClientIdentifier(await headers());
+  const requester = getRateLimitIdentifier(await headers(), clientId);
   const limit = await consumeRateLimit("traffic", `traffic:${requester}`);
   if (!limit.ok) {
     throw new Error("Too many traffic requests. Please wait a moment.");
@@ -134,7 +138,9 @@ export async function getTrafficIncidentsAsync(bounds: {
   }
 
   const apiKey = env.TOMTOM_SERVER_API_KEY;
-  if (!apiKey) throw new Error("TomTom API key not configured");
+  if (!apiKey) {
+    return emptyTrafficIncidents();
+  }
 
   const baseUrl = env.TOMTOM_BASE_URL;
   const url = new URL(`${baseUrl}/traffic/services/5/incidentDetails`);
@@ -153,15 +159,17 @@ export async function getTrafficIncidentsAsync(bounds: {
   const response = await fetch(url.toString(), { headers: { Accept: "application/json" } });
   if (!response.ok) {
     const body = await response.text().catch(() => "");
-    throw new Error(`TomTom API error: ${response.status} - ${body}`);
+    console.warn(`TomTom incidents unavailable (${response.status}): ${body}`);
+    return emptyTrafficIncidents();
   }
 
   const raw = await response.json();
   const parsed = tomTomIncidentsResponseSchema.safeParse(raw);
   if (!parsed.success) {
-    throw new Error(
+    console.warn(
       `TomTom incidents response validation failed: ${parsed.error.issues[0]?.message ?? parsed.error.message}`,
     );
+    return emptyTrafficIncidents();
   }
   const data = parsed.data;
   const features: TrafficIncidentFeature[] = [];

@@ -3,17 +3,17 @@
 import { headers } from "next/headers";
 import { searchPlacesAsync as searchPlacesAsync } from "@/server/google-routes";
 import { consumeRateLimit } from "@/lib/rate-limit";
-import { getClientIdentifier } from "@/lib/request-client";
+import { getRateLimitIdentifier } from "@/lib/request-client";
 import { placesQuerySchema } from "@/lib/schemas";
 
-export async function searchPlacesActionAsync(q: string) {
+export async function searchPlacesActionAsync(q: string, clientId?: string) {
   const parsedQuery = placesQuerySchema.safeParse(q);
   if (!parsedQuery.success) return [];
 
-  const ip = getClientIdentifier(await headers());
-  const limit = await consumeRateLimit("places", `searchPlaces:${ip}`);
+  const requester = getRateLimitIdentifier(await headers(), clientId);
+  const limit = await consumeRateLimit("places", `searchPlaces:${requester}`);
   if (!limit.ok) {
-    return [];
+    throw new Error("Too many search requests. Please wait a moment.");
   }
 
   const raw = await searchPlacesAsync(parsedQuery.data);

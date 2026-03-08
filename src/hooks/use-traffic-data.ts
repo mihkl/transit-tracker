@@ -5,6 +5,7 @@ import {
   type TrafficFlowTileInfo,
   type TrafficIncidentCollection as TrafficIncidentData,
 } from "@/actions";
+import { getBrowserClientId } from "@/lib/browser-client-id";
 
 export type { TrafficFlowTileInfo, TrafficIncidentData };
 
@@ -57,22 +58,31 @@ export function useTrafficData(
 
     try {
       const needsFlow = !flowTileInfoRef.current;
-      const [flowResult, incidentsResult] = await Promise.all([
-        needsFlow ? getTrafficFlowAsync() : Promise.resolve(null),
-        getTrafficIncidentsAsync(bounds),
+      const [flowResult, incidentsResult] = await Promise.allSettled([
+        needsFlow ? getTrafficFlowAsync() : Promise.resolve(flowTileInfoRef.current),
+        getTrafficIncidentsAsync(bounds, getBrowserClientId() ?? undefined),
       ]);
 
       if (fetchGenRef.current !== gen) return;
 
-      if (needsFlow && flowResult) {
-        flowTileInfoRef.current = flowResult;
+      if (flowResult.status === "fulfilled" && flowResult.value) {
+        flowTileInfoRef.current = flowResult.value;
+      }
+
+      const incidents =
+        incidentsResult.status === "fulfilled" ? incidentsResult.value : null;
+      if (incidentsResult.status === "rejected") {
+        console.warn("Traffic incidents unavailable:", incidentsResult.reason);
       }
 
       setState({
         flowTileInfo: flowTileInfoRef.current,
-        incidents: incidentsResult,
+        incidents,
         loading: false,
-        error: null,
+        error:
+          flowTileInfoRef.current || incidents
+            ? null
+            : "Failed to fetch traffic data",
       });
     } catch (err) {
       if (fetchGenRef.current !== gen) return;
