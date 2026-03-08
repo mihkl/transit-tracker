@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import { isReliableUserLocation } from "@/lib/location-quality";
+import { captureExpectedMessage } from "@/lib/monitoring";
 
 type UserLocation = { lat: number; lng: number } | null;
 
@@ -23,7 +24,15 @@ function startWatch() {
       currentLocation = { lat: coords.latitude, lng: coords.longitude };
       emit();
     },
-    (err) => console.warn("Geolocation error:", err.message),
+    (err) => {
+      if (err.code !== err.PERMISSION_DENIED) {
+        captureExpectedMessage("Geolocation watch failed", {
+          area: "geolocation",
+          extra: { code: err.code, message: err.message },
+          level: "info",
+        });
+      }
+    },
     { enableHighAccuracy: true, maximumAge: 30_000, timeout: 15_000 },
   );
 }

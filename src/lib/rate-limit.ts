@@ -1,6 +1,7 @@
 import { RateLimiterMemory, RateLimiterRedis } from "rate-limiter-flexible";
 import { createClient } from "redis";
 import { env } from "@/lib/env";
+import { captureExpectedMessage } from "@/lib/monitoring";
 
 type LimitName = "places" | "routes" | "traffic" | "push-write" | "push-delete";
 
@@ -74,7 +75,10 @@ async function getRedisClient() {
     client.on("error", (error) => {
       if (!scoped[REDIS_WARNING_KEY]) {
         scoped[REDIS_WARNING_KEY] = true;
-        console.warn("Redis rate limiter connection error, falling back to memory:", error);
+        captureExpectedMessage("Redis rate limiter connection error, falling back to memory", {
+          area: "rate-limit",
+          extra: { error },
+        });
       }
     });
     scoped[REDIS_KEY] = client;
@@ -87,7 +91,10 @@ async function getRedisClient() {
     } catch (error) {
       if (!scoped[REDIS_WARNING_KEY]) {
         scoped[REDIS_WARNING_KEY] = true;
-        console.warn("Redis rate limiter unavailable, falling back to memory:", error);
+        captureExpectedMessage("Redis rate limiter unavailable, falling back to memory", {
+          area: "rate-limit",
+          extra: { error },
+        });
       }
       return null;
     }

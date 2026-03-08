@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { captureUnexpectedError } from "@/lib/monitoring";
 
 export function ServiceWorkerRegister() {
   useEffect(() => {
@@ -20,7 +21,7 @@ export function ServiceWorkerRegister() {
         const registration = await navigator.serviceWorker.register("/sw.js");
         await registration.update().catch(() => undefined);
       } catch (error) {
-        console.error("SW registration failed", error);
+        captureUnexpectedError(error, { area: "service-worker" });
       }
     })();
 

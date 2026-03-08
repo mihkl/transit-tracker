@@ -9,6 +9,7 @@ import type { LineType, TypeFilter, TransportType } from "@/lib/domain";
 import { env } from "@/lib/env";
 import { normalizeLineType, GPS_TYPE_TO_TRANSPORT, LINE_TYPE_TO_GPS_TYPES } from "@/lib/domain";
 import { lineDtoSchema, vehicleDtoSchema } from "@/lib/schemas";
+import { captureUnexpectedError } from "@/lib/monitoring";
 import { loadGtfs } from "./gtfs-loader";
 import { VehicleTracker } from "./vehicle-tracker";
 import { GpsPollerService } from "./gps-poller";
@@ -133,7 +134,7 @@ class TransitState {
       console.log("GTFS loaded, GPS poller started.");
     } catch (err) {
       this.initializing = false;
-      console.error("Failed to initialize TransitState:", err);
+      captureUnexpectedError(err, { area: "transit-state" });
       throw err;
     }
   }
@@ -152,7 +153,7 @@ class TransitState {
       try {
         cb();
       } catch (err) {
-        console.error("Update callback error:", err);
+        captureUnexpectedError(err, { area: "transit-state", extra: { phase: "notify-update" } });
       }
     }
   }

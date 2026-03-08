@@ -75,13 +75,10 @@ export function PlaceSearchInput({
     setLoading(true);
     setErrorMessage(null);
     try {
-      const results = await searchPlacesActionAsync(q, getBrowserClientId() ?? undefined);
-      setResults(results);
+      const result = await searchPlacesActionAsync(q, getBrowserClientId() ?? undefined);
+      setResults(result.results);
+      setErrorMessage(result.error);
       setShowDropdown(true);
-    } catch (err) {
-      console.error("Search failed:", err);
-      setErrorMessage("Search failed. Check connection and try again.");
-      setResults([]);
     } finally {
       setLoading(false);
     }

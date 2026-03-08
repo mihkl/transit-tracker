@@ -36,6 +36,7 @@ export function HomeRoutePlannerLayer({
   const destination = useTransitStore((s) => s.destination);
   const pickingPoint = useTransitStore((s) => s.pickingPoint);
   const routePlan = useTransitStore((s) => s.routePlan);
+  const planError = useTransitStore((s) => s.planError);
   const planLoading = useTransitStore((s) => s.planLoading);
   const selectedRouteIndex = useTransitStore((s) => s.selectedRouteIndex);
   const openSelectedRouteDetails = useTransitStore((s) => s.openSelectedRouteDetails);
@@ -60,6 +61,7 @@ export function HomeRoutePlannerLayer({
       onSetDestination={onSetDestination}
       onPlanRoute={onPlanRoute}
       routePlan={routePlan}
+      planError={planError}
       planLoading={planLoading}
       selectedRouteIndex={selectedRouteIndex}
       onSelectRoute={onSelectRoute}

@@ -321,6 +321,7 @@ interface RoutePlannerProps {
   onSetDestination: (place: { lat: number; lng: number; name: string }) => void;
   onPlanRoute: () => void;
   routePlan: RoutePlanResponse | null;
+  planError?: string | null;
   planLoading: boolean;
   selectedRouteIndex: number;
   onSelectRoute: (index: number) => void;
@@ -346,6 +347,7 @@ export function RoutePlanner({
   onSetDestination,
   onPlanRoute,
   routePlan,
+  planError = null,
   planLoading,
   selectedRouteIndex,
   onSelectRoute,
@@ -505,6 +507,11 @@ export function RoutePlanner({
             onChange={(e) => onDateTimeChange(e.target.value)}
             className="h-10 w-full rounded-xl border border-foreground/10 bg-white px-3 text-sm text-foreground/80 font-medium focus:outline-none focus:ring-1 focus:ring-primary/30 transition-all"
           />
+        )}
+        {planError && (
+          <div className="rounded-xl border border-rose-200 bg-rose-50/80 px-3 py-2 text-[12px] font-medium text-rose-700">
+            {planError}
+          </div>
         )}
 
         {/* Routing mode selector */}

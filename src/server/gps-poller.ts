@@ -1,4 +1,5 @@
 import type { GpsReading } from "@/lib/types";
+import { captureExpectedMessage, captureUnexpectedError } from "@/lib/monitoring";
 import { z } from "zod";
 import { fetchWithTimeoutAsync } from "./fetch-with-timeout";
 
@@ -37,7 +38,10 @@ export async function pollGpsAsync() {
   const raw = await res.json();
   const parsed = geoJsonEnvelopeSchema.safeParse(raw);
   if (!parsed.success) {
-    console.error("GPS response validation error:", parsed.error.issues[0]?.message ?? parsed.error.message);
+    captureExpectedMessage("GPS response validation error", {
+      area: "gps",
+      extra: { issue: parsed.error.issues[0]?.message ?? parsed.error.message },
+    });
     return [];
   }
   const data = parsed.data;
@@ -65,15 +69,14 @@ export async function pollGpsAsync() {
     return [parsedFeature.data];
   });
   if (invalidCount > 0) {
-    console.warn(`GPS feed: skipped ${invalidCount} invalid feature(s)`);
-    for (const detail of invalidDetails) {
-      console.warn(`GPS feed detail: ${detail}`);
-    }
-    if (invalidCount > invalidDetails.length) {
-      console.warn(
-        `GPS feed detail: ${invalidCount - invalidDetails.length} additional invalid feature(s) omitted`,
-      );
-    }
+    captureExpectedMessage(`GPS feed: skipped ${invalidCount} invalid feature(s)`, {
+      area: "gps",
+      extra: {
+        invalidCount,
+        invalidDetails,
+        omittedCount: Math.max(0, invalidCount - invalidDetails.length),
+      },
+    });
   }
 
   return validFeatures.map((feature) => {
@@ -127,7 +130,7 @@ export class GpsPollerService {
       const readings = await pollGpsAsync();
       this.onData(readings);
     } catch (err) {
-      console.error("GPS poll error:", err instanceof Error ? err.message : err);
+      captureUnexpectedError(err, { area: "gps" });
     } finally {
       this.isPolling = false;
     }

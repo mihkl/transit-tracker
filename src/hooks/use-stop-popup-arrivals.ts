@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { StopArrival, StopDto } from "@/lib/types";
 import { getStopArrivalsAsync } from "@/actions";
+import { captureUnexpectedError } from "@/lib/monitoring";
 
 async function fetchArrivalsAsync(stopId: string) {
   return getStopArrivalsAsync(stopId);
@@ -21,7 +22,10 @@ export function useStopPopupArrivals() {
     try {
       setStopArrivals(await fetchArrivalsAsync(stop.stopId));
     } catch (err) {
-      console.error("Failed to fetch departures:", err);
+      captureUnexpectedError(err, {
+        area: "stop-arrivals",
+        extra: { stopId: stop.stopId, phase: "open" },
+      });
     } finally {
       setArrivalsLoading(false);
     }
@@ -40,7 +44,10 @@ export function useStopPopupArrivals() {
       try {
         setStopArrivals(await fetchArrivalsAsync(popupStop.stopId));
       } catch (err) {
-        console.error("Failed to refresh departures:", err);
+        captureUnexpectedError(err, {
+          area: "stop-arrivals",
+          extra: { stopId: popupStop.stopId, phase: "refresh" },
+        });
       }
     };
 

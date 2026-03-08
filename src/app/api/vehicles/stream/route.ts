@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { transitState } from "@/server/transit-state";
 import { vehicleStreamEventSchema } from "@/lib/schemas";
+import { captureUnexpectedError } from "@/lib/monitoring";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +42,10 @@ export async function GET(request: NextRequest) {
           const data = JSON.stringify(parsed.data);
           controller.enqueue(encoder.encode(`data: ${data}\n\n`));
         } catch (err) {
-          console.error("SSE send error:", err);
+          captureUnexpectedError(err, {
+            area: "vehicles-stream",
+            extra: { phase: "send" },
+          });
         }
       };
 

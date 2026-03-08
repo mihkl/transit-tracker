@@ -1,5 +1,6 @@
 import type { GoogleRoutesResponse, PlaceSearchResult } from "@/lib/types";
 import { env } from "@/lib/env";
+import { captureExpectedMessage } from "@/lib/monitoring";
 import { z } from "zod";
 
 const ROUTES_URL = "https://routes.googleapis.com/directions/v2:computeRoutes";
@@ -273,7 +274,10 @@ export async function computeRoutesAsync(
   const body = await res.text();
 
   if (!res.ok) {
-    console.error(`Google Routes API error (${res.status}): ${body}`);
+    captureExpectedMessage(`Google Routes API error (${res.status})`, {
+      area: "routes",
+      extra: { body },
+    });
     return null;
   }
 
@@ -281,15 +285,18 @@ export async function computeRoutesAsync(
     const parsedJson: unknown = JSON.parse(body);
     const parsed = googleRoutesResponseSchema.safeParse(parsedJson);
     if (!parsed.success) {
-      console.error(
-        "Google Routes API response validation error:",
-        parsed.error.issues[0]?.message ?? parsed.error.message,
-      );
+      captureExpectedMessage("Google Routes API response validation error", {
+        area: "routes",
+        extra: { issue: parsed.error.issues[0]?.message ?? parsed.error.message },
+      });
       return null;
     }
     return parsed.data;
   } catch {
-    console.error("Google Routes API returned invalid JSON:", body);
+    captureExpectedMessage("Google Routes API returned invalid JSON", {
+      area: "routes",
+      extra: { body },
+    });
     return null;
   }
 }
@@ -303,7 +310,10 @@ export async function searchPlacesAsync(query: string) {
       if (results.length > 0) return results;
     }
   } catch (err) {
-    console.warn("Places (New) search/details failed, falling back to Geocoding:", err);
+    captureExpectedMessage("Places (New) search/details failed, falling back to Geocoding", {
+      area: "places",
+      extra: { error: err, query },
+    });
   }
 
   return searchPlacesGeocodingAsync(query, apiKey);
@@ -335,17 +345,20 @@ async function searchPlacesNewAsync(query: string, apiKey: string) {
 
   const searchBody = await searchRes.text();
   if (!searchRes.ok) {
-    console.error(`Places Text Search (New) error (${searchRes.status}): ${searchBody}`);
+    captureExpectedMessage(`Places Text Search (New) error (${searchRes.status})`, {
+      area: "places",
+      extra: { body: searchBody, query },
+    });
     return [];
   }
 
   const searchRaw: unknown = JSON.parse(searchBody);
   const parsedSearch = placesNewSearchResponseSchema.safeParse(searchRaw);
   if (!parsedSearch.success) {
-    console.error(
-      "Places Text Search (New) validation error:",
-      parsedSearch.error.issues[0]?.message ?? parsedSearch.error.message,
-    );
+    captureExpectedMessage("Places Text Search (New) validation error", {
+      area: "places",
+      extra: { issue: parsedSearch.error.issues[0]?.message ?? parsedSearch.error.message, query },
+    });
     return [];
   }
   const searchData = parsedSearch.data;
@@ -399,17 +412,20 @@ async function fetchPlaceDetailsNewAsync(placeId: string, apiKey: string, depth 
 
   const body = await res.text();
   if (!res.ok) {
-    console.error(`Place Details (New) error (${res.status}): ${body}`);
+    captureExpectedMessage(`Place Details (New) error (${res.status})`, {
+      area: "places",
+      extra: { body, placeId },
+    });
     return null;
   }
 
   const detailsRaw: unknown = JSON.parse(body);
   const parsedDetails = placesNewDetailsResponseSchema.safeParse(detailsRaw);
   if (!parsedDetails.success) {
-    console.error(
-      "Place Details (New) validation error:",
-      parsedDetails.error.issues[0]?.message ?? parsedDetails.error.message,
-    );
+    captureExpectedMessage("Place Details (New) validation error", {
+      area: "places",
+      extra: { issue: parsedDetails.error.issues[0]?.message ?? parsedDetails.error.message, placeId },
+    });
     return null;
   }
   const data = parsedDetails.data;
@@ -437,23 +453,29 @@ async function searchPlacesGeocodingAsync(query: string, apiKey: string) {
   const body = await res.text();
 
   if (!res.ok) {
-    console.error(`Google Geocoding error (${res.status}): ${body}`);
+    captureExpectedMessage(`Google Geocoding error (${res.status})`, {
+      area: "places",
+      extra: { body, query },
+    });
     return [];
   }
 
   const geocodeRaw: unknown = JSON.parse(body);
   const parsedGeocode = geocodingResponseSchema.safeParse(geocodeRaw);
   if (!parsedGeocode.success) {
-    console.error(
-      "Google Geocoding response validation error:",
-      parsedGeocode.error.issues[0]?.message ?? parsedGeocode.error.message,
-    );
+    captureExpectedMessage("Google Geocoding response validation error", {
+      area: "places",
+      extra: { issue: parsedGeocode.error.issues[0]?.message ?? parsedGeocode.error.message, query },
+    });
     return [];
   }
   const data = parsedGeocode.data;
 
   if (data.status !== "OK" && data.status !== "ZERO_RESULTS") {
-    console.error(`Google Geocoding status: ${data.status}`);
+    captureExpectedMessage(`Google Geocoding status: ${data.status}`, {
+      area: "places",
+      extra: { query },
+    });
     return [];
   }
 

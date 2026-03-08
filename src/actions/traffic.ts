@@ -5,6 +5,7 @@ import { env } from "@/lib/env";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { getRateLimitIdentifier } from "@/lib/request-client";
 import { trafficBoundsSchema } from "@/lib/schemas";
+import { captureExpectedMessage, captureUnexpectedError } from "@/lib/monitoring";
 import { z } from "zod";
 
 export interface TrafficFlowTileInfo {
@@ -33,6 +34,11 @@ export interface TrafficIncidentFeature {
 export interface TrafficIncidentCollection {
   type: "FeatureCollection";
   features: TrafficIncidentFeature[];
+}
+
+export interface TrafficIncidentsActionResult {
+  data: TrafficIncidentCollection;
+  error: string | null;
 }
 
 interface TrafficCacheEntry {
@@ -106,105 +112,146 @@ export async function getTrafficIncidentsAsync(bounds: {
   minLng: number;
   maxLat: number;
   maxLng: number;
-}, clientId?: string) {
-  const parsedBounds = trafficBoundsSchema.parse(bounds);
-  const requester = getRateLimitIdentifier(await headers(), clientId);
-  const limit = await consumeRateLimit("traffic", `traffic:${requester}`);
-  if (!limit.ok) {
-    throw new Error("Too many traffic requests. Please wait a moment.");
-  }
-
-  const minLat = Math.max(-90, Math.min(90, parsedBounds.minLat));
-  const minLng = Math.max(-180, Math.min(180, parsedBounds.minLng));
-  const maxLat = Math.max(-90, Math.min(90, parsedBounds.maxLat));
-  const maxLng = Math.max(-180, Math.min(180, parsedBounds.maxLng));
-
-  if (maxLat - minLat > 2 || maxLng - minLng > 2) {
-    throw new Error("Traffic bounds are too large");
-  }
-
-  const round = (value: number) => Number(value.toFixed(3));
-  const normalizedBounds = {
-    minLat: round(minLat),
-    minLng: round(minLng),
-    maxLat: round(maxLat),
-    maxLng: round(maxLng),
-  };
-
-  const cacheKey = `incidents:${normalizedBounds.minLat},${normalizedBounds.minLng},${normalizedBounds.maxLat},${normalizedBounds.maxLng}`;
-  const cached = trafficCache.get(cacheKey);
-  if (cached && Date.now() - cached.timestamp < TRAFFIC_CACHE_TTL) {
-    return cached.data as TrafficIncidentCollection;
-  }
-
-  const apiKey = env.TOMTOM_SERVER_API_KEY;
-  if (!apiKey) {
-    return emptyTrafficIncidents();
-  }
-
-  const baseUrl = env.TOMTOM_BASE_URL;
-  const url = new URL(`${baseUrl}/traffic/services/5/incidentDetails`);
-  url.searchParams.set(
-    "bbox",
-    `${normalizedBounds.minLng},${normalizedBounds.minLat},${normalizedBounds.maxLng},${normalizedBounds.maxLat}`,
-  );
-  url.searchParams.set(
-    "fields",
-    "{incidents{type,geometry{type,coordinates},properties{iconCategory}}}",
-  );
-  url.searchParams.set("key", apiKey);
-  url.searchParams.set("language", "en-GB");
-  url.searchParams.set("timeValidityFilter", "present");
-
-  const response = await fetch(url.toString(), { headers: { Accept: "application/json" } });
-  if (!response.ok) {
-    const body = await response.text().catch(() => "");
-    console.warn(`TomTom incidents unavailable (${response.status}): ${body}`);
-    return emptyTrafficIncidents();
-  }
-
-  const raw = await response.json();
-  const parsed = tomTomIncidentsResponseSchema.safeParse(raw);
-  if (!parsed.success) {
-    console.warn(
-      `TomTom incidents response validation failed: ${parsed.error.issues[0]?.message ?? parsed.error.message}`,
-    );
-    return emptyTrafficIncidents();
-  }
-  const data = parsed.data;
-  const features: TrafficIncidentFeature[] = [];
-
-  for (const incident of data.incidents ?? []) {
-    if (!incident.geometry) continue;
-
-    let coordinates: number[];
-    if (incident.geometry.type === "Point") {
-      coordinates = incident.geometry.coordinates as number[];
-    } else if (incident.geometry.type === "LineString" || incident.geometry.type === "MultiPoint") {
-      coordinates = (incident.geometry.coordinates as number[][])[0];
-    } else {
-      continue;
+}, clientId?: string): Promise<TrafficIncidentsActionResult> {
+  try {
+    const parsedBounds = trafficBoundsSchema.parse(bounds);
+    const requester = getRateLimitIdentifier(await headers(), clientId);
+    const limit = await consumeRateLimit("traffic", `traffic:${requester}`);
+    if (!limit.ok) {
+      captureExpectedMessage("Traffic incidents rate limit exceeded", {
+        area: "traffic",
+        clientId,
+        tags: { requester },
+        extra: { bounds },
+      });
+      return {
+        data: emptyTrafficIncidents(),
+        error: "Too many traffic requests. Please wait a moment.",
+      };
     }
 
-    features.push({
-      type: "Feature",
-      geometry: { type: "Point", coordinates },
-      properties: {
-        id: incident.id ?? crypto.randomUUID(),
-        type: incident.type || "unknown",
-        iconCategory: incident.properties.iconCategory ?? 0,
-        description:
-          INCIDENT_ICON_CATEGORIES[incident.properties.iconCategory ?? 0] || "Traffic Incident",
-        delay: null,
-        magnitude: 0,
-        startTime: null,
-        endTime: null,
-        roadNumbers: [],
-      },
-    });
-  }
+    const minLat = Math.max(-90, Math.min(90, parsedBounds.minLat));
+    const minLng = Math.max(-180, Math.min(180, parsedBounds.minLng));
+    const maxLat = Math.max(-90, Math.min(90, parsedBounds.maxLat));
+    const maxLng = Math.max(-180, Math.min(180, parsedBounds.maxLng));
 
-  const result: TrafficIncidentCollection = { type: "FeatureCollection", features };
-  trafficCache.set(cacheKey, { data: result, timestamp: Date.now() });
-  return result;
+    if (maxLat - minLat > 2 || maxLng - minLng > 2) {
+      captureExpectedMessage("Traffic bounds rejected as too large", {
+        area: "traffic",
+        clientId,
+        extra: { bounds: parsedBounds },
+      });
+      return {
+        data: emptyTrafficIncidents(),
+        error: "Traffic bounds are too large.",
+      };
+    }
+
+    const round = (value: number) => Number(value.toFixed(3));
+    const normalizedBounds = {
+      minLat: round(minLat),
+      minLng: round(minLng),
+      maxLat: round(maxLat),
+      maxLng: round(maxLng),
+    };
+
+    const cacheKey = `incidents:${normalizedBounds.minLat},${normalizedBounds.minLng},${normalizedBounds.maxLat},${normalizedBounds.maxLng}`;
+    const cached = trafficCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < TRAFFIC_CACHE_TTL) {
+      return { data: cached.data as TrafficIncidentCollection, error: null };
+    }
+
+    const apiKey = env.TOMTOM_SERVER_API_KEY;
+    if (!apiKey) {
+      captureExpectedMessage("TomTom incidents unavailable: TOMTOM_SERVER_API_KEY is not configured", {
+        area: "traffic",
+        clientId,
+      });
+      return { data: emptyTrafficIncidents(), error: null };
+    }
+
+    const baseUrl = env.TOMTOM_BASE_URL;
+    const url = new URL(`${baseUrl}/traffic/services/5/incidentDetails`);
+    url.searchParams.set(
+      "bbox",
+      `${normalizedBounds.minLng},${normalizedBounds.minLat},${normalizedBounds.maxLng},${normalizedBounds.maxLat}`,
+    );
+    url.searchParams.set(
+      "fields",
+      "{incidents{type,geometry{type,coordinates},properties{iconCategory}}}",
+    );
+    url.searchParams.set("key", apiKey);
+    url.searchParams.set("language", "en-GB");
+    url.searchParams.set("timeValidityFilter", "present");
+
+    const response = await fetch(url.toString(), { headers: { Accept: "application/json" } });
+    if (!response.ok) {
+      const body = await response.text().catch(() => "");
+      captureExpectedMessage(`TomTom incidents unavailable (${response.status})`, {
+        area: "traffic",
+        clientId,
+        extra: { body, url: url.toString() },
+      });
+      return { data: emptyTrafficIncidents(), error: null };
+    }
+
+    const raw = await response.json();
+    const parsed = tomTomIncidentsResponseSchema.safeParse(raw);
+    if (!parsed.success) {
+      captureExpectedMessage("TomTom incidents response validation failed", {
+        area: "traffic",
+        clientId,
+        extra: {
+          issue: parsed.error.issues[0]?.message ?? parsed.error.message,
+        },
+      });
+      return { data: emptyTrafficIncidents(), error: null };
+    }
+    const data = parsed.data;
+    const features: TrafficIncidentFeature[] = [];
+
+    for (const incident of data.incidents ?? []) {
+      if (!incident.geometry) continue;
+
+      let coordinates: number[];
+      if (incident.geometry.type === "Point") {
+        coordinates = incident.geometry.coordinates as number[];
+      } else if (incident.geometry.type === "LineString" || incident.geometry.type === "MultiPoint") {
+        coordinates = (incident.geometry.coordinates as number[][])[0];
+      } else {
+        continue;
+      }
+
+      features.push({
+        type: "Feature",
+        geometry: { type: "Point", coordinates },
+        properties: {
+          id: incident.id ?? crypto.randomUUID(),
+          type: incident.type || "unknown",
+          iconCategory: incident.properties.iconCategory ?? 0,
+          description:
+            INCIDENT_ICON_CATEGORIES[incident.properties.iconCategory ?? 0] || "Traffic Incident",
+          delay: null,
+          magnitude: 0,
+          startTime: null,
+          endTime: null,
+          roadNumbers: [],
+        },
+      });
+    }
+
+    const result: TrafficIncidentCollection = { type: "FeatureCollection", features };
+    trafficCache.set(cacheKey, { data: result, timestamp: Date.now() });
+    return { data: result, error: null };
+  } catch (error) {
+    captureUnexpectedError(error, {
+      area: "traffic",
+      clientId,
+      extra: { bounds },
+    });
+    return {
+      data: emptyTrafficIncidents(),
+      error: "Failed to fetch traffic data.",
+    };
+  }
 }

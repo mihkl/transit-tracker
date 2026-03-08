@@ -43,6 +43,7 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
     setDestination,
     setPickingPoint,
     setRoutePlan,
+    setPlanError,
     setPlanLoading,
     setSelectedRouteIndex,
     bumpRouteFitRequest,
@@ -98,6 +99,7 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
     if (!origin || !destination) return;
     setPlanLoading(true);
     setRoutePlan(null);
+    setPlanError(null);
     setSelectedRouteIndex(0);
     setSelectedLine(null);
     setSelectedStop(null);
@@ -118,10 +120,15 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
       }
 
       const clientId = getBrowserClientId() ?? undefined;
-      const [fewerTransfersData, lessWalkingData] = await Promise.all([
+      const [fewerTransfersResult, lessWalkingResult] = await Promise.all([
         planRouteAsync({ ...baseReq, routingPreference: "FEWER_TRANSFERS" }, clientId),
         planRouteAsync({ ...baseReq, routingPreference: "LESS_WALKING" }, clientId),
       ]);
+
+      const fewerTransfersData = fewerTransfersResult.data ?? { routes: [] };
+      const lessWalkingData = lessWalkingResult.data ?? { routes: [] };
+      const planError = fewerTransfersResult.error ?? lessWalkingResult.error;
+      setPlanError(planError);
 
       const merged = mergeAndDedupeRoutes(fewerTransfersData, lessWalkingData);
       const fastestData: RoutePlanResponse = { routes: fastestRoutes(merged) };
@@ -138,8 +145,6 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
         : routingMode === "less-walking" ? lessWalkingData
         : fewerTransfersData;
       setRoutePlan(activePlan);
-    } catch (err) {
-      console.error("Failed to plan route:", err);
     } finally {
       setPlanLoading(false);
       hasPlanSearchedRef.current = true;
@@ -150,6 +155,7 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
     routingMode,
     selectedDateTime,
     setRouteCache,
+    setPlanError,
     setPlanLoading,
     setRoutePlan,
     setSelectedLine,

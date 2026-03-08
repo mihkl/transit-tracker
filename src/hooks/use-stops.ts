@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { getAllStopsAsync } from "@/actions";
 import type { StopDto } from "@/lib/types";
+import { captureUnexpectedError } from "@/lib/monitoring";
 
 let stopsCache: StopDto[] | null = null;
 let inflight: Promise<StopDto[]> | null = null;
@@ -39,7 +40,7 @@ export function useStops() {
       })
       .catch((err) => {
         if (cancelled) return;
-        console.error("Failed to load stops:", err);
+        captureUnexpectedError(err, { area: "stops" });
         setError("Failed to load stops");
         setLoading(false);
       });

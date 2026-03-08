@@ -1,6 +1,7 @@
 import type { StopArrival } from "@/lib/types";
 import { normalizeTransportType } from "@/lib/domain";
 import { stopArrivalSchema } from "@/lib/schemas";
+import { captureExpectedMessage } from "@/lib/monitoring";
 import { fetchWithTimeoutAsync } from "./fetch-with-timeout";
 import { getSecondsOfDayInTallinn } from "./time-utils";
 
@@ -168,10 +169,10 @@ export async function fetchStopArrivalsAsync(stopId: string) {
     cache.set(stopId, { data: departures, timestamp: Date.now() });
     return departures;
   } catch (err) {
-    console.error(
-      `SIRI departures fetch error for stop ${stopId}:`,
-      err instanceof Error ? err.message : err,
-    );
+    captureExpectedMessage(`SIRI departures fetch error for stop ${stopId}`, {
+      area: "siri",
+      extra: { stopId, error: err instanceof Error ? err.message : err },
+    });
     if (cached) return cached.data;
     return [];
   }

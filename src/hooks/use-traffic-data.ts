@@ -70,23 +70,19 @@ export function useTrafficData(
       }
 
       const incidents =
-        incidentsResult.status === "fulfilled" ? incidentsResult.value : null;
-      if (incidentsResult.status === "rejected") {
-        console.warn("Traffic incidents unavailable:", incidentsResult.reason);
-      }
+        incidentsResult.status === "fulfilled" ? incidentsResult.value.data : null;
+      const incidentsError =
+        incidentsResult.status === "fulfilled" ? incidentsResult.value.error : "Failed to fetch traffic data";
 
       setState({
         flowTileInfo: flowTileInfoRef.current,
         incidents,
         loading: false,
         error:
-          flowTileInfoRef.current || incidents
-            ? null
-            : "Failed to fetch traffic data",
+          flowTileInfoRef.current || incidents ? incidentsError : "Failed to fetch traffic data",
       });
-    } catch (err) {
+    } catch {
       if (fetchGenRef.current !== gen) return;
-      console.error("Failed to fetch traffic data:", err);
       setState((prev) => ({ ...prev, loading: false, error: "Failed to fetch traffic data" }));
     }
   }, [bounds, zoom, minZoom]);

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { captureUnexpectedError } from "@/lib/monitoring";
 
 export default function Error({
   error,
@@ -9,7 +10,10 @@ export default function Error({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error("App error:", error);
+    captureUnexpectedError(error, {
+      area: "app",
+      extra: { digest: error.digest, boundary: "error" },
+    });
   }, [error]);
 
   return (

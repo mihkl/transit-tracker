@@ -21,6 +21,7 @@ interface TransitStoreState {
   destination: PlannerPoint;
   pickingPoint: PickingPoint;
   routePlan: RoutePlanResponse | null;
+  planError: string | null;
   routeCache: RouteCache;
   routingMode: RoutingMode;
   planLoading: boolean;
@@ -47,6 +48,7 @@ interface TransitStoreActions {
   setDestination: (point: PlannerPoint) => void;
   setPickingPoint: (point: PickingPoint) => void;
   setRoutePlan: (plan: RoutePlanResponse | null) => void;
+  setPlanError: (error: string | null) => void;
   setRouteCache: (cache: RouteCache) => void;
   setRoutingMode: (mode: RoutingMode) => void;
   setPlanLoading: (loading: boolean) => void;
@@ -77,6 +79,7 @@ function getInitialState() {
     destination: null,
     pickingPoint: null,
     routePlan: null,
+    planError: null,
     routeCache: { fastest: null, lessWalking: null, fewerTransfers: null },
     routingMode: "fastest",
     planLoading: false,
@@ -108,6 +111,7 @@ export const useTransitStore = create<TransitStore>((set) => ({
   setDestination: (destination) => set({ destination }),
   setPickingPoint: (pickingPoint) => set({ pickingPoint }),
   setRoutePlan: (routePlan) => set({ routePlan }),
+  setPlanError: (planError) => set({ planError }),
   setRouteCache: (routeCache) => set({ routeCache }),
   setRoutingMode: (mode) =>
     set((state) => ({
@@ -132,6 +136,7 @@ export const useTransitStore = create<TransitStore>((set) => ({
       destination: null,
       pickingPoint: null,
       routePlan: null,
+      planError: null,
       routeCache: { fastest: null, lessWalking: null, fewerTransfers: null },
       planLoading: false,
       selectedRouteIndex: 0,
