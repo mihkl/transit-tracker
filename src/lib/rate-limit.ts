@@ -158,6 +158,7 @@ async function createRedisLimiter(name: LimitName): Promise<LimiterState | null>
   return {
     limiter: new RateLimiterRedis({
       storeClient: redisClient,
+      useRedisPackage: true,
       keyPrefix: config.keyPrefix,
       points: config.points,
       duration: config.duration,
