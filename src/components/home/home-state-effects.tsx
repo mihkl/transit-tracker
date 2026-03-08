@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useTransitStore } from "@/store/use-transit-store";
+import { useNavigationHistory } from "@/hooks/use-navigation-history";
 import type { PlannedRoute, RoutePlanResponse } from "@/lib/types";
 
 const ROUTE_SNAPSHOT_KEY = "transit-reminder-route-snapshot";
@@ -19,6 +20,8 @@ export function HomeStateEffects() {
   const setOpenSelectedRouteDetails = useTransitStore((s) => s.setOpenSelectedRouteDetails);
   const setMobileTab = useTransitStore((s) => s.setMobileTab);
   const bumpMapKey = useTransitStore((s) => s.bumpMapKey);
+
+  useNavigationHistory();
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -44,7 +47,8 @@ export function HomeStateEffects() {
       params.delete("trip");
       const next = params.toString();
       const nextUrl = `${window.location.pathname}${next ? `?${next}` : ""}${window.location.hash}`;
-      window.history.replaceState({}, "", nextUrl);
+      // Preserve existing history state (nav state) while cleaning the URL
+      window.history.replaceState(window.history.state, "", nextUrl);
     }
   }, [setMobileTab, setOpenSelectedRouteDetails, setRoutePlan, setSelectedRouteIndex, setShowPlanner]);
 
