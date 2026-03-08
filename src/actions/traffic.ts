@@ -139,10 +139,7 @@ export async function getTrafficIncidentsAsync(bounds: {
       };
     }
 
-    const minLat = Math.max(-90, Math.min(90, parsedBounds.minLat));
-    const minLng = Math.max(-180, Math.min(180, parsedBounds.minLng));
-    const maxLat = Math.max(-90, Math.min(90, parsedBounds.maxLat));
-    const maxLng = Math.max(-180, Math.min(180, parsedBounds.maxLng));
+    const { minLat, minLng, maxLat, maxLng } = parsedBounds;
 
     if (maxLat - minLat > 2 || maxLng - minLng > 2) {
       captureExpectedMessage("Traffic bounds rejected as too large", {

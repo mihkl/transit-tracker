@@ -12,9 +12,6 @@ import { normalizeTransitMode } from "@/lib/domain";
 import { routePlanRequestSchema, routePlanResponseSchema } from "@/lib/schemas";
 import { captureExpectedMessage, captureUnexpectedError } from "@/lib/monitoring";
 
-function normalizeVehicleType(type: string) {
-  return normalizeTransitMode(type);
-}
 
 export interface RoutePlanActionResult {
   data: RoutePlanResponse | null;
@@ -94,7 +91,7 @@ export async function planRouteAsync(
 
           if (step.travelMode === "TRANSIT" && step.transitDetails) {
             const td = step.transitDetails;
-            const vehicleType = normalizeVehicleType(td.transitLine?.vehicle?.type ?? "BUS");
+            const vehicleType = normalizeTransitMode(td.transitLine?.vehicle?.type ?? "BUS");
             leg.mode = vehicleType;
             leg.lineNumber = td.transitLine?.nameShort || td.transitLine?.name;
             leg.lineName = td.transitLine?.name;

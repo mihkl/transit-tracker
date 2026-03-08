@@ -1,7 +1,7 @@
 "use server";
 
 import { headers } from "next/headers";
-import { searchPlacesAsync as searchPlacesAsync } from "@/server/google-routes";
+import { searchPlacesAsync } from "@/server/google-routes";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { getRateLimitContext } from "@/lib/request-client";
 import { placesQuerySchema } from "@/lib/schemas";

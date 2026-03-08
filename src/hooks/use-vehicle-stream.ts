@@ -70,7 +70,7 @@ export function useVehicleStream(
     connect();
 
     const handleVisibility = () => {
-      if (!document.hidden) connect();
+      if (!document.hidden && eventSourceRef.current?.readyState === EventSource.CLOSED) connect();
     };
     document.addEventListener("visibilitychange", handleVisibility);
 

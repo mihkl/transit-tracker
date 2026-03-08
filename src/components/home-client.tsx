@@ -141,9 +141,9 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
       setRouteCache(cache);
 
       const activePlan =
-        routingMode === "fastest" ? fastestData
-        : routingMode === "less-walking" ? lessWalkingData
-        : fewerTransfersData;
+        routingMode === "fastest" ? cache.fastest
+        : routingMode === "less-walking" ? cache.lessWalking
+        : cache.fewerTransfers;
       setRoutePlan(activePlan);
     } finally {
       setPlanLoading(false);
