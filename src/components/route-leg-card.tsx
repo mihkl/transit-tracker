@@ -36,7 +36,8 @@ export function RouteLegCard({
   }
 
   return (
-    <div
+    <button
+      type="button"
       className={`rounded-xl border border-foreground/8 bg-white px-3 py-3 transition-all duration-150 ${
         canLocateVehicle ? "cursor-pointer hover:bg-foreground/[0.02] active:scale-[0.99]" : ""
       }`}
@@ -44,6 +45,7 @@ export function RouteLegCard({
       onClick={() => {
         if (canLocateVehicle) onLocateVehicle(leg);
       }}
+      disabled={!canLocateVehicle}
     >
       <div className="flex items-center gap-2">
         <span
@@ -109,7 +111,7 @@ export function RouteLegCard({
       {canLocateVehicle && (
         <div className="mt-2 text-[11px] text-foreground/45 font-medium">Tap to locate on map</div>
       )}
-    </div>
+    </button>
   );
 }
 

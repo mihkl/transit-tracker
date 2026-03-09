@@ -36,7 +36,7 @@ export interface TrafficIncidentCollection {
   features: TrafficIncidentFeature[];
 }
 
-export interface TrafficIncidentsActionResult {
+interface TrafficIncidentsActionResult {
   data: TrafficIncidentCollection;
   error: string | null;
 }

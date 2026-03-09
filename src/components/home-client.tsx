@@ -106,7 +106,7 @@ function resolveActivePlan<T>(
       : cache.fewerTransfers;
 }
 
-export function HomeClient({ shapes, lines }: HomeClientProps) {
+function useHomeClientController() {
   const {
     selectedLine,
     setSelectedLine,
@@ -534,57 +534,93 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
     bumpRouteFitRequest();
   }, [bumpRouteFitRequest, setSelectedRouteIndex]);
 
+  const handleStartPicking = useCallback((stopId: string | null) => {
+    if (stopId && !isDesktop) {
+      pickingFromPlannerRef.current = true;
+      setShowPlanner(false);
+      navigateTo(null);
+    } else {
+      pickingFromPlannerRef.current = false;
+    }
+    setPickingPoint(stopId);
+  }, [isDesktop, setPickingPoint, setShowPlanner]);
+
   const hasSearchedCurrentDraft = plannedDraftVersion === draftVersion && hasPlanSearchedRef.current;
+
+  return (
+    {
+      vehicles,
+      loading,
+      userLocation,
+      isDesktop,
+      handleStartPicking,
+      handleSetStopPoint,
+      handleSetStopDwell,
+      handleSetStopDepartureOverride,
+      handleAddStop,
+      handleMoveStop,
+      handleRemoveStop,
+      handleReturnToStart,
+      handlePlanRoute,
+      handleRouteSelect,
+      handlePlannerClose,
+      handleLocateVehicle,
+      handleTimeOptionChange,
+      handleDateTimeChange,
+      handleSwapEndpoints,
+      handleClearPlanner,
+      hasSearchedCurrentDraft,
+      handleMapClick,
+      handleVehicleClick,
+      handleDeselectVehicle,
+      handleToggleVehicles,
+    }
+  );
+}
+
+export function HomeClient({ shapes, lines }: HomeClientProps) {
+  const controller = useHomeClientController();
 
   return (
     <div className="h-dvh flex flex-col">
       <HomeStateEffects />
-      <FilterPanel vehicleCount={vehicles.length} lines={lines} />
+      <FilterPanel vehicleCount={controller.vehicles.length} lines={lines} />
 
       <div className="flex-1 flex relative overflow-hidden">
         <HomeRoutePlannerLayer
-          isDesktop={isDesktop}
-          userLocation={userLocation}
-          onStartPicking={(stopId) => {
-            if (stopId && !isDesktop) {
-              pickingFromPlannerRef.current = true;
-              setShowPlanner(false);
-              navigateTo(null);
-            } else {
-              pickingFromPlannerRef.current = false;
-            }
-            setPickingPoint(stopId);
-          }}
-          onSetStopPoint={handleSetStopPoint}
-          onSetStopDwell={handleSetStopDwell}
-          onSetStopDepartureOverride={handleSetStopDepartureOverride}
-          onAddStop={handleAddStop}
-          onMoveStop={handleMoveStop}
-          onRemoveStop={handleRemoveStop}
-          onReturnToStart={handleReturnToStart}
-          onPlanRoute={handlePlanRoute}
-          onSelectRoute={handleRouteSelect}
-          onClose={handlePlannerClose}
-          onLocateVehicle={handleLocateVehicle}
-          onTimeOptionChange={handleTimeOptionChange}
-          onDateTimeChange={handleDateTimeChange}
-          onSwapEndpoints={handleSwapEndpoints}
-          onClear={handleClearPlanner}
-          hasSearchedCurrentDraft={hasSearchedCurrentDraft}
+          isDesktop={controller.isDesktop}
+          userLocation={controller.userLocation}
+          onStartPicking={controller.handleStartPicking}
+          onSetStopPoint={controller.handleSetStopPoint}
+          onSetStopDwell={controller.handleSetStopDwell}
+          onSetStopDepartureOverride={controller.handleSetStopDepartureOverride}
+          onAddStop={controller.handleAddStop}
+          onMoveStop={controller.handleMoveStop}
+          onRemoveStop={controller.handleRemoveStop}
+          onReturnToStart={controller.handleReturnToStart}
+          onPlanRoute={controller.handlePlanRoute}
+          onSelectRoute={controller.handleRouteSelect}
+          onClose={controller.handlePlannerClose}
+          onLocateVehicle={controller.handleLocateVehicle}
+          onTimeOptionChange={controller.handleTimeOptionChange}
+          onDateTimeChange={controller.handleDateTimeChange}
+          onSwapEndpoints={controller.handleSwapEndpoints}
+          onClear={controller.handleClearPlanner}
+          hasSearchedCurrentDraft={controller.hasSearchedCurrentDraft}
         />
         <div className="flex-1 relative">
           <HomeMapLayer
             shapes={shapes}
-            vehicles={vehicles}
-            loading={loading}
-            onMapClick={handleMapClick}
-            onVehicleClick={handleVehicleClick}
-            onDeselectVehicle={handleDeselectVehicle}
+            vehicles={controller.vehicles}
+            loading={controller.loading}
+            onMapClick={controller.handleMapClick}
+            onVehicleClick={controller.handleVehicleClick}
+            onDeselectVehicle={controller.handleDeselectVehicle}
           />
           <HomeMobileOverlays
             lines={lines}
-            vehicleCount={vehicles.length}
-            onToggleVehicles={handleToggleVehicles}
+            vehicleCount={controller.vehicles.length}
+            onToggleVehicles={controller.handleToggleVehicles}
           />
         </div>
       </div>

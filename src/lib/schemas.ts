@@ -7,22 +7,22 @@ import {
   TYPE_FILTERS,
 } from "@/lib/domain";
 
-export const transportTypeSchema = z.enum(TRANSPORT_TYPES);
-export const lineTypeSchema = z.enum(LINE_TYPES);
-export const typeFilterSchema = z.enum(TYPE_FILTERS);
-export const transitModeSchema = z.enum(TRANSIT_MODES);
-export const delayStatusSchema = z.enum(DELAY_STATUSES);
+const transportTypeSchema = z.enum(TRANSPORT_TYPES);
+const lineTypeSchema = z.enum(LINE_TYPES);
+const typeFilterSchema = z.enum(TYPE_FILTERS);
+const transitModeSchema = z.enum(TRANSIT_MODES);
+const delayStatusSchema = z.enum(DELAY_STATUSES);
 
 const latLngPairSchema = z.tuple([z.number(), z.number()]);
 
-export const delayInfoSchema = z.object({
+const delayInfoSchema = z.object({
   vehicleId: z.string().optional(),
   estimatedDelaySeconds: z.number(),
   status: delayStatusSchema,
   stopsAway: z.number().optional(),
 });
 
-export const routeLegSchema = z.object({
+const routeLegSchema = z.object({
   mode: transitModeSchema,
   lineNumber: z.string().optional(),
   lineName: z.string().optional(),
@@ -41,7 +41,7 @@ export const routeLegSchema = z.object({
   delay: delayInfoSchema.optional(),
 });
 
-export const plannedRouteSchema = z.object({
+const plannedRouteSchema = z.object({
   duration: z.string(),
   distanceMeters: z.string(),
   legs: z.array(routeLegSchema),
@@ -66,7 +66,7 @@ export const routePlanRequestSchema = z
     message: "Only one of departureTime or arrivalTime can be set",
   });
 
-export const multiRouteStopRequestSchema = z.object({
+const multiRouteStopRequestSchema = z.object({
   lat: z.number(),
   lng: z.number(),
   name: z.string().optional(),
@@ -109,13 +109,13 @@ export const multiRoutePlanRequestSchema = z.object({
   });
 });
 
-export const itineraryStopSchema = z.object({
+const itineraryStopSchema = z.object({
   lat: z.number(),
   lng: z.number(),
   name: z.string(),
 });
 
-export const multiRouteSegmentSchema = z.object({
+const multiRouteSegmentSchema = z.object({
   id: z.string(),
   segmentIndex: z.number().int().min(0),
   origin: itineraryStopSchema,
@@ -131,14 +131,14 @@ export const multiRouteSegmentSchema = z.object({
   status: z.enum(["live", "scheduled-only"]),
 });
 
-export const multiRoutePlanFailureSchema = z.object({
+const multiRoutePlanFailureSchema = z.object({
   segmentIndex: z.number().int().min(0),
   origin: itineraryStopSchema,
   destination: itineraryStopSchema,
   message: z.string(),
 });
 
-export const multiRouteItinerarySchema = z.object({
+const multiRouteItinerarySchema = z.object({
   segments: z.array(multiRouteSegmentSchema),
   totalTravelDuration: z.string(),
   totalDwellMinutes: z.number().int().min(0),
@@ -194,7 +194,7 @@ export const stopArrivalSchema = z.object({
   alertsCount: z.number().optional(),
 });
 
-export const nextStopSchema = z.object({
+const nextStopSchema = z.object({
   stopId: z.string(),
   name: z.string(),
   latitude: z.number(),
@@ -227,4 +227,4 @@ export const vehicleStreamEventSchema = z.object({
   timestamp: z.string(),
 });
 
-export type VehicleStreamEvent = z.infer<typeof vehicleStreamEventSchema>;
+type VehicleStreamEvent = z.infer<typeof vehicleStreamEventSchema>;

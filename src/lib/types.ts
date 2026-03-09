@@ -11,7 +11,7 @@ export interface GtfsRoute {
   routeType: number;
 }
 
-export interface GtfsTrip {
+interface GtfsTrip {
   tripId: string;
   routeId: string;
   directionId: number;
@@ -27,7 +27,7 @@ export interface GtfsStop {
   stopArea?: string;
 }
 
-export interface GtfsStopTime {
+interface GtfsStopTime {
   tripId: string;
   stopId: string;
   stopSequence: number;
@@ -259,14 +259,14 @@ export interface GoogleRoute {
   legs: GoogleLeg[];
 }
 
-export interface GoogleLeg {
+interface GoogleLeg {
   duration: string;
   distanceMeters: number;
   polyline?: GooglePolyline;
   steps: GoogleStep[];
 }
 
-export interface GoogleStep {
+interface GoogleStep {
   travelMode: string;
   staticDuration: string;
   distanceMeters: number;
@@ -274,36 +274,36 @@ export interface GoogleStep {
   transitDetails?: GoogleTransitDetails;
 }
 
-export interface GooglePolyline {
+interface GooglePolyline {
   encodedPolyline: string;
 }
 
-export interface GoogleTransitDetails {
+interface GoogleTransitDetails {
   stopDetails?: GoogleStopDetails;
   transitLine?: GoogleTransitLine;
   stopCount: number;
   localizedValues?: GoogleLocalizedValues;
 }
 
-export interface GoogleStopDetails {
+interface GoogleStopDetails {
   arrivalStop?: GoogleStopInfo;
   departureStop?: GoogleStopInfo;
   arrivalTime?: string;
   departureTime?: string;
 }
 
-export interface GoogleStopInfo {
+interface GoogleStopInfo {
   name: string;
   location?: { latLng?: { latitude: number; longitude: number } };
 }
 
-export interface GoogleTransitLine {
+interface GoogleTransitLine {
   name: string;
   nameShort: string;
   vehicle?: { type: string };
 }
 
-export interface GoogleLocalizedValues {
+interface GoogleLocalizedValues {
   departureTime?: { time?: { text: string }; timeZone: string };
   arrivalTime?: { time?: { text: string }; timeZone: string };
 }
@@ -330,7 +330,7 @@ export interface StopArrival {
   alertsCount?: number;
 }
 
-export interface VehicleStopEta {
+interface VehicleStopEta {
   stopId: string;
   stopName: string;
   latitude: number;
@@ -341,7 +341,7 @@ export interface VehicleStopEta {
   isPassed: boolean;
 }
 
-export interface VehicleMatchDebugInfo {
+interface VehicleMatchDebugInfo {
   lineNumber: string;
   mode: TransitMode | null;
   departureStopLat: number | null;
@@ -360,7 +360,7 @@ export interface VehicleMatchDebugInfo {
   timestamp: string;
 }
 
-export interface DirectionPatternInfo {
+interface DirectionPatternInfo {
   patternKey: string;
   terminal: string;
   depStopDistAlong: number | null;
@@ -368,7 +368,7 @@ export interface DirectionPatternInfo {
   totalLength: number;
 }
 
-export interface VehicleCandidateInfo {
+interface VehicleCandidateInfo {
   vehicleId: string;
   destination: string;
   latitude: number;

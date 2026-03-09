@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect } from "react";
-import { createInitialPlannerStops, useTransitStore } from "@/store/use-transit-store";
+import { useTransitStore } from "@/store/use-transit-store";
 import { useHashRouter } from "@/hooks/use-hash-router";
 import { navigateTo } from "@/lib/navigation";
-import type { PlannedRoute, RoutePlanResponse } from "@/lib/types";
+import type { PlannedRoute } from "@/lib/types";
 
 const ROUTE_SNAPSHOT_KEY = "transit-reminder-route-snapshot";
 const SNAPSHOT_MAX_AGE_MS = 12 * 60 * 60 * 1000;
@@ -15,12 +15,7 @@ interface StoredRouteSnapshot {
 }
 
 export function HomeStateEffects() {
-  const setShowPlanner = useTransitStore((s) => s.setShowPlanner);
-  const setPlannerStops = useTransitStore((s) => s.setPlannerStops);
-  const setRoutePlan = useTransitStore((s) => s.setRoutePlan);
-  const setMultiRoutePlan = useTransitStore((s) => s.setMultiRoutePlan);
-  const setSelectedRouteIndex = useTransitStore((s) => s.setSelectedRouteIndex);
-  const setOpenSelectedRouteDetails = useTransitStore((s) => s.setOpenSelectedRouteDetails);
+  const restoreRouteSnapshot = useTransitStore((s) => s.restoreRouteSnapshot);
   const bumpMapKey = useTransitStore((s) => s.bumpMapKey);
 
   useHashRouter();
@@ -38,12 +33,7 @@ export function HomeStateEffects() {
       const hasLegs = Array.isArray(snapshot?.route?.legs);
       if (!isFresh || !hasLegs) return;
 
-      setShowPlanner(true);
-      setPlannerStops(createInitialPlannerStops());
-      setRoutePlan({ routes: [snapshot.route] } as RoutePlanResponse);
-      setMultiRoutePlan(null);
-      setSelectedRouteIndex(0);
-      setOpenSelectedRouteDetails(true);
+      restoreRouteSnapshot(snapshot.route);
       navigateTo("directions", { replace: true });
     } catch {
       // Ignore malformed snapshot.
@@ -55,12 +45,7 @@ export function HomeStateEffects() {
       window.history.replaceState(window.history.state, "", nextUrl);
     }
   }, [
-    setMultiRoutePlan,
-    setOpenSelectedRouteDetails,
-    setPlannerStops,
-    setRoutePlan,
-    setSelectedRouteIndex,
-    setShowPlanner,
+    restoreRouteSnapshot,
   ]);
 
   useEffect(() => {

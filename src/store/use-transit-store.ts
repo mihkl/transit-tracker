@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { MultiRoutePlanResponse, RoutePlanResponse, StopDto } from "@/lib/types";
+import type { MultiRoutePlanResponse, PlannedRoute, RoutePlanResponse, StopDto } from "@/lib/types";
 import type { LineType } from "@/lib/domain";
 import type { Overlay } from "@/lib/navigation";
 import {
@@ -11,10 +11,10 @@ import {
 } from "@/lib/route-filter";
 import { toLocalDateTimeString } from "@/lib/format-utils";
 
-export type SelectedLine = { lineNumber: string; type: LineType } | null;
+type SelectedLine = { lineNumber: string; type: LineType } | null;
 export type PlannerPoint = { lat: number; lng: number; name?: string } | null;
-export type PickingPoint = string | null;
-export type TimeOption = "now" | "depart" | "arrive";
+type PickingPoint = string | null;
+type TimeOption = "now" | "depart" | "arrive";
 
 export interface PlannerStop {
   id: string;
@@ -39,7 +39,7 @@ export function createPlannerStop(overrides: Partial<PlannerStop> = {}): Planner
   };
 }
 
-export function createInitialPlannerStops() {
+function createInitialPlannerStops() {
   return [createPlannerStop(), createPlannerStop()];
 }
 
@@ -91,6 +91,7 @@ interface TransitStoreActions {
   bumpRouteFitRequest: () => void;
   setFocusedVehicleId: (vehicleId: string | null) => void;
   setOpenSelectedRouteDetails: (open: boolean) => void;
+  restoreRouteSnapshot: (route: PlannedRoute) => void;
   setTimeOption: (option: TimeOption) => void;
   setSelectedDateTime: (value: string) => void;
   setActiveOverlay: (overlay: Overlay) => void;
@@ -169,6 +170,15 @@ export const useTransitStore = create<TransitStore>((set) => ({
   bumpRouteFitRequest: () => set((state) => ({ routeFitRequest: state.routeFitRequest + 1 })),
   setFocusedVehicleId: (focusedVehicleId) => set({ focusedVehicleId }),
   setOpenSelectedRouteDetails: (openSelectedRouteDetails) => set({ openSelectedRouteDetails }),
+  restoreRouteSnapshot: (route) =>
+    set({
+      showPlanner: true,
+      plannerStops: createInitialPlannerStops(),
+      routePlan: { routes: [route] },
+      multiRoutePlan: null,
+      selectedRouteIndex: 0,
+      openSelectedRouteDetails: true,
+    }),
   setTimeOption: (timeOption) => set({ timeOption }),
   setSelectedDateTime: (selectedDateTime) => set({ selectedDateTime }),
   setActiveOverlay: (activeOverlay) => set({ activeOverlay }),

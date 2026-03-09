@@ -26,12 +26,12 @@ import {
 } from "@/lib/schemas";
 import { captureExpectedMessage, captureUnexpectedError } from "@/lib/monitoring";
 
-export interface RoutePlanActionResult {
+interface RoutePlanActionResult {
   data: RoutePlanResponse | null;
   error: string | null;
 }
 
-export interface MultiRoutePlanActionResult {
+interface MultiRoutePlanActionResult {
   data: MultiRoutePlanResponse | null;
   error: string | null;
 }

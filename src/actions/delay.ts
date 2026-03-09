@@ -4,7 +4,7 @@ import { transitState } from "@/server/transit-state";
 import { matchTransitLegAsync } from "@/server/delay-matcher";
 import { legDelayParamsSchema } from "@/lib/schemas";
 
-export interface LegDelayParams {
+interface LegDelayParams {
   line?: string;
   depLat?: number;
   depLng?: number;

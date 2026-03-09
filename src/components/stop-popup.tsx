@@ -10,6 +10,16 @@ interface StopPopupProps {
   loading: boolean;
 }
 
+function getArrivalKey(arrival: StopArrival) {
+  return [
+    arrival.route,
+    arrival.destination,
+    arrival.expectedTime,
+    arrival.scheduleTime,
+    arrival.secondsUntilArrival,
+  ].join(":");
+}
+
 export function StopPopup({ stop, arrivals, loading }: StopPopupProps) {
   const formatDelayBadge = (arrival: StopArrival) => {
     if (!arrival.hasRealtime) return "Scheduled";
@@ -49,9 +59,9 @@ export function StopPopup({ stop, arrivals, loading }: StopPopupProps) {
         </div>
       ) : (
         <div className="space-y-1 max-h-44 overflow-y-auto pr-1">
-          {arrivals.map((dep, i) => (
+          {arrivals.map((dep) => (
             <div
-              key={i}
+              key={getArrivalKey(dep)}
               className="rounded-lg border border-foreground/8 bg-white px-2.5 py-2 text-xs"
             >
               <div className="flex items-start gap-2">

@@ -30,7 +30,7 @@ const geoJsonFeatureSchema = z.object({
   }),
 });
 
-export async function pollGpsAsync() {
+async function pollGpsAsync() {
   const now = new Date();
 
   const url = `${GPS_URL}?ver=${Date.now()}`;

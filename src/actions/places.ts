@@ -8,7 +8,7 @@ import { placesQuerySchema } from "@/lib/schemas";
 import type { PlaceSearchResult } from "@/lib/types";
 import { captureExpectedMessage, captureUnexpectedError } from "@/lib/monitoring";
 
-export interface PlaceSearchActionResult {
+interface PlaceSearchActionResult {
   results: PlaceSearchResult[];
   error: string | null;
 }

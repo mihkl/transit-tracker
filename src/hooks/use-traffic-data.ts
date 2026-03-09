@@ -9,8 +9,6 @@ import {
 } from "@/actions";
 import { getBrowserClientId } from "@/lib/browser-client-id";
 
-export type { TrafficFlowTileInfo, TrafficIncidentData };
-
 interface TrafficDataState {
   flowTileInfo: TrafficFlowTileInfo | null;
   incidents: TrafficIncidentData | null;

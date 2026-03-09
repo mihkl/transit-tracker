@@ -5,7 +5,7 @@ import type { PlannedRoute, RouteLeg } from "@/lib/types";
 import { useLeaveReminder, type ReminderStatusMessage } from "@/hooks/use-leave-reminder";
 import { useTransferViability, type TransferInfo } from "@/hooks/use-transfer-viability";
 
-export interface RouteReminderState {
+interface RouteReminderState {
   isSet: boolean;
   minutesUntil: number | null;
   isLiveAdjusted: boolean;

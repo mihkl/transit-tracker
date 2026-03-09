@@ -12,7 +12,7 @@ import {
   LEAVE_REMINDER_CATEGORY,
 } from "@/lib/push-constants";
 
-export interface LeaveInfo {
+interface LeaveInfo {
   leaveTime: Date;
   walkMinutes: number;
   lineNumber: string;

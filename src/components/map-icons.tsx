@@ -1,4 +1,6 @@
-export const INCIDENT_LABELS: Record<number, string> = {
+import Image from "next/image";
+
+const INCIDENT_LABELS: Record<number, string> = {
   1: "Accident",
   2: "Fog",
   3: "Hazard",
@@ -17,8 +19,7 @@ export function IncidentIcon({ category, size = 28 }: { category: number; size?:
   const label = INCIDENT_LABELS[category] || "Incident";
   const iconFile = INCIDENT_LABELS[category] ? `incident-${category}` : "incident-default";
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img src={`/icons/${iconFile}.svg`} width={size} height={size} alt={label} />
+    <Image src={`/icons/${iconFile}.svg`} width={size} height={size} alt={label} />
   );
 }
 
@@ -62,7 +63,7 @@ export function PinIcon({
   );
 }
 
-export function VehicleIcon({
+function VehicleIcon({
   color,
   bearing,
   size,

@@ -1,12 +1,12 @@
 "use client";
 
-import { useMemo, useCallback, useRef, useState, useEffect } from "react";
+import { useMemo, useCallback, useRef, useEffect, useReducer, type RefObject } from "react";
 import Map, { Marker, Source, Layer, Popup, type MapRef } from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { MultiRoutePlanResponse, RoutePlanResponse, StopDto, VehicleDto } from "@/lib/types";
 import { TALLINN_CENTER, DEFAULT_ZOOM, TYPE_COLORS } from "@/lib/constants";
 import { BottomSheet } from "@/components/bottom-sheet";
-import type { MapLayerMouseEvent } from "maplibre-gl";
+import type { MapLayerMouseEvent, Map as MapLibreMap } from "maplibre-gl";
 import {
   IncidentIcon,
   PinIcon,
@@ -42,6 +42,404 @@ const INITIAL_VIEW_STATE = {
   zoom: DEFAULT_ZOOM,
 };
 
+type ViewState = typeof INITIAL_VIEW_STATE;
+type MapBounds = {
+  minLat: number;
+  minLng: number;
+  maxLat: number;
+  maxLng: number;
+} | null;
+
+interface MapUiState {
+  viewState: ViewState;
+  popupVehicle: VehicleDto | null;
+  hoveringInteractive: boolean;
+  isDragging: boolean;
+  webglLost: boolean;
+  mapBounds: MapBounds;
+}
+
+const INITIAL_UI_STATE: MapUiState = {
+  viewState: INITIAL_VIEW_STATE,
+  popupVehicle: null,
+  hoveringInteractive: false,
+  isDragging: false,
+  webglLost: false,
+  mapBounds: null,
+};
+
+type MapUiAction =
+  | { type: "setViewState"; viewState: ViewState }
+  | { type: "setPopupVehicle"; popupVehicle: VehicleDto | null }
+  | {
+      type: "syncFocusedVehicle";
+      popupVehicle: VehicleDto | null;
+      viewStatePatch?: Partial<ViewState>;
+    }
+  | { type: "centerOnStop"; stop: StopDto }
+  | { type: "setHoveringInteractive"; hoveringInteractive: boolean }
+  | { type: "setDragging"; isDragging: boolean }
+  | { type: "setWebglLost"; webglLost: boolean }
+  | { type: "setMapBounds"; mapBounds: MapBounds };
+
+function mapUiReducer(state: MapUiState, action: MapUiAction): MapUiState {
+  switch (action.type) {
+    case "setViewState":
+      return { ...state, viewState: action.viewState };
+    case "setPopupVehicle":
+      return { ...state, popupVehicle: action.popupVehicle };
+    case "syncFocusedVehicle":
+      return {
+        ...state,
+        popupVehicle: action.popupVehicle,
+        viewState: action.viewStatePatch
+          ? { ...state.viewState, ...action.viewStatePatch }
+          : state.viewState,
+      };
+    case "centerOnStop":
+      return {
+        ...state,
+        popupVehicle: null,
+        viewState: {
+          ...state.viewState,
+          longitude: action.stop.longitude,
+          latitude: action.stop.latitude,
+          zoom: Math.max(state.viewState.zoom, 15),
+        },
+      };
+    case "setHoveringInteractive":
+      return { ...state, hoveringInteractive: action.hoveringInteractive };
+    case "setDragging":
+      return { ...state, isDragging: action.isDragging };
+    case "setWebglLost":
+      return { ...state, webglLost: action.webglLost };
+    case "setMapBounds":
+      return { ...state, mapBounds: action.mapBounds };
+    default:
+      return state;
+  }
+}
+
+function getMapBounds(map: MapLibreMap): Exclude<MapBounds, null> {
+  const bounds = map.getBounds();
+  return {
+    minLat: bounds.getSouth(),
+    minLng: bounds.getWest(),
+    maxLat: bounds.getNorth(),
+    maxLng: bounds.getEast(),
+  };
+}
+
+function getIncidentMarkerKey(feature: {
+  properties: { id: string | number };
+  geometry: { coordinates: number[] };
+}) {
+  return `incident:${feature.properties.id}:${feature.geometry.coordinates[0]}:${feature.geometry.coordinates[1]}`;
+}
+
+function getBoardingStopKey(stop: {
+  lat: number;
+  lng: number;
+  name: string;
+  lineNumber?: string;
+}) {
+  return `boarding:${stop.lat}:${stop.lng}:${stop.name}:${stop.lineNumber ?? ""}`;
+}
+
+interface MapCanvasProps {
+  mapRef: RefObject<MapRef | null>;
+  viewState: ViewState;
+  popupVehicle: VehicleDto | null;
+  popupStop: StopDto | null;
+  stopArrivals: ReturnType<typeof useStopPopupArrivals>["stopArrivals"];
+  arrivalsLoading: boolean;
+  selectedStop: StopDto | null;
+  routePlan: RoutePlanResponse | null;
+  multiRoutePlan: MultiRoutePlanResponse | null;
+  selectedRouteIndex: number;
+  plannerStops: PlannerStop[];
+  boardingStops: ReturnType<typeof buildBoardingStops>;
+  allStopsGeoJson: ReturnType<typeof buildStopsFeatureCollection>;
+  routeLegsGeoJson: ReturnType<typeof buildRouteLegFeatures>;
+  vehicleRouteGeoJson: ReturnType<typeof buildVehicleRouteFeature>;
+  vehiclesGeoJson: ReturnType<typeof buildVehiclesFeatureCollection>;
+  userLocation: { lat: number; lng: number } | null;
+  showTraffic: boolean;
+  showStops: boolean;
+  trafficData: ReturnType<typeof useTrafficData>;
+  webglLost: boolean;
+  isDesktop: boolean;
+  hoveringInteractive: boolean;
+  isDragging: boolean;
+  vehicleEta: number | null;
+  onMove: (event: { viewState: ViewState }) => void;
+  onMoveEnd: () => void;
+  onMouseMove: (event: MapLayerMouseEvent) => void;
+  onMouseLeave: () => void;
+  onDragStart: () => void;
+  onDragEnd: () => void;
+  onMapClick: (event: MapLayerMouseEvent) => void;
+  onMapLoad: () => void;
+  onPopupVehicleClose: () => void;
+  onPopupStopClose: () => void;
+  onSelectedStopMarkerClick: (event: { originalEvent: { stopPropagation: () => void } }) => void;
+}
+
+function MapCanvas({
+  mapRef,
+  viewState,
+  popupVehicle,
+  popupStop,
+  stopArrivals,
+  arrivalsLoading,
+  selectedStop,
+  routePlan,
+  multiRoutePlan,
+  selectedRouteIndex,
+  plannerStops,
+  boardingStops,
+  allStopsGeoJson,
+  routeLegsGeoJson,
+  vehicleRouteGeoJson,
+  vehiclesGeoJson,
+  userLocation,
+  showTraffic,
+  showStops,
+  trafficData,
+  webglLost,
+  isDesktop,
+  hoveringInteractive,
+  isDragging,
+  vehicleEta,
+  onMove,
+  onMoveEnd,
+  onMouseMove,
+  onMouseLeave,
+  onDragStart,
+  onDragEnd,
+  onMapClick,
+  onMapLoad,
+  onPopupVehicleClose,
+  onPopupStopClose,
+  onSelectedStopMarkerClick,
+}: MapCanvasProps) {
+  return (
+    <Map
+      ref={mapRef}
+      {...viewState}
+      onMove={onMove}
+      onMoveEnd={onMoveEnd}
+      onMouseMove={onMouseMove}
+      onMouseLeave={onMouseLeave}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      cursor={isDragging ? "grabbing" : hoveringInteractive ? "pointer" : "grab"}
+      interactiveLayerIds={
+        showStops
+          ? [MAP_LAYER_IDS.VEHICLES, MAP_LAYER_IDS.ALL_STOPS_HIT, MAP_LAYER_IDS.ALL_STOPS]
+          : [MAP_LAYER_IDS.VEHICLES]
+      }
+      onClick={onMapClick}
+      onLoad={onMapLoad}
+      style={{ width: "100%", height: "100%" }}
+      mapStyle="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
+      attributionControl={false}
+    >
+      {!webglLost && vehicleRouteGeoJson && !routePlan && (
+        <Source id={MAP_LAYER_IDS.VEHICLE_ROUTE} type="geojson" data={vehicleRouteGeoJson}>
+          <Layer
+            id="vehicle-route-line"
+            type="line"
+            paint={{
+              "line-color": "#888",
+              "line-width": 3,
+              "line-opacity": 0.6,
+            }}
+          />
+        </Source>
+      )}
+
+      {!webglLost && routeLegsGeoJson && (
+        <Source
+          id="route-legs"
+          type="geojson"
+          data={{ type: "FeatureCollection", features: routeLegsGeoJson }}
+        >
+          <Layer
+            id="route-legs-line"
+            type="line"
+            paint={{
+              "line-color": ROUTE_LEG_COLOR_EXPRESSION,
+              "line-width": 4,
+              "line-opacity": 0.8,
+            }}
+          />
+        </Source>
+      )}
+
+      {!webglLost && showTraffic && trafficData.flowTileInfo && (
+        <Source
+          id="traffic-flow"
+          type="raster"
+          tiles={[trafficData.flowTileInfo.tileUrlTemplate]}
+          tileSize={256}
+          attribution={trafficData.flowTileInfo.attribution}
+          key="traffic-flow-source"
+        >
+          <Layer
+            id="traffic-flow-tiles"
+            type="raster"
+            paint={{
+              "raster-opacity": 0.8,
+              "raster-fade-duration": 0,
+            }}
+          />
+        </Source>
+      )}
+
+      {showTraffic &&
+        trafficData.incidents?.features.map((feature) => (
+          <Marker
+            key={getIncidentMarkerKey(feature)}
+            longitude={feature.geometry.coordinates[0]}
+            latitude={feature.geometry.coordinates[1]}
+            anchor="center"
+          >
+            <IncidentIcon category={feature.properties.iconCategory} size={32} />
+          </Marker>
+        ))}
+
+      {plannerStops.map((stop, index) => {
+        if (!stop.point) return null;
+
+        const label = String.fromCharCode(65 + index);
+        const color =
+          index === 0
+            ? "#22c55e"
+            : index === plannerStops.length - 1
+              ? "#ef4444"
+              : "#0f766e";
+
+        return (
+          <Marker key={stop.id} longitude={stop.point.lng} latitude={stop.point.lat} anchor="bottom">
+            <PinIcon color={color} label={label} />
+          </Marker>
+        );
+      })}
+
+      {boardingStops.map((stop) => {
+        const color = stop.transportType
+          ? TYPE_COLORS[stop.transportType] || TYPE_COLORS.bus
+          : "#22c55e";
+        return (
+          <Marker key={getBoardingStopKey(stop)} longitude={stop.lng} latitude={stop.lat} anchor="center">
+            {stop.lineNumber ? (
+              <BoardingStopIcon lineNumber={stop.lineNumber} color={color} />
+            ) : (
+              <StopIcon />
+            )}
+          </Marker>
+        );
+      })}
+
+      {selectedStop && (
+        <Marker
+          longitude={selectedStop.longitude}
+          latitude={selectedStop.latitude}
+          anchor="center"
+          onClick={onSelectedStopMarkerClick}
+        >
+          <StopIcon />
+        </Marker>
+      )}
+
+      {!webglLost && showStops && (
+        <Source id="all-stops-source" type="geojson" data={allStopsGeoJson}>
+          <Layer
+            id={MAP_LAYER_IDS.ALL_STOPS_HIT}
+            type="circle"
+            minzoom={12}
+            paint={{
+              "circle-radius": ["interpolate", ["linear"], ["zoom"], 12, 8, 13, 10, 16, 12],
+              "circle-color": "#000000",
+              "circle-opacity": 0.01,
+            }}
+          />
+          <Layer
+            id={MAP_LAYER_IDS.ALL_STOPS}
+            type="circle"
+            minzoom={12}
+            paint={{
+              "circle-radius": ["interpolate", ["linear"], ["zoom"], 12, 2, 13, 3, 16, 5],
+              "circle-color": "#ffffff",
+              "circle-stroke-color": "#4b5563",
+              "circle-stroke-width": 1,
+              "circle-opacity": 0.85,
+            }}
+          />
+        </Source>
+      )}
+
+      {userLocation && (
+        <Marker longitude={userLocation.lng} latitude={userLocation.lat} anchor="center">
+          <UserLocationDot />
+        </Marker>
+      )}
+
+      {!webglLost && (
+        <Source id={MAP_LAYER_IDS.VEHICLES} type="geojson" data={vehiclesGeoJson}>
+          <Layer
+            id={MAP_LAYER_IDS.VEHICLES}
+            type="symbol"
+            layout={{
+              "icon-image": "vehicle-arrow",
+              "icon-rotation-alignment": "map",
+              "icon-rotate": ["get", "bearing"],
+              "icon-allow-overlap": true,
+              "icon-ignore-placement": true,
+              "icon-size": ["case", ["==", ["get", "focused"], 1], 1.0, 0.75],
+              "symbol-sort-key": ["case", ["==", ["get", "focused"], 1], 1, 0],
+            }}
+            paint={{
+              "icon-color": ["case", ["==", ["get", "focused"], 1], "#FF9800", ["get", "color"]],
+              "icon-halo-color": "#fff",
+              "icon-halo-width": 1,
+            }}
+          />
+        </Source>
+      )}
+
+      {!webglLost && isDesktop && popupVehicle && (
+        <Popup
+          longitude={popupVehicle.longitude}
+          latitude={popupVehicle.latitude}
+          anchor="bottom"
+          offset={[0, -16]}
+          closeButton={false}
+          onClose={onPopupVehicleClose}
+          maxWidth="280px"
+        >
+          <VehiclePopup vehicle={popupVehicle} etaSeconds={vehicleEta} />
+        </Popup>
+      )}
+
+      {!webglLost && isDesktop && popupStop && (
+        <Popup
+          longitude={popupStop.longitude}
+          latitude={popupStop.latitude}
+          anchor="bottom"
+          offset={[0, -10]}
+          closeButton={false}
+          onClose={onPopupStopClose}
+          maxWidth="280px"
+        >
+          <StopPopup stop={popupStop} arrivals={stopArrivals} loading={arrivalsLoading} />
+        </Popup>
+      )}
+    </Map>
+  );
+}
+
 export interface MapViewInnerProps {
   vehicles: VehicleDto[];
   routePlan: RoutePlanResponse | null;
@@ -60,7 +458,7 @@ export interface MapViewInnerProps {
   showStops?: boolean;
 }
 
-export function MapViewInner({
+function useMapViewController({
   vehicles,
   routePlan,
   multiRoutePlan,
@@ -78,8 +476,8 @@ export function MapViewInner({
   showStops = false,
 }: MapViewInnerProps) {
   const mapRef = useRef<MapRef>(null);
-  const [viewState, setViewState] = useState(INITIAL_VIEW_STATE);
-  const [popupVehicle, setPopupVehicle] = useState<VehicleDto | null>(null);
+  const [state, dispatch] = useReducer(mapUiReducer, INITIAL_UI_STATE);
+  const viewStateRef = useRef(INITIAL_VIEW_STATE);
   const {
     popupStop,
     setPopupStop,
@@ -88,29 +486,20 @@ export function MapViewInner({
     openStopPopupAsync,
     clearStopPopup,
   } = useStopPopupArrivals();
-  const vehicleEta = useVehicleEta(popupVehicle);
-  const [hoveringInteractive, setHoveringInteractive] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
+  const vehicleEta = useVehicleEta(state.popupVehicle);
   const isDesktop = useIsDesktop();
-  const [webglLost, setWebglLost] = useState(false);
   const webglCleanupRef = useRef<(() => void) | null>(null);
   const vehiclesRef = useRef(vehicles);
-  vehiclesRef.current = vehicles;
   const popupVehicleKeyRef = useRef<string>("");
-  const [mapBounds, setMapBounds] = useState<{
-    minLat: number;
-    minLng: number;
-    maxLat: number;
-    maxLng: number;
-  } | null>(null);
+  vehiclesRef.current = vehicles;
+  viewStateRef.current = state.viewState;
 
-  const trafficData = useTrafficData(mapBounds, viewState.zoom, {
+  const trafficData = useTrafficData(state.mapBounds, state.viewState.zoom, {
     enabled: showTraffic,
     minZoom: 11,
     debounceMs: 400,
   });
   const { stops: allStops } = useStops();
-
   const userLocation = useUserLocation();
 
   const handleMapLoad = useCallback(() => {
@@ -120,14 +509,14 @@ export function MapViewInner({
 
     addVehicleArrowImage(map);
 
-    const handleLost = (e: Event) => {
-      e.preventDefault();
-      setWebglLost(true);
+    const handleLost = (event: Event) => {
+      event.preventDefault();
+      dispatch({ type: "setWebglLost", webglLost: true });
     };
     const handleRestored = () => {
-      setWebglLost(false);
-      const m = mapRef.current?.getMap();
-      if (m) addVehicleArrowImage(m);
+      dispatch({ type: "setWebglLost", webglLost: false });
+      const currentMap = mapRef.current?.getMap();
+      if (currentMap) addVehicleArrowImage(currentMap);
     };
 
     canvas.addEventListener("webglcontextlost", handleLost);
@@ -137,40 +526,27 @@ export function MapViewInner({
       canvas.removeEventListener("webglcontextrestored", handleRestored);
     };
 
-    const bounds = map.getBounds();
-    setMapBounds({
-      minLat: bounds.getSouth(),
-      minLng: bounds.getWest(),
-      maxLat: bounds.getNorth(),
-      maxLng: bounds.getEast(),
-    });
+    dispatch({ type: "setMapBounds", mapBounds: getMapBounds(map) });
   }, []);
 
   useEffect(() => {
     return () => webglCleanupRef.current?.();
   }, []);
 
-  const focusedVehicle = useMemo(() => {
-    if (focusedVehicleId == null) return null;
-    return vehicles.find((v) => v.id === focusedVehicleId) ?? null;
-  }, [vehicles, focusedVehicleId]);
-
   useEffect(() => {
     if (!focusedVehicleId) {
-      setPopupVehicle(null);
+      dispatch({ type: "setPopupVehicle", popupVehicle: null });
       return;
     }
 
-    const selected = vehiclesRef.current.find((v) => v.id === focusedVehicleId);
-    if (!selected) {
-      setPopupVehicle(null);
+    const selectedVehicle = vehiclesRef.current.find((vehicle) => vehicle.id === focusedVehicleId) ?? null;
+    if (!selectedVehicle) {
+      dispatch({ type: "setPopupVehicle", popupVehicle: null });
       return;
     }
-
-    setPopupVehicle(selected);
 
     const map = mapRef.current?.getMap();
-    const shape = selected.routeKey && shapes ? shapes[selected.routeKey] : null;
+    const shape = selectedVehicle.routeKey && shapes ? shapes[selectedVehicle.routeKey] : null;
 
     if (map) {
       if (shape && shape.length > 0) {
@@ -178,396 +554,287 @@ export function MapViewInner({
       } else {
         const currentZoom = map.getZoom();
         map.flyTo({
-          center: [selected.longitude, selected.latitude],
+          center: [selectedVehicle.longitude, selectedVehicle.latitude],
           zoom: Math.max(currentZoom, 14),
           duration: 600,
         });
       }
+      dispatch({ type: "setPopupVehicle", popupVehicle: selectedVehicle });
       return;
     }
 
-    if (!shape || shape.length === 0) {
-      setViewState((prev) => ({
-        ...prev,
-        longitude: selected.longitude,
-        latitude: selected.latitude,
-        zoom: Math.max(prev.zoom, 14),
-      }));
-    }
-  }, [focusedVehicleId, shapes, isDesktop]);
+    dispatch({
+      type: "syncFocusedVehicle",
+      popupVehicle: selectedVehicle,
+      viewStatePatch:
+        !shape || shape.length === 0
+          ? {
+              longitude: selectedVehicle.longitude,
+              latitude: selectedVehicle.latitude,
+              zoom: Math.max(viewStateRef.current.zoom, 14),
+            }
+          : undefined,
+    });
+  }, [focusedVehicleId, isDesktop, shapes]);
 
-  const handleStopClick = useCallback(async (stop: StopDto) => {
-    setPopupVehicle(null);
+  const openStopPopupForStop = useCallback(async (stop: StopDto) => {
+    dispatch({ type: "setPopupVehicle", popupVehicle: null });
     await openStopPopupAsync(stop);
   }, [openStopPopupAsync]);
 
   const handleMapClick = useCallback(
-    (e: MapLayerMouseEvent) => {
+    (event: MapLayerMouseEvent) => {
       if (pickingPoint) {
-        onMapClick(pickingPoint, e.lngLat.lat, e.lngLat.lng);
+        onMapClick(pickingPoint, event.lngLat.lat, event.lngLat.lng);
         return;
       }
 
-      const vehicleFeature = e.features?.find(
-        (f) => f.layer?.id === MAP_LAYER_IDS.VEHICLES,
-      );
+      const vehicleFeature = event.features?.find((feature) => feature.layer?.id === MAP_LAYER_IDS.VEHICLES);
       if (vehicleFeature) {
         const rawVehicleId = vehicleFeature.properties?.id;
         const vehicleId = rawVehicleId == null ? undefined : String(rawVehicleId);
-        const vehicle = vehiclesRef.current.find((v) => v.id === vehicleId);
+        const vehicle = vehiclesRef.current.find((item) => item.id === vehicleId);
         if (vehicle) {
           onVehicleClick(vehicle.id);
-          setPopupVehicle(vehicle);
+          dispatch({ type: "setPopupVehicle", popupVehicle: vehicle });
           setPopupStop(null);
           return;
         }
       }
 
-      const stopFeature = e.features?.find(
-        (f) =>
-          f.layer?.id === MAP_LAYER_IDS.ALL_STOPS ||
-          f.layer?.id === MAP_LAYER_IDS.ALL_STOPS_HIT,
+      const stopFeature = event.features?.find(
+        (feature) =>
+          feature.layer?.id === MAP_LAYER_IDS.ALL_STOPS ||
+          feature.layer?.id === MAP_LAYER_IDS.ALL_STOPS_HIT,
       );
       if (stopFeature) {
         const stopId = String(stopFeature.properties?.stopId ?? "");
-        const stop = allStops.find((s) => s.stopId === stopId);
+        const stop = allStops.find((item) => item.stopId === stopId);
         if (stop) {
-          void handleStopClick(stop);
+          void openStopPopupForStop(stop);
           return;
         }
       }
 
       onDeselectVehicle();
-      setPopupVehicle(null);
+      dispatch({ type: "setPopupVehicle", popupVehicle: null });
       setPopupStop(null);
     },
-    [pickingPoint, onMapClick, onDeselectVehicle, onVehicleClick, allStops, handleStopClick, setPopupStop],
+    [allStops, onDeselectVehicle, onMapClick, onVehicleClick, openStopPopupForStop, pickingPoint, setPopupStop],
   );
 
   useEffect(() => {
-    if (selectedStop) {
-      setViewState((prev) => ({
-        ...prev,
-        longitude: selectedStop.longitude,
-        latitude: selectedStop.latitude,
-        zoom: Math.max(prev.zoom, 15),
-      }));
-      void handleStopClick(selectedStop);
-    } else {
+    if (!selectedStop) {
       clearStopPopup();
+      return;
     }
-  }, [selectedStop, handleStopClick, clearStopPopup]);
+
+    dispatch({ type: "centerOnStop", stop: selectedStop });
+    void openStopPopupAsync(selectedStop);
+  }, [clearStopPopup, openStopPopupAsync, selectedStop]);
 
   useEffect(() => {
-    if (!popupVehicle) return;
-    const updated = vehicles.find((v) => v.id === popupVehicle.id);
-    if (!updated) return;
-    // Only update popup when API data changes, not on every animation frame.
-    // Exclude lat/lng/bearing because those are animated and change at 60fps.
-    const key = `${popupVehicle.id}:${updated.stopIndex}:${updated.distanceAlongRoute}:${updated.nextStop?.name ?? ""}`;
-    if (key === popupVehicleKeyRef.current) return;
-    popupVehicleKeyRef.current = key;
-    setPopupVehicle(updated);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vehicles, popupVehicle?.id]);
+    if (!state.popupVehicle) return;
+    const updatedVehicle = vehicles.find((vehicle) => vehicle.id === state.popupVehicle?.id);
+    if (!updatedVehicle) return;
+
+    const nextKey = [
+      state.popupVehicle.id,
+      updatedVehicle.stopIndex,
+      updatedVehicle.distanceAlongRoute,
+      updatedVehicle.nextStop?.name ?? "",
+    ].join(":");
+    if (nextKey === popupVehicleKeyRef.current) return;
+
+    popupVehicleKeyRef.current = nextKey;
+    dispatch({ type: "setPopupVehicle", popupVehicle: updatedVehicle });
+  }, [state.popupVehicle, vehicles]);
 
   useEffect(() => {
-    const map = mapRef.current;
+    const map = mapRef.current?.getMap();
     if (!map) return;
 
     const points = multiRoutePlan?.itinerary
-      ? multiRoutePlan.itinerary.segments.flatMap((segment) => segment.route.legs.flatMap((leg) => leg.polyline))
+      ? multiRoutePlan.itinerary.segments.flatMap((segment) =>
+          segment.route.legs.flatMap((leg) => leg.polyline),
+        )
       : routePlan?.routes[selectedRouteIndex]?.legs.flatMap((leg) => leg.polyline) ?? [];
     if (points.length === 0) return;
     fitMapToPoints(map, points, { isDesktop, reserveBottomSpace: !isDesktop });
-  }, [routePlan, multiRoutePlan, selectedRouteIndex, routeFitRequest, isDesktop]);
+  }, [isDesktop, multiRoutePlan, routeFitRequest, routePlan, selectedRouteIndex]);
 
   const handleMoveEnd = useCallback(() => {
     const map = mapRef.current?.getMap();
     if (map) {
-      const bounds = map.getBounds();
-      setMapBounds({
-        minLat: bounds.getSouth(),
-        minLng: bounds.getWest(),
-        maxLat: bounds.getNorth(),
-        maxLng: bounds.getEast(),
-      });
+      dispatch({ type: "setMapBounds", mapBounds: getMapBounds(map) });
     }
   }, []);
 
-  const handleMove = useCallback((evt: { viewState: typeof INITIAL_VIEW_STATE }) => {
-    setViewState({ ...evt.viewState });
+  const handleMove = useCallback((event: { viewState: ViewState }) => {
+    dispatch({ type: "setViewState", viewState: { ...event.viewState } });
   }, []);
 
-  const handleMouseMove = useCallback((e: MapLayerMouseEvent) => {
-    const hasInteractiveFeature = !!e.features?.some(
-      (f) =>
-        f.layer?.id === MAP_LAYER_IDS.VEHICLES ||
-        f.layer?.id === MAP_LAYER_IDS.ALL_STOPS ||
-        f.layer?.id === MAP_LAYER_IDS.ALL_STOPS_HIT,
+  const handleMouseMove = useCallback((event: MapLayerMouseEvent) => {
+    const hoveringInteractive = !!event.features?.some(
+      (feature) =>
+        feature.layer?.id === MAP_LAYER_IDS.VEHICLES ||
+        feature.layer?.id === MAP_LAYER_IDS.ALL_STOPS ||
+        feature.layer?.id === MAP_LAYER_IDS.ALL_STOPS_HIT,
     );
-    setHoveringInteractive(hasInteractiveFeature);
+    dispatch({ type: "setHoveringInteractive", hoveringInteractive });
   }, []);
 
-  const routeLegsGeoJson = useMemo(() => {
-    return buildRouteLegFeatures(routePlan, selectedRouteIndex, multiRoutePlan);
-  }, [routePlan, multiRoutePlan, selectedRouteIndex]);
-
-  const vehicleRouteGeoJson = useMemo(() => {
-    return buildVehicleRouteFeature(focusedVehicle, shapes);
-  }, [focusedVehicle, shapes]);
-
+  const routeLegsGeoJson = useMemo(
+    () => buildRouteLegFeatures(routePlan, selectedRouteIndex, multiRoutePlan),
+    [multiRoutePlan, routePlan, selectedRouteIndex],
+  );
+  const focusedVehicle = useMemo(
+    () => (focusedVehicleId == null ? null : vehicles.find((vehicle) => vehicle.id === focusedVehicleId) ?? null),
+    [focusedVehicleId, vehicles],
+  );
+  const vehicleRouteGeoJson = useMemo(
+    () => buildVehicleRouteFeature(focusedVehicle, shapes),
+    [focusedVehicle, shapes],
+  );
   const vehiclesGeoJson = useMemo(
     () => buildVehiclesFeatureCollection(vehicles, focusedVehicleId),
-    [vehicles, focusedVehicleId],
+    [focusedVehicleId, vehicles],
   );
-
-  const allStopsGeoJson = useMemo(
-    () => buildStopsFeatureCollection(allStops),
-    [allStops],
+  const allStopsGeoJson = useMemo(() => buildStopsFeatureCollection(allStops), [allStops]);
+  const boardingStops = useMemo(
+    () => buildBoardingStops(routePlan, selectedRouteIndex, multiRoutePlan),
+    [multiRoutePlan, routePlan, selectedRouteIndex],
   );
-
-  const boardingStops = useMemo(() => {
-    return buildBoardingStops(routePlan, selectedRouteIndex, multiRoutePlan);
-  }, [routePlan, multiRoutePlan, selectedRouteIndex]);
 
   const handleBottomSheetClose = useCallback(() => {
-    setPopupVehicle(null);
+    dispatch({ type: "setPopupVehicle", popupVehicle: null });
     clearStopPopup();
     onDeselectVehicle();
-  }, [onDeselectVehicle, clearStopPopup]);
+  }, [clearStopPopup, onDeselectVehicle]);
 
   const handleLocateMe = useCallback(() => {
     if (!userLocation || !mapRef.current) return;
-    const currentZoom = mapRef.current.getMap()?.getZoom() ?? DEFAULT_ZOOM;
-    mapRef.current.getMap()?.flyTo({
+    const map = mapRef.current.getMap();
+    const currentZoom = map?.getZoom() ?? DEFAULT_ZOOM;
+    map?.flyTo({
       center: [userLocation.lng, userLocation.lat],
       zoom: Math.max(currentZoom, 15),
       duration: 600,
     });
   }, [userLocation]);
 
+  return {
+    mapRef,
+    state,
+    popupStop,
+    setPopupStop,
+    stopArrivals,
+    arrivalsLoading,
+    vehicleEta,
+    userLocation,
+    showTraffic,
+    showStops,
+    isDesktop,
+    trafficData,
+    routeLegsGeoJson,
+    vehicleRouteGeoJson,
+    vehiclesGeoJson,
+    allStopsGeoJson,
+    boardingStops,
+    handleMove,
+    handleMoveEnd,
+    handleMouseMove,
+    handleMapClick,
+    handleMapLoad,
+    handleBottomSheetClose,
+    handleLocateMe,
+    openStopPopupForStop,
+    dispatch,
+  };
+}
+
+export function MapViewInner(props: MapViewInnerProps) {
+  const {
+    routePlan,
+    multiRoutePlan,
+    selectedRouteIndex,
+    plannerStops,
+    selectedStop,
+  } = props;
+  const {
+    mapRef,
+    state,
+    popupStop,
+    setPopupStop,
+    stopArrivals,
+    arrivalsLoading,
+    vehicleEta,
+    userLocation,
+    showTraffic,
+    showStops,
+    isDesktop,
+    trafficData,
+    routeLegsGeoJson,
+    vehicleRouteGeoJson,
+    vehiclesGeoJson,
+    allStopsGeoJson,
+    boardingStops,
+    handleMove,
+    handleMoveEnd,
+    handleMouseMove,
+    handleMapClick,
+    handleMapLoad,
+    handleBottomSheetClose,
+    handleLocateMe,
+    openStopPopupForStop,
+    dispatch,
+  } = useMapViewController(props);
+
   return (
     <>
-      <Map
-        ref={mapRef}
-        {...viewState}
+      <MapCanvas
+        mapRef={mapRef}
+        viewState={state.viewState}
+        popupVehicle={state.popupVehicle}
+        popupStop={popupStop}
+        stopArrivals={stopArrivals}
+        arrivalsLoading={arrivalsLoading}
+        selectedStop={selectedStop}
+        routePlan={routePlan}
+        multiRoutePlan={multiRoutePlan}
+        selectedRouteIndex={selectedRouteIndex}
+        plannerStops={plannerStops}
+        boardingStops={boardingStops}
+        allStopsGeoJson={allStopsGeoJson}
+        routeLegsGeoJson={routeLegsGeoJson}
+        vehicleRouteGeoJson={vehicleRouteGeoJson}
+        vehiclesGeoJson={vehiclesGeoJson}
+        userLocation={userLocation}
+        showTraffic={showTraffic}
+        showStops={showStops}
+        trafficData={trafficData}
+        webglLost={state.webglLost}
+        isDesktop={isDesktop}
+        hoveringInteractive={state.hoveringInteractive}
+        isDragging={state.isDragging}
+        vehicleEta={vehicleEta}
         onMove={handleMove}
         onMoveEnd={handleMoveEnd}
         onMouseMove={handleMouseMove}
-        onMouseLeave={() => setHoveringInteractive(false)}
-        onDragStart={() => setIsDragging(true)}
-        onDragEnd={() => setIsDragging(false)}
-        cursor={isDragging ? "grabbing" : hoveringInteractive ? "pointer" : "grab"}
-        interactiveLayerIds={
-          showStops
-            ? [MAP_LAYER_IDS.VEHICLES, MAP_LAYER_IDS.ALL_STOPS_HIT, MAP_LAYER_IDS.ALL_STOPS]
-            : [MAP_LAYER_IDS.VEHICLES]
-        }
-        onClick={handleMapClick}
-        onLoad={handleMapLoad}
-        style={{ width: "100%", height: "100%" }}
-        mapStyle="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
-        attributionControl={false}
-      >
-        {!webglLost && vehicleRouteGeoJson && !routePlan && (
-          <Source id={MAP_LAYER_IDS.VEHICLE_ROUTE} type="geojson" data={vehicleRouteGeoJson}>
-            <Layer
-              id="vehicle-route-line"
-              type="line"
-              paint={{
-                "line-color": "#888",
-                "line-width": 3,
-                "line-opacity": 0.6,
-              }}
-            />
-          </Source>
-        )}
-
-        {!webglLost && routeLegsGeoJson && (
-          <Source
-            id="route-legs"
-            type="geojson"
-            data={{ type: "FeatureCollection", features: routeLegsGeoJson }}
-          >
-            <Layer
-              id="route-legs-line"
-              type="line"
-              paint={{
-                "line-color": ROUTE_LEG_COLOR_EXPRESSION,
-                "line-width": 4,
-                "line-opacity": 0.8,
-              }}
-            />
-          </Source>
-        )}
-
-        {/* Traffic flow layer - using TomTom raster tiles */}
-        {!webglLost && showTraffic && trafficData.flowTileInfo && (
-          <Source
-            id="traffic-flow"
-            type="raster"
-            tiles={[trafficData.flowTileInfo.tileUrlTemplate]}
-            tileSize={256}
-            attribution={trafficData.flowTileInfo.attribution}
-            key="traffic-flow-source"
-          >
-            <Layer
-              id="traffic-flow-tiles"
-              type="raster"
-              paint={{
-                "raster-opacity": 0.8,
-                "raster-fade-duration": 0,
-              }}
-            />
-          </Source>
-        )}
-
-        {/* Traffic incidents as markers */}
-        {showTraffic &&
-          trafficData.incidents?.features.map((feature, i) => (
-            <Marker
-              key={`incident-${feature.properties.id}-${i}`}
-              longitude={feature.geometry.coordinates[0]}
-              latitude={feature.geometry.coordinates[1]}
-              anchor="center"
-            >
-              <IncidentIcon category={feature.properties.iconCategory} size={32} />
-            </Marker>
-          ))}
-
-        {plannerStops.map((stop, index) => {
-          if (!stop.point) return null;
-
-          const label = String.fromCharCode(65 + index);
-          const color =
-            index === 0
-              ? "#22c55e"
-              : index === plannerStops.length - 1
-                ? "#ef4444"
-                : "#0f766e";
-
-          return (
-            <Marker key={stop.id} longitude={stop.point.lng} latitude={stop.point.lat} anchor="bottom">
-              <PinIcon color={color} label={label} />
-            </Marker>
-          );
-        })}
-
-        {boardingStops.map((stop, i) => {
-          const color = stop.transportType
-            ? TYPE_COLORS[stop.transportType] || TYPE_COLORS.bus
-            : "#22c55e";
-          return (
-            <Marker key={`boarding-${i}`} longitude={stop.lng} latitude={stop.lat} anchor="center">
-              {stop.lineNumber ? (
-                <BoardingStopIcon lineNumber={stop.lineNumber} color={color} />
-              ) : (
-                <StopIcon />
-              )}
-            </Marker>
-          );
-        })}
-
-        {selectedStop && (
-          <Marker
-            longitude={selectedStop.longitude}
-            latitude={selectedStop.latitude}
-            anchor="center"
-            onClick={(e) => {
-              e.originalEvent.stopPropagation();
-              handleStopClick(selectedStop);
-            }}
-          >
-            <StopIcon />
-          </Marker>
-        )}
-
-        {!webglLost && showStops && (
-          <Source id="all-stops-source" type="geojson" data={allStopsGeoJson}>
-            <Layer
-              id={MAP_LAYER_IDS.ALL_STOPS_HIT}
-              type="circle"
-              minzoom={12}
-              paint={{
-                "circle-radius": ["interpolate", ["linear"], ["zoom"], 12, 8, 13, 10, 16, 12],
-                "circle-color": "#000000",
-                "circle-opacity": 0.01,
-              }}
-            />
-            <Layer
-              id={MAP_LAYER_IDS.ALL_STOPS}
-              type="circle"
-              minzoom={12}
-              paint={{
-                "circle-radius": ["interpolate", ["linear"], ["zoom"], 12, 2, 13, 3, 16, 5],
-                "circle-color": "#ffffff",
-                "circle-stroke-color": "#4b5563",
-                "circle-stroke-width": 1,
-                "circle-opacity": 0.85,
-              }}
-            />
-          </Source>
-        )}
-
-        {userLocation && (
-          <Marker longitude={userLocation.lng} latitude={userLocation.lat} anchor="center">
-            <UserLocationDot />
-          </Marker>
-        )}
-
-        {!webglLost && (
-          <Source id={MAP_LAYER_IDS.VEHICLES} type="geojson" data={vehiclesGeoJson}>
-            <Layer
-              id={MAP_LAYER_IDS.VEHICLES}
-              type="symbol"
-              layout={{
-                "icon-image": "vehicle-arrow",
-                "icon-rotation-alignment": "map",
-                "icon-rotate": ["get", "bearing"],
-                "icon-allow-overlap": true,
-                "icon-ignore-placement": true,
-                "icon-size": ["case", ["==", ["get", "focused"], 1], 1.0, 0.75],
-                "symbol-sort-key": ["case", ["==", ["get", "focused"], 1], 1, 0],
-              }}
-              paint={{
-                "icon-color": ["case", ["==", ["get", "focused"], 1], "#FF9800", ["get", "color"]],
-                "icon-halo-color": "#fff",
-                "icon-halo-width": 1,
-              }}
-            />
-          </Source>
-        )}
-
-        {/* Desktop-only popups */}
-        {!webglLost && isDesktop && popupVehicle && (
-          <Popup
-            longitude={popupVehicle.longitude}
-            latitude={popupVehicle.latitude}
-            anchor="bottom"
-            offset={[0, -16]}
-            closeButton={false}
-            onClose={() => setPopupVehicle(null)}
-            maxWidth="280px"
-          >
-            <VehiclePopup vehicle={popupVehicle} etaSeconds={vehicleEta} />
-          </Popup>
-        )}
-
-        {!webglLost && isDesktop && popupStop && (
-          <Popup
-            longitude={popupStop.longitude}
-            latitude={popupStop.latitude}
-            anchor="bottom"
-            offset={[0, -10]}
-            closeButton={false}
-            onClose={() => setPopupStop(null)}
-            maxWidth="280px"
-          >
-            <StopPopup stop={popupStop} arrivals={stopArrivals} loading={arrivalsLoading} />
-          </Popup>
-        )}
-      </Map>
+        onMouseLeave={() => dispatch({ type: "setHoveringInteractive", hoveringInteractive: false })}
+        onDragStart={() => dispatch({ type: "setDragging", isDragging: true })}
+        onDragEnd={() => dispatch({ type: "setDragging", isDragging: false })}
+        onMapClick={handleMapClick}
+        onMapLoad={handleMapLoad}
+        onPopupVehicleClose={() => dispatch({ type: "setPopupVehicle", popupVehicle: null })}
+        onPopupStopClose={() => setPopupStop(null)}
+        onSelectedStopMarkerClick={(event) => {
+          event.originalEvent.stopPropagation();
+          if (selectedStop) {
+            void openStopPopupForStop(selectedStop);
+          }
+        }}
+      />
 
       {userLocation && (
         <button
@@ -579,9 +846,8 @@ export function MapViewInner({
         </button>
       )}
 
-      {/* Mobile bottom sheet */}
-      <BottomSheet open={!!(popupVehicle || popupStop)} onClose={handleBottomSheetClose}>
-        {popupVehicle && <VehiclePopup vehicle={popupVehicle} etaSeconds={vehicleEta} />}
+      <BottomSheet open={!!(state.popupVehicle || popupStop)} onClose={handleBottomSheetClose}>
+        {state.popupVehicle && <VehiclePopup vehicle={state.popupVehicle} etaSeconds={vehicleEta} />}
         {popupStop && (
           <StopPopup stop={popupStop} arrivals={stopArrivals} loading={arrivalsLoading} />
         )}

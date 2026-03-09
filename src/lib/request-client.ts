@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-export type RateLimitRequesterType = "client" | "ip" | "fingerprint" | "unknown";
+type RateLimitRequesterType = "client" | "ip" | "fingerprint" | "unknown";
 
 interface RateLimitContext {
   requester: string;
@@ -83,6 +83,6 @@ export function getRateLimitContext(
   };
 }
 
-export function getRateLimitIdentifier(requestHeaders: Headers, explicitClientId?: string | null) {
+function getRateLimitIdentifier(requestHeaders: Headers, explicitClientId?: string | null) {
   return getRateLimitContext(requestHeaders, explicitClientId).requester;
 }

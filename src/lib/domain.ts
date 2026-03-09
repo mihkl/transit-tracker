@@ -21,13 +21,13 @@ export const MAP_LAYER_IDS = {
   ROUTE_LEGS: "route-legs",
   TRAFFIC_FLOW: "traffic-flow",
 } as const;
-export type MapLayerId = (typeof MAP_LAYER_IDS)[keyof typeof MAP_LAYER_IDS];
+type MapLayerId = (typeof MAP_LAYER_IDS)[keyof typeof MAP_LAYER_IDS];
 
-export function isTransportType(value: string): value is TransportType {
+function isTransportType(value: string): value is TransportType {
   return (TRANSPORT_TYPES as readonly string[]).includes(value);
 }
 
-export function isLineType(value: string): value is LineType {
+function isLineType(value: string): value is LineType {
   return (LINE_TYPES as readonly string[]).includes(value);
 }
 
@@ -88,7 +88,7 @@ export function modeToTransportType(mode: TransitMode) {
 }
 
 /** Numeric transport type codes from the Tallinn GPS feed (gis.ee). */
-export const GPS_TYPE = {
+const GPS_TYPE = {
   TROLLEYBUS: 1,
   BUS: 2,
   TRAM: 3,

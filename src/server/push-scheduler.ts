@@ -350,7 +350,7 @@ async function sendClaimedNotification(job: ClaimedNotification) {
   }
 }
 
-export async function dispatchDueNotifications() {
+async function dispatchDueNotifications() {
   const state = getState();
   if (state.dispatching || !vapidPublicKey) return;
 

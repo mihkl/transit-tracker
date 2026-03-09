@@ -24,6 +24,10 @@ function stopAccentColor(stop: StopDto) {
   return type ? TYPE_COLORS[type] || "#6b7280" : "#6b7280";
 }
 
+function getArrivalKey(route: string, secondsUntilArrival: number) {
+  return `${route}:${secondsUntilArrival}`;
+}
+
 export function QuickActionsPanel() {
   const setSelectedLine = useTransitStore((s) => s.setSelectedLine);
   const setSelectedStop = useTransitStore((s) => s.setSelectedStop);
@@ -118,9 +122,9 @@ export function QuickActionsPanel() {
 
               {arrivals.length > 0 && (
                 <div className="flex flex-wrap gap-2 mt-3">
-                  {arrivals.slice(0, 4).map((arr, i) => (
+                  {arrivals.slice(0, 4).map((arr) => (
                     <div
-                      key={i}
+                      key={getArrivalKey(arr.route, arr.secondsUntilArrival)}
                       className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-foreground/[0.04]"
                     >
                       <span

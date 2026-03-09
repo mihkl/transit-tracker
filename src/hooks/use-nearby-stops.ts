@@ -21,7 +21,7 @@ function haversineMeters(
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-export interface NearbyStop {
+interface NearbyStop {
   stop: StopDto;
   distanceMeters: number;
   arrivals: StopArrival[];
