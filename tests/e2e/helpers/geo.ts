@@ -9,7 +9,3 @@ export async function grantGeolocation(
   await context.grantPermissions(["geolocation"]);
   await context.setGeolocation(coords);
 }
-
-async function denyGeolocation(context: BrowserContext) {
-  await context.clearPermissions();
-}

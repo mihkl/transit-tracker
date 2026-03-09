@@ -4,12 +4,10 @@ import {
   LINE_TYPES,
   TRANSIT_MODES,
   TRANSPORT_TYPES,
-  TYPE_FILTERS,
 } from "@/lib/domain";
 
 const transportTypeSchema = z.enum(TRANSPORT_TYPES);
 const lineTypeSchema = z.enum(LINE_TYPES);
-const typeFilterSchema = z.enum(TYPE_FILTERS);
 const transitModeSchema = z.enum(TRANSIT_MODES);
 const delayStatusSchema = z.enum(DELAY_STATUSES);
 
@@ -226,5 +224,3 @@ export const vehicleStreamEventSchema = z.object({
   count: z.number(),
   timestamp: z.string(),
 });
-
-type VehicleStreamEvent = z.infer<typeof vehicleStreamEventSchema>;

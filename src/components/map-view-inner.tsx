@@ -155,8 +155,6 @@ interface MapCanvasProps {
   arrivalsLoading: boolean;
   selectedStop: StopDto | null;
   routePlan: RoutePlanResponse | null;
-  multiRoutePlan: MultiRoutePlanResponse | null;
-  selectedRouteIndex: number;
   plannerStops: PlannerStop[];
   boardingStops: ReturnType<typeof buildBoardingStops>;
   allStopsGeoJson: ReturnType<typeof buildStopsFeatureCollection>;
@@ -194,8 +192,6 @@ function MapCanvas({
   arrivalsLoading,
   selectedStop,
   routePlan,
-  multiRoutePlan,
-  selectedRouteIndex,
   plannerStops,
   boardingStops,
   allStopsGeoJson,
@@ -464,7 +460,6 @@ function useMapViewController({
   multiRoutePlan,
   selectedRouteIndex,
   routeFitRequest = 0,
-  plannerStops,
   pickingPoint,
   onMapClick,
   focusedVehicleId,
@@ -491,8 +486,6 @@ function useMapViewController({
   const webglCleanupRef = useRef<(() => void) | null>(null);
   const vehiclesRef = useRef(vehicles);
   const popupVehicleKeyRef = useRef<string>("");
-  vehiclesRef.current = vehicles;
-  viewStateRef.current = state.viewState;
 
   const trafficData = useTrafficData(state.mapBounds, state.viewState.zoom, {
     enabled: showTraffic,
@@ -532,6 +525,14 @@ function useMapViewController({
   useEffect(() => {
     return () => webglCleanupRef.current?.();
   }, []);
+
+  useEffect(() => {
+    vehiclesRef.current = vehicles;
+  }, [vehicles]);
+
+  useEffect(() => {
+    viewStateRef.current = state.viewState;
+  }, [state.viewState]);
 
   useEffect(() => {
     if (!focusedVehicleId) {
@@ -756,8 +757,6 @@ function useMapViewController({
 export function MapViewInner(props: MapViewInnerProps) {
   const {
     routePlan,
-    multiRoutePlan,
-    selectedRouteIndex,
     plannerStops,
     selectedStop,
   } = props;
@@ -801,8 +800,6 @@ export function MapViewInner(props: MapViewInnerProps) {
         arrivalsLoading={arrivalsLoading}
         selectedStop={selectedStop}
         routePlan={routePlan}
-        multiRoutePlan={multiRoutePlan}
-        selectedRouteIndex={selectedRouteIndex}
         plannerStops={plannerStops}
         boardingStops={boardingStops}
         allStopsGeoJson={allStopsGeoJson}

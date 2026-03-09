@@ -63,39 +63,6 @@ export function PinIcon({
   );
 }
 
-function VehicleIcon({
-  color,
-  bearing,
-  size,
-}: {
-  color: string;
-  bearing: number;
-  size: number;
-}) {
-  const roundedBearing = Math.round(bearing / 5) * 5;
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      role="img"
-      aria-label="Vehicle"
-      style={{ cursor: "pointer" }}
-    >
-      <g transform={`rotate(${roundedBearing} 12 12)`}>
-        <polygon
-          points="12,3 20,21 12,16 4,21"
-          fill={color}
-          stroke="#fff"
-          strokeWidth={1.5}
-          strokeLinejoin="round"
-        />
-      </g>
-    </svg>
-  );
-}
-
 export function StopIcon({ size = 12 }: { size?: number }) {
   return (
     <svg

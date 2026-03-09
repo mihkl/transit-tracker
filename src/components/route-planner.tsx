@@ -367,7 +367,6 @@ function PlannerStopEditor({
   isLocationSaved,
   onStartPicking,
   onSetStopPoint,
-  onSetStopDwell,
   onSetStopDepartureOverride,
   onMoveStop,
   onRemoveStop,
@@ -382,7 +381,6 @@ function PlannerStopEditor({
   isLocationSaved: (lat: number, lng: number) => boolean;
   onStartPicking: (stopId: string | null) => void;
   onSetStopPoint: (stopId: string, place: { lat: number; lng: number; name?: string }) => void;
-  onSetStopDwell: (stopId: string, dwellMinutes: number) => void;
   onSetStopDepartureOverride: (stopId: string, departureOverride: string) => void;
   onMoveStop: (stopId: string, direction: -1 | 1) => void;
   onRemoveStop: (stopId: string) => void;
@@ -694,7 +692,6 @@ interface RoutePlannerFormBlockProps {
   isLocationSaved: (lat: number, lng: number) => boolean;
   onStartPicking: (stopId: string | null) => void;
   onSetStopPoint: (stopId: string, place: { lat: number; lng: number; name?: string }) => void;
-  onSetStopDwell: (stopId: string, dwellMinutes: number) => void;
   onSetStopDepartureOverride: (stopId: string, departureOverride: string) => void;
   onMoveStop: (stopId: string, direction: -1 | 1) => void;
   onRemoveStop: (stopId: string) => void;
@@ -728,7 +725,6 @@ function RoutePlannerFormBlock({
   isLocationSaved,
   onStartPicking,
   onSetStopPoint,
-  onSetStopDwell,
   onSetStopDepartureOverride,
   onMoveStop,
   onRemoveStop,
@@ -773,7 +769,6 @@ function RoutePlannerFormBlock({
                 isLocationSaved={isLocationSaved}
                 onStartPicking={onStartPicking}
                 onSetStopPoint={onSetStopPoint}
-                onSetStopDwell={onSetStopDwell}
                 onSetStopDepartureOverride={onSetStopDepartureOverride}
                 onMoveStop={onMoveStop}
                 onRemoveStop={onRemoveStop}
@@ -1176,7 +1171,6 @@ interface RoutePlannerProps {
   pickingPoint: string | null;
   onStartPicking: (stopId: string | null) => void;
   onSetStopPoint: (stopId: string, place: { lat: number; lng: number; name?: string }) => void;
-  onSetStopDwell: (stopId: string, dwellMinutes: number) => void;
   onSetStopDepartureOverride: (stopId: string, departureOverride: string) => void;
   onAddStop: () => void;
   onMoveStop: (stopId: string, direction: -1 | 1) => void;
@@ -1208,7 +1202,6 @@ export function RoutePlanner({
   pickingPoint,
   onStartPicking,
   onSetStopPoint,
-  onSetStopDwell,
   onSetStopDepartureOverride,
   onAddStop,
   onMoveStop,
@@ -1300,7 +1293,6 @@ export function RoutePlanner({
       isLocationSaved={isLocationSaved}
       onStartPicking={onStartPicking}
       onSetStopPoint={onSetStopPoint}
-      onSetStopDwell={onSetStopDwell}
       onSetStopDepartureOverride={onSetStopDepartureOverride}
       onMoveStop={onMoveStop}
       onRemoveStop={onRemoveStop}

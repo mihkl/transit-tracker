@@ -9,7 +9,6 @@ interface HomeRoutePlannerLayerProps {
   userLocation: { lat: number; lng: number } | null;
   onStartPicking: (stopId: string | null) => void;
   onSetStopPoint: (stopId: string, place: { lat: number; lng: number; name?: string }) => void;
-  onSetStopDwell: (stopId: string, dwellMinutes: number) => void;
   onSetStopDepartureOverride: (stopId: string, departureOverride: string) => void;
   onAddStop: () => void;
   onMoveStop: (stopId: string, direction: -1 | 1) => void;
@@ -31,7 +30,6 @@ export function HomeRoutePlannerLayer({
   userLocation,
   onStartPicking,
   onSetStopPoint,
-  onSetStopDwell,
   onSetStopDepartureOverride,
   onAddStop,
   onMoveStop,
@@ -73,7 +71,6 @@ export function HomeRoutePlannerLayer({
       pickingPoint={pickingPoint}
       onStartPicking={onStartPicking}
       onSetStopPoint={onSetStopPoint}
-      onSetStopDwell={onSetStopDwell}
       onSetStopDepartureOverride={onSetStopDepartureOverride}
       onAddStop={onAddStop}
       onMoveStop={onMoveStop}

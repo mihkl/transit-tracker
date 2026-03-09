@@ -36,11 +36,6 @@ export interface TrafficIncidentCollection {
   features: TrafficIncidentFeature[];
 }
 
-interface TrafficIncidentsActionResult {
-  data: TrafficIncidentCollection;
-  error: string | null;
-}
-
 interface TrafficCacheEntry {
   data: unknown;
   timestamp: number;

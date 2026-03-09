@@ -11,13 +11,6 @@ export interface GtfsRoute {
   routeType: number;
 }
 
-interface GtfsTrip {
-  tripId: string;
-  routeId: string;
-  directionId: number;
-  shapeId: string;
-}
-
 export interface GtfsStop {
   stopId: string;
   stopName: string;
@@ -25,14 +18,6 @@ export interface GtfsStop {
   longitude: number;
   stopDesc?: string;
   stopArea?: string;
-}
-
-interface GtfsStopTime {
-  tripId: string;
-  stopId: string;
-  stopSequence: number;
-  shapeDistTraveled: number;
-  departureTime: string;
 }
 
 export interface GtfsShapePoint {
@@ -328,57 +313,6 @@ export interface StopArrival {
   stopSequence?: number;
   totalStops?: number;
   alertsCount?: number;
-}
-
-interface VehicleStopEta {
-  stopId: string;
-  stopName: string;
-  latitude: number;
-  longitude: number;
-  expectedArrivalSeconds: number | null;
-  scheduledArrivalSeconds: number | null;
-  delaySeconds: number | null;
-  isPassed: boolean;
-}
-
-interface VehicleMatchDebugInfo {
-  lineNumber: string;
-  mode: TransitMode | null;
-  departureStopLat: number | null;
-  departureStopLng: number | null;
-  arrivalStopLat: number | null;
-  arrivalStopLng: number | null;
-  scheduledDeparture: string | null;
-  targetSeconds: number | null;
-  correctDirection: number | null;
-  routeId: string | null;
-  dir0: DirectionPatternInfo | null;
-  dir1: DirectionPatternInfo | null;
-  candidates: VehicleCandidateInfo[];
-  selectedVehicleId: string | null;
-  selectionReason: string;
-  timestamp: string;
-}
-
-interface DirectionPatternInfo {
-  patternKey: string;
-  terminal: string;
-  depStopDistAlong: number | null;
-  arrStopDistAlong: number | null;
-  totalLength: number;
-}
-
-interface VehicleCandidateInfo {
-  vehicleId: string;
-  destination: string;
-  latitude: number;
-  longitude: number;
-  matchedDirection: number | null;
-  reason: string;
-  forwardDistanceMeters: number;
-  etaSeconds: number;
-  timeDiffSeconds: number | null;
-  isSelected: boolean;
 }
 
 export interface StopDto {

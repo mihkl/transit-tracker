@@ -7,13 +7,6 @@ type LimitName = "places" | "routes" | "traffic" | "push-write" | "push-delete";
 type RateLimitBackend = "redis" | "memory";
 type RateLimitFallbackReason = "connected" | "missing_url" | "connect_error";
 
-interface LimitResult {
-  ok: boolean;
-  retryAfterSec: number;
-  backend: RateLimitBackend;
-  reason: RateLimitFallbackReason;
-}
-
 const RATE_LIMIT_CONFIG: Record<
   LimitName,
   {

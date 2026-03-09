@@ -21,15 +21,8 @@ export const MAP_LAYER_IDS = {
   ROUTE_LEGS: "route-legs",
   TRAFFIC_FLOW: "traffic-flow",
 } as const;
-type MapLayerId = (typeof MAP_LAYER_IDS)[keyof typeof MAP_LAYER_IDS];
 
-function isTransportType(value: string): value is TransportType {
-  return (TRANSPORT_TYPES as readonly string[]).includes(value);
-}
 
-function isLineType(value: string): value is LineType {
-  return (LINE_TYPES as readonly string[]).includes(value);
-}
 
 export function normalizeTransportType(value: string | null | undefined) {
   const v = String(value ?? "").trim().toLowerCase();

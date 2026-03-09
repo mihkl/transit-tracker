@@ -35,7 +35,7 @@ export function getClientIdentifier(requestHeaders: Headers) {
 export function getRateLimitContext(
   requestHeaders: Headers,
   explicitClientId?: string | null,
-) {
+): RateLimitContext {
   const clientIdProvided = !!explicitClientId?.trim();
   const clientId = sanitizeClientId(explicitClientId);
   if (clientId) {
@@ -81,8 +81,4 @@ export function getRateLimitContext(
     clientIdProvided,
     clientIdAccepted: false,
   };
-}
-
-function getRateLimitIdentifier(requestHeaders: Headers, explicitClientId?: string | null) {
-  return getRateLimitContext(requestHeaders, explicitClientId).requester;
 }

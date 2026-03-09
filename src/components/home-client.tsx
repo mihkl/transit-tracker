@@ -114,7 +114,6 @@ function useHomeClientController() {
     showVehicles,
     setShowVehicles,
     toggleVehicles,
-    showPlanner,
     setShowPlanner,
     plannerStops,
     setPlannerStops,
@@ -339,9 +338,6 @@ function useHomeClientController() {
     setPlanLoading,
     setRouteCache,
     setRoutePlan,
-    setSelectedLine,
-    setSelectedRouteIndex,
-    setSelectedStop,
     resetPlannerResults,
   ]);
 
@@ -479,15 +475,6 @@ function useHomeClientController() {
     [markDraftChanged, plannerStops, setPlannerStops],
   );
 
-  const handleSetStopDwell = useCallback(
-    (stopId: string, dwellMinutes: number) => {
-      updateStops((current) =>
-        current.map((stop) => (stop.id === stopId ? { ...stop, dwellMinutes } : stop)),
-      );
-    },
-    [updateStops],
-  );
-
   const handleSetStopDepartureOverride = useCallback(
     (stopId: string, departureOverride: string) => {
       updateStops((current) =>
@@ -555,7 +542,6 @@ function useHomeClientController() {
       isDesktop,
       handleStartPicking,
       handleSetStopPoint,
-      handleSetStopDwell,
       handleSetStopDepartureOverride,
       handleAddStop,
       handleMoveStop,
@@ -592,7 +578,6 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
           userLocation={controller.userLocation}
           onStartPicking={controller.handleStartPicking}
           onSetStopPoint={controller.handleSetStopPoint}
-          onSetStopDwell={controller.handleSetStopDwell}
           onSetStopDepartureOverride={controller.handleSetStopDepartureOverride}
           onAddStop={controller.handleAddStop}
           onMoveStop={controller.handleMoveStop}

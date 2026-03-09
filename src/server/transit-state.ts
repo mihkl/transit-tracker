@@ -5,7 +5,7 @@ import type {
   RoutePattern,
   VehicleState,
 } from "@/lib/types";
-import type { LineType, TypeFilter, TransportType } from "@/lib/domain";
+import type { LineType, TypeFilter } from "@/lib/domain";
 import { env } from "@/lib/env";
 import { normalizeLineType, GPS_TYPE_TO_TRANSPORT, LINE_TYPE_TO_GPS_TYPES } from "@/lib/domain";
 import { lineDtoSchema, vehicleDtoSchema } from "@/lib/schemas";
