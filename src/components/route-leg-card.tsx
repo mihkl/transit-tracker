@@ -10,10 +10,16 @@ import type { TransferInfo } from "@/hooks/use-transfer-viability";
 interface RouteLegCardProps {
   leg: RouteLeg;
   onLocateVehicle?: (leg: RouteLeg) => void;
+  allowLocateVehicle?: boolean;
 }
 
-export function RouteLegCard({ leg, onLocateVehicle }: RouteLegCardProps) {
+export function RouteLegCard({
+  leg,
+  onLocateVehicle,
+  allowLocateVehicle = true,
+}: RouteLegCardProps) {
   const isTransit = leg.mode !== "WALK" && !!leg.lineNumber;
+  const canLocateVehicle = isTransit && allowLocateVehicle && !!onLocateVehicle;
   const depTime = formatTime(leg.scheduledDeparture);
   const arrTime = formatTime(leg.scheduledArrival);
   const color = getTransportColor(leg.mode);
@@ -32,11 +38,11 @@ export function RouteLegCard({ leg, onLocateVehicle }: RouteLegCardProps) {
   return (
     <div
       className={`rounded-xl border border-foreground/8 bg-white px-3 py-3 transition-all duration-150 ${
-        isTransit ? "cursor-pointer hover:bg-foreground/[0.02] active:scale-[0.99]" : ""
+        canLocateVehicle ? "cursor-pointer hover:bg-foreground/[0.02] active:scale-[0.99]" : ""
       }`}
       style={{ borderLeftWidth: 3, borderLeftColor: color }}
       onClick={() => {
-        if (isTransit && onLocateVehicle) onLocateVehicle(leg);
+        if (canLocateVehicle) onLocateVehicle(leg);
       }}
     >
       <div className="flex items-center gap-2">
@@ -100,7 +106,7 @@ export function RouteLegCard({ leg, onLocateVehicle }: RouteLegCardProps) {
         </div>
       </div>
 
-      {isTransit && (
+      {canLocateVehicle && (
         <div className="mt-2 text-[11px] text-foreground/45 font-medium">Tap to locate on map</div>
       )}
     </div>

@@ -7,45 +7,59 @@ import type { RouteLeg } from "@/lib/types";
 interface HomeRoutePlannerLayerProps {
   isDesktop: boolean;
   userLocation: { lat: number; lng: number } | null;
-  onStartPicking: (point: "origin" | "destination" | null) => void;
-  onSetOrigin: (place: { lat: number; lng: number; name?: string }) => void;
-  onSetDestination: (place: { lat: number; lng: number; name?: string }) => void;
+  onStartPicking: (stopId: string | null) => void;
+  onSetStopPoint: (stopId: string, place: { lat: number; lng: number; name?: string }) => void;
+  onSetStopDwell: (stopId: string, dwellMinutes: number) => void;
+  onSetStopDepartureOverride: (stopId: string, departureOverride: string) => void;
+  onAddStop: () => void;
+  onMoveStop: (stopId: string, direction: -1 | 1) => void;
+  onRemoveStop: (stopId: string) => void;
+  onReturnToStart: () => void;
   onPlanRoute: () => void;
   onSelectRoute: (index: number) => void;
   onClose: () => void;
   onLocateVehicle: (leg: RouteLeg) => void;
-  onSwap: () => void;
+  onTimeOptionChange: (option: "now" | "depart" | "arrive") => void;
+  onDateTimeChange: (dateTime: string) => void;
+  onSwapEndpoints: () => void;
   onClear: () => void;
+  hasSearchedCurrentDraft: boolean;
 }
 
 export function HomeRoutePlannerLayer({
   isDesktop,
   userLocation,
   onStartPicking,
-  onSetOrigin,
-  onSetDestination,
+  onSetStopPoint,
+  onSetStopDwell,
+  onSetStopDepartureOverride,
+  onAddStop,
+  onMoveStop,
+  onRemoveStop,
+  onReturnToStart,
   onPlanRoute,
   onSelectRoute,
   onClose,
   onLocateVehicle,
-  onSwap,
+  onTimeOptionChange,
+  onDateTimeChange,
+  onSwapEndpoints,
   onClear,
+  hasSearchedCurrentDraft,
 }: HomeRoutePlannerLayerProps) {
-  const showPlanner = useTransitStore((s) => s.showPlanner);
-  const origin = useTransitStore((s) => s.origin);
-  const destination = useTransitStore((s) => s.destination);
-  const pickingPoint = useTransitStore((s) => s.pickingPoint);
-  const routePlan = useTransitStore((s) => s.routePlan);
-  const planError = useTransitStore((s) => s.planError);
-  const planLoading = useTransitStore((s) => s.planLoading);
-  const selectedRouteIndex = useTransitStore((s) => s.selectedRouteIndex);
-  const openSelectedRouteDetails = useTransitStore((s) => s.openSelectedRouteDetails);
-  const setOpenSelectedRouteDetails = useTransitStore((s) => s.setOpenSelectedRouteDetails);
-  const timeOption = useTransitStore((s) => s.timeOption);
-  const setTimeOption = useTransitStore((s) => s.setTimeOption);
-  const selectedDateTime = useTransitStore((s) => s.selectedDateTime);
-  const setSelectedDateTime = useTransitStore((s) => s.setSelectedDateTime);
-  const activeOverlay = useTransitStore((s) => s.activeOverlay);
+  const showPlanner = useTransitStore((state) => state.showPlanner);
+  const plannerStops = useTransitStore((state) => state.plannerStops);
+  const pickingPoint = useTransitStore((state) => state.pickingPoint);
+  const routePlan = useTransitStore((state) => state.routePlan);
+  const multiRoutePlan = useTransitStore((state) => state.multiRoutePlan);
+  const planError = useTransitStore((state) => state.planError);
+  const planLoading = useTransitStore((state) => state.planLoading);
+  const selectedRouteIndex = useTransitStore((state) => state.selectedRouteIndex);
+  const openSelectedRouteDetails = useTransitStore((state) => state.openSelectedRouteDetails);
+  const setOpenSelectedRouteDetails = useTransitStore((state) => state.setOpenSelectedRouteDetails);
+  const timeOption = useTransitStore((state) => state.timeOption);
+  const selectedDateTime = useTransitStore((state) => state.selectedDateTime);
+  const activeOverlay = useTransitStore((state) => state.activeOverlay);
 
   const showPlannerComponent = isDesktop
     ? showPlanner
@@ -55,14 +69,19 @@ export function HomeRoutePlannerLayer({
   return (
     <RoutePlanner
       userLocation={userLocation}
-      origin={origin}
-      destination={destination}
+      plannerStops={plannerStops}
       pickingPoint={pickingPoint}
       onStartPicking={onStartPicking}
-      onSetOrigin={onSetOrigin}
-      onSetDestination={onSetDestination}
+      onSetStopPoint={onSetStopPoint}
+      onSetStopDwell={onSetStopDwell}
+      onSetStopDepartureOverride={onSetStopDepartureOverride}
+      onAddStop={onAddStop}
+      onMoveStop={onMoveStop}
+      onRemoveStop={onRemoveStop}
+      onReturnToStart={onReturnToStart}
       onPlanRoute={onPlanRoute}
       routePlan={routePlan}
+      multiRoutePlan={multiRoutePlan}
       planError={planError}
       planLoading={planLoading}
       selectedRouteIndex={selectedRouteIndex}
@@ -70,13 +89,14 @@ export function HomeRoutePlannerLayer({
       onClose={onClose}
       onLocateVehicle={onLocateVehicle}
       timeOption={timeOption}
-      onTimeOptionChange={setTimeOption}
+      onTimeOptionChange={onTimeOptionChange}
       selectedDateTime={selectedDateTime}
-      onDateTimeChange={setSelectedDateTime}
-      onSwap={onSwap}
+      onDateTimeChange={onDateTimeChange}
+      onSwapEndpoints={onSwapEndpoints}
       onClear={onClear}
       openSelectedRouteDetails={openSelectedRouteDetails}
       onConsumeOpenSelectedRouteDetails={() => setOpenSelectedRouteDetails(false)}
+      hasSearchedCurrentDraft={hasSearchedCurrentDraft}
     />
   );
 }

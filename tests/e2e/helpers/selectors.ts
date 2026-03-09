@@ -62,10 +62,13 @@ export const search = {
 export const directions = {
   originInput: (p: Page) => p.getByPlaceholder("From").last(),
   destinationInput: (p: Page) => p.getByPlaceholder("To").last(),
+  stopInput: (p: Page, index: number) => p.getByPlaceholder(`Stop ${index}`).last(),
   swapBtn: (p: Page) => p.getByTitle("Swap").last(),
   timeSelect: (p: Page) => p.locator("select").last(),
   datetimeInput: (p: Page) =>
     p.locator("input[type='datetime-local']").last(),
+  addStopBtn: (p: Page) => p.getByRole("button", { name: "Add stop" }).last(),
+  returnToStartBtn: (p: Page) => p.getByRole("button", { name: "Return to start" }).last(),
   // Exclude the bottom nav "Search" button by scoping outside <nav>
   searchBtn: (p: Page) =>
     p.locator("button:not(nav button)")

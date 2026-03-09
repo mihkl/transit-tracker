@@ -1,5 +1,25 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import { nav, directions, waitForHydration } from "../helpers/selectors";
+
+async function selectPlace(page: Page, input: Locator, query: string) {
+  await input.fill(query);
+  const dropdown = page.locator("[cmdk-list]").last();
+  await expect(dropdown).toBeVisible({ timeout: 5000 });
+  const firstResult = dropdown.locator("[cmdk-item]").first();
+  await expect(firstResult).toBeVisible({ timeout: 15_000 });
+  await firstResult.click();
+}
+
+async function planMultiStopJourney(page: Page) {
+  await selectPlace(page, directions.originInput(page), "Viru");
+  await selectPlace(page, directions.destinationInput(page), "Balti jaam");
+  await directions.addStopBtn(page).click();
+  await selectPlace(page, directions.stopInput(page, 1), "Telliskivi");
+  await directions.searchBtn(page).click();
+  await expect(page.getByRole("button", { name: /Edit itinerary/i })).toBeVisible({
+    timeout: 40_000,
+  });
+}
 
 test.describe("Directions", () => {
   test.beforeEach(async ({ page }) => {
@@ -69,6 +89,32 @@ test.describe("Directions", () => {
     await directions.timeSelect(page).selectOption("arrive");
     await expect(directions.datetimeInput(page)).toBeVisible();
   });
+
+  test("can add and remove an intermediate stop", async ({ page }) => {
+    await directions.addStopBtn(page).click();
+    await expect(directions.stopInput(page, 1)).toBeVisible();
+
+    await page.getByLabel("Remove stop 2").last().click();
+    await expect(directions.stopInput(page, 1)).not.toBeVisible();
+  });
+
+  test("does not show a remove button when only origin and destination are present", async ({ page }) => {
+    await expect(page.getByLabel("Remove stop 2")).toHaveCount(0);
+  });
+
+  test("return to start adds a final stop after an intermediate stop", async ({ page }) => {
+    await directions.originInput(page).fill("Viru");
+    const originDropdown = page.locator("[cmdk-list]");
+    await expect(originDropdown).toBeVisible({ timeout: 5000 });
+    await originDropdown.locator("[cmdk-item]").first().click();
+
+    await directions.addStopBtn(page).click();
+    await directions.returnToStartBtn(page).click();
+
+    await expect(directions.stopInput(page, 1)).toBeVisible();
+    await expect(directions.stopInput(page, 2)).toBeVisible();
+    await expect(directions.destinationInput(page)).toBeVisible();
+  });
 });
 
 test.describe("Directions search flow", () => {
@@ -122,20 +168,10 @@ test.describe("Directions search flow", () => {
     test.setTimeout(60_000);
 
     // Fill origin
-    await directions.originInput(page).fill("Viru väljak");
-    const originDropdown = page.locator("[cmdk-list]").first();
-    await expect(originDropdown).toBeVisible({ timeout: 5000 });
-    const originResult = originDropdown.locator("[cmdk-item]").first();
-    await expect(originResult).toBeVisible({ timeout: 15000 });
-    await originResult.click();
+    await selectPlace(page, directions.originInput(page), "Viru väljak");
 
     // Fill destination
-    await directions.destinationInput(page).fill("Ülemiste");
-    const destDropdown = page.locator("[cmdk-list]").last();
-    await expect(destDropdown).toBeVisible({ timeout: 5000 });
-    const destResult = destDropdown.locator("[cmdk-item]").first();
-    await expect(destResult).toBeVisible({ timeout: 15000 });
-    await destResult.click();
+    await selectPlace(page, directions.destinationInput(page), "Ülemiste");
 
     // Search button should now be enabled
     const searchBtn = directions.searchBtn(page);
@@ -160,5 +196,37 @@ test.describe("Directions search flow", () => {
         page.getByLabel("Back to all routes"),
       ).toBeVisible({ timeout: 3000 });
     }
+  });
+
+  test("reorders a searched multi-stop journey and refreshes the itinerary automatically", async ({ page }) => {
+    test.setTimeout(90_000);
+
+    await planMultiStopJourney(page);
+    await expect(page.getByText("Viru Keskus to Telliskivi Creative City").last()).toBeVisible();
+
+    await page.getByRole("button", { name: /Edit itinerary/i }).click();
+    await page.locator("[aria-label='Move stop 1 down']:visible").first().click();
+
+    await expect(page.getByText("Telliskivi Creative City to Viru Keskus").last()).toBeVisible({
+      timeout: 40_000,
+    });
+  });
+
+  test("shows a neutral state instead of no-routes after adding an empty intermediate stop", async ({ page }) => {
+    test.setTimeout(60_000);
+
+    await selectPlace(page, directions.originInput(page), "Viru väljak");
+    await selectPlace(page, directions.destinationInput(page), "Ülemiste");
+    await directions.searchBtn(page).click();
+
+    await Promise.any([
+      page.getByRole("button", { name: /\b\d+\s*min\b/i }).first().waitFor({ state: "visible", timeout: 40_000 }),
+      page.getByText("No routes found").first().waitFor({ state: "visible", timeout: 40_000 }),
+    ]);
+
+    await directions.addStopBtn(page).click();
+    await expect(directions.stopInput(page, 1)).toBeVisible();
+    await expect(page.getByText("No routes found")).toHaveCount(0);
+    await expect(page.getByText("Itinerary")).toHaveCount(0);
   });
 });

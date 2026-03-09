@@ -149,6 +149,65 @@ export interface RoutePlanResponse {
   routes: PlannedRoute[];
 }
 
+export interface MultiRouteStopRequest {
+  lat: number;
+  lng: number;
+  name?: string;
+  dwellMinutes?: number;
+  departureOverride?: string;
+}
+
+export interface MultiRoutePlanRequest {
+  stops: MultiRouteStopRequest[];
+  timeMode: "now" | "depart" | "arrive";
+  anchorTime?: string;
+  routingPreference?: "FEWER_TRANSFERS" | "LESS_WALKING";
+  liveWindowMinutes?: number;
+}
+
+export interface ItineraryStop {
+  lat: number;
+  lng: number;
+  name: string;
+}
+
+export interface MultiRouteSegment {
+  id: string;
+  segmentIndex: number;
+  origin: ItineraryStop;
+  destination: ItineraryStop;
+  dwellMinutes: number;
+  departureOverride?: string;
+  requestedDepartureTime?: string;
+  requestedArrivalTime?: string;
+  route: PlannedRoute;
+  departureTime: string;
+  arrivalTime: string;
+  liveEligible: boolean;
+  status: "live" | "scheduled-only";
+}
+
+export interface MultiRoutePlanFailure {
+  segmentIndex: number;
+  origin: ItineraryStop;
+  destination: ItineraryStop;
+  message: string;
+}
+
+export interface MultiRouteItinerary {
+  segments: MultiRouteSegment[];
+  totalTravelDuration: string;
+  totalDwellMinutes: number;
+  totalDistanceMeters: string;
+  startTime: string;
+  endTime: string;
+}
+
+export interface MultiRoutePlanResponse {
+  itinerary: MultiRouteItinerary | null;
+  failedSegment?: MultiRoutePlanFailure;
+}
+
 export interface PlannedRoute {
   duration: string;
   distanceMeters: string;

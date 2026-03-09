@@ -1,4 +1,4 @@
-import type { PlannedRoute, RoutePlanResponse } from "@/lib/types";
+import type { MultiRoutePlanResponse, PlannedRoute, RoutePlanResponse } from "@/lib/types";
 import { parseDurationSeconds } from "@/lib/route-time";
 
 export type RoutingMode = "fastest" | "less-walking" | "fewer-transfers";
@@ -7,6 +7,12 @@ export interface RouteCache {
   fastest: RoutePlanResponse | null;
   lessWalking: RoutePlanResponse | null;
   fewerTransfers: RoutePlanResponse | null;
+}
+
+export interface MultiRouteCache {
+  fastest: MultiRoutePlanResponse | null;
+  lessWalking: MultiRoutePlanResponse | null;
+  fewerTransfers: MultiRoutePlanResponse | null;
 }
 
 export const ROUTING_MODES: {
@@ -73,4 +79,25 @@ export function resolveRoutePlan(cache: RouteCache, mode: RoutingMode) {
     : mode === "less-walking"
       ? cache.lessWalking
       : cache.fewerTransfers;
+}
+
+export function resolveMultiRoutePlan(cache: MultiRouteCache, mode: RoutingMode) {
+  return mode === "fastest"
+    ? cache.fastest
+    : mode === "less-walking"
+      ? cache.lessWalking
+      : cache.fewerTransfers;
+}
+
+function itineraryDuration(response: MultiRoutePlanResponse | null) {
+  return parseDurationSeconds(response?.itinerary?.totalTravelDuration);
+}
+
+export function fastestMultiRoute(
+  a: MultiRoutePlanResponse | null,
+  b: MultiRoutePlanResponse | null,
+) {
+  if (!a?.itinerary) return b;
+  if (!b?.itinerary) return a;
+  return itineraryDuration(a) <= itineraryDuration(b) ? a : b;
 }

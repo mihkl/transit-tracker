@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { useTransitStore } from "@/store/use-transit-store";
+import { createInitialPlannerStops, useTransitStore } from "@/store/use-transit-store";
 import { useHashRouter } from "@/hooks/use-hash-router";
 import { navigateTo } from "@/lib/navigation";
 import type { PlannedRoute, RoutePlanResponse } from "@/lib/types";
@@ -16,7 +16,9 @@ interface StoredRouteSnapshot {
 
 export function HomeStateEffects() {
   const setShowPlanner = useTransitStore((s) => s.setShowPlanner);
+  const setPlannerStops = useTransitStore((s) => s.setPlannerStops);
   const setRoutePlan = useTransitStore((s) => s.setRoutePlan);
+  const setMultiRoutePlan = useTransitStore((s) => s.setMultiRoutePlan);
   const setSelectedRouteIndex = useTransitStore((s) => s.setSelectedRouteIndex);
   const setOpenSelectedRouteDetails = useTransitStore((s) => s.setOpenSelectedRouteDetails);
   const bumpMapKey = useTransitStore((s) => s.bumpMapKey);
@@ -37,7 +39,9 @@ export function HomeStateEffects() {
       if (!isFresh || !hasLegs) return;
 
       setShowPlanner(true);
+      setPlannerStops(createInitialPlannerStops());
       setRoutePlan({ routes: [snapshot.route] } as RoutePlanResponse);
+      setMultiRoutePlan(null);
       setSelectedRouteIndex(0);
       setOpenSelectedRouteDetails(true);
       navigateTo("directions", { replace: true });
@@ -50,7 +54,14 @@ export function HomeStateEffects() {
       const nextUrl = `${window.location.pathname}${next ? `?${next}` : ""}${hash}`;
       window.history.replaceState(window.history.state, "", nextUrl);
     }
-  }, [setOpenSelectedRouteDetails, setRoutePlan, setSelectedRouteIndex, setShowPlanner]);
+  }, [
+    setMultiRoutePlan,
+    setOpenSelectedRouteDetails,
+    setPlannerStops,
+    setRoutePlan,
+    setSelectedRouteIndex,
+    setShowPlanner,
+  ]);
 
   useEffect(() => {
     const STALE_MS = 5 * 60 * 1000;

@@ -25,25 +25,29 @@ export interface SavedLocation {
 interface PlaceSearchInputProps {
   value: { lat: number; lng: number; name?: string } | null;
   onSelect: (place: { lat: number; lng: number; name: string }) => void;
-  pickingPoint: "origin" | "destination" | null;
-  pointType: "origin" | "destination";
-  onStartPicking: (point: "origin" | "destination" | null) => void;
+  pickingPoint: string | null;
+  pointId: string;
+  onStartPicking: (point: string | null) => void;
+  placeholder: string;
   currentLocation?: { lat: number; lng: number } | null;
   savedLocations?: SavedLocation[];
   onSaveLocation?: (point: { lat: number; lng: number; name: string }, nickname?: string) => void;
   isLocationSaved?: (lat: number, lng: number) => boolean;
+  allowCurrentLocation?: boolean;
 }
 
 export function PlaceSearchInput({
   value,
   onSelect,
   pickingPoint,
-  pointType,
+  pointId,
   onStartPicking,
+  placeholder,
   currentLocation,
   savedLocations,
   onSaveLocation,
   isLocationSaved,
+  allowCurrentLocation = false,
 }: PlaceSearchInputProps) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<PlaceSearchResult[]>([]);
@@ -139,9 +143,8 @@ export function PlaceSearchInput({
   }, []);
   useClickOutside(wrapperRef, closeDropdown);
 
-  const isPicking = pickingPoint === pointType;
-  const isOrigin = pointType === "origin";
-  const canUseMyLocation = isOrigin && !!currentLocation;
+  const isPicking = pickingPoint === pointId;
+  const canUseMyLocation = allowCurrentLocation && !!currentLocation;
   const alreadySaved = value ? isLocationSaved?.(value.lat, value.lng) : false;
   const showBookmark = !!value && !!onSaveLocation;
 
@@ -160,7 +163,7 @@ export function PlaceSearchInput({
             showBookmark ? "pr-[4.5rem]" : "pr-16"
           }`}
           type="text"
-          placeholder={isOrigin ? "From" : "To"}
+          placeholder={placeholder}
           value={query}
           onChange={handleInput}
           onFocus={() => setShowDropdown(true)}
@@ -201,7 +204,7 @@ export function PlaceSearchInput({
         {/* Map picker button */}
         <button
           type="button"
-          onClick={() => onStartPicking(isPicking ? null : pointType)}
+          onClick={() => onStartPicking(isPicking ? null : pointId)}
           className={`absolute right-1.5 top-1/2 -translate-y-1/2 w-7 h-7 rounded-lg flex items-center justify-center transition-all ${
             isPicking
               ? "bg-primary text-white"

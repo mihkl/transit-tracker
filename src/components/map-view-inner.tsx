@@ -3,7 +3,7 @@
 import { useMemo, useCallback, useRef, useState, useEffect } from "react";
 import Map, { Marker, Source, Layer, Popup, type MapRef } from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
-import type { VehicleDto, RoutePlanResponse, StopDto } from "@/lib/types";
+import type { MultiRoutePlanResponse, RoutePlanResponse, StopDto, VehicleDto } from "@/lib/types";
 import { TALLINN_CENTER, DEFAULT_ZOOM, TYPE_COLORS } from "@/lib/constants";
 import { BottomSheet } from "@/components/bottom-sheet";
 import type { MapLayerMouseEvent } from "maplibre-gl";
@@ -34,6 +34,7 @@ import {
   fitMapToPoints,
   ROUTE_LEG_COLOR_EXPRESSION,
 } from "@/components/map/map-view-helpers";
+import type { PlannerStop } from "@/store/use-transit-store";
 
 const INITIAL_VIEW_STATE = {
   longitude: TALLINN_CENTER[1],
@@ -44,12 +45,12 @@ const INITIAL_VIEW_STATE = {
 export interface MapViewInnerProps {
   vehicles: VehicleDto[];
   routePlan: RoutePlanResponse | null;
+  multiRoutePlan: MultiRoutePlanResponse | null;
   selectedRouteIndex: number;
   routeFitRequest?: number;
-  origin: { lat: number; lng: number } | null;
-  destination: { lat: number; lng: number } | null;
-  pickingPoint: "origin" | "destination" | null;
-  onMapClick: (pointType: "origin" | "destination", lat: number, lng: number) => void;
+  plannerStops: PlannerStop[];
+  pickingPoint: string | null;
+  onMapClick: (stopId: string, lat: number, lng: number) => void;
   focusedVehicleId: string | null;
   shapes: Record<string, number[][]> | null;
   onVehicleClick: (id: string) => void;
@@ -62,10 +63,10 @@ export interface MapViewInnerProps {
 export function MapViewInner({
   vehicles,
   routePlan,
+  multiRoutePlan,
   selectedRouteIndex,
   routeFitRequest = 0,
-  origin,
-  destination,
+  plannerStops,
   pickingPoint,
   onMapClick,
   focusedVehicleId,
@@ -272,12 +273,14 @@ export function MapViewInner({
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !routePlan || !routePlan.routes[selectedRouteIndex]) return;
+    if (!map) return;
 
-    const route = routePlan.routes[selectedRouteIndex];
-    const points = route.legs.flatMap((leg) => leg.polyline);
+    const points = multiRoutePlan?.itinerary
+      ? multiRoutePlan.itinerary.segments.flatMap((segment) => segment.route.legs.flatMap((leg) => leg.polyline))
+      : routePlan?.routes[selectedRouteIndex]?.legs.flatMap((leg) => leg.polyline) ?? [];
+    if (points.length === 0) return;
     fitMapToPoints(map, points, { isDesktop, reserveBottomSpace: !isDesktop });
-  }, [routePlan, selectedRouteIndex, routeFitRequest, isDesktop]);
+  }, [routePlan, multiRoutePlan, selectedRouteIndex, routeFitRequest, isDesktop]);
 
   const handleMoveEnd = useCallback(() => {
     const map = mapRef.current?.getMap();
@@ -307,8 +310,8 @@ export function MapViewInner({
   }, []);
 
   const routeLegsGeoJson = useMemo(() => {
-    return buildRouteLegFeatures(routePlan, selectedRouteIndex);
-  }, [routePlan, selectedRouteIndex]);
+    return buildRouteLegFeatures(routePlan, selectedRouteIndex, multiRoutePlan);
+  }, [routePlan, multiRoutePlan, selectedRouteIndex]);
 
   const vehicleRouteGeoJson = useMemo(() => {
     return buildVehicleRouteFeature(focusedVehicle, shapes);
@@ -325,8 +328,8 @@ export function MapViewInner({
   );
 
   const boardingStops = useMemo(() => {
-    return buildBoardingStops(routePlan, selectedRouteIndex);
-  }, [routePlan, selectedRouteIndex]);
+    return buildBoardingStops(routePlan, selectedRouteIndex, multiRoutePlan);
+  }, [routePlan, multiRoutePlan, selectedRouteIndex]);
 
   const handleBottomSheetClose = useCallback(() => {
     setPopupVehicle(null);
@@ -433,17 +436,23 @@ export function MapViewInner({
             </Marker>
           ))}
 
-        {origin && (
-          <Marker longitude={origin.lng} latitude={origin.lat} anchor="bottom">
-            <PinIcon color="#22c55e" label="A" />
-          </Marker>
-        )}
+        {plannerStops.map((stop, index) => {
+          if (!stop.point) return null;
 
-        {destination && (
-          <Marker longitude={destination.lng} latitude={destination.lat} anchor="bottom">
-            <PinIcon color="#ef4444" label="B" />
-          </Marker>
-        )}
+          const label = String.fromCharCode(65 + index);
+          const color =
+            index === 0
+              ? "#22c55e"
+              : index === plannerStops.length - 1
+                ? "#ef4444"
+                : "#0f766e";
+
+          return (
+            <Marker key={stop.id} longitude={stop.point.lng} latitude={stop.point.lat} anchor="bottom">
+              <PinIcon color={color} label={label} />
+            </Marker>
+          );
+        })}
 
         {boardingStops.map((stop, i) => {
           const color = stop.transportType

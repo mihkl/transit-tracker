@@ -9,7 +9,7 @@ interface HomeMapLayerProps {
   shapes: Record<string, number[][]>;
   vehicles: VehicleDto[];
   loading: boolean;
-  onMapClick: (pointType: "origin" | "destination", lat: number, lng: number) => void;
+  onMapClick: (stopId: string, lat: number, lng: number) => void;
   onVehicleClick: (id: string) => void;
   onDeselectVehicle: () => void;
 }
@@ -24,10 +24,10 @@ export function HomeMapLayer({
 }: HomeMapLayerProps) {
   const mapKey = useTransitStore((s) => s.mapKey);
   const routePlan = useTransitStore((s) => s.routePlan);
+  const multiRoutePlan = useTransitStore((s) => s.multiRoutePlan);
   const selectedRouteIndex = useTransitStore((s) => s.selectedRouteIndex);
   const routeFitRequest = useTransitStore((s) => s.routeFitRequest);
-  const origin = useTransitStore((s) => s.origin);
-  const destination = useTransitStore((s) => s.destination);
+  const plannerStops = useTransitStore((s) => s.plannerStops);
   const pickingPoint = useTransitStore((s) => s.pickingPoint);
   const focusedVehicleId = useTransitStore((s) => s.focusedVehicleId);
   const selectedStop = useTransitStore((s) => s.selectedStop);
@@ -41,9 +41,9 @@ export function HomeMapLayer({
         key={mapKey}
         vehicles={vehicles}
         routePlan={routePlan}
+        multiRoutePlan={multiRoutePlan}
         selectedRouteIndex={selectedRouteIndex}
-        origin={origin}
-        destination={destination}
+        plannerStops={plannerStops}
         pickingPoint={pickingPoint}
         onMapClick={onMapClick}
         focusedVehicleId={focusedVehicleId}

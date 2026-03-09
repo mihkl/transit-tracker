@@ -6,6 +6,8 @@ import type {
   Map as MaplibreMap,
 } from "maplibre-gl";
 import type {
+  MultiRoutePlanResponse,
+  RouteLeg,
   RoutePlanResponse,
   StopDto,
   VehicleDto,
@@ -140,13 +142,26 @@ export function addVehicleArrowImage(map: MaplibreMap) {
   map.addImage("vehicle-arrow", imageData, { sdf: true });
 }
 
+function getDisplayLegs(
+  routePlan: RoutePlanResponse | null,
+  selectedRouteIndex: number,
+  multiRoutePlan?: MultiRoutePlanResponse | null,
+): RouteLeg[] {
+  if (multiRoutePlan?.itinerary) {
+    return multiRoutePlan.itinerary.segments.flatMap((segment) => segment.route.legs);
+  }
+  if (!routePlan || !routePlan.routes[selectedRouteIndex]) return [];
+  return routePlan.routes[selectedRouteIndex].legs;
+}
+
 export function buildRouteLegFeatures(
   routePlan: RoutePlanResponse | null,
   selectedRouteIndex: number,
+  multiRoutePlan?: MultiRoutePlanResponse | null,
 ) {
-  if (!routePlan || !routePlan.routes[selectedRouteIndex]) return null;
-  const route = routePlan.routes[selectedRouteIndex];
-  return route.legs.map((leg) => ({
+  const legs = getDisplayLegs(routePlan, selectedRouteIndex, multiRoutePlan);
+  if (legs.length === 0) return null;
+  return legs.map((leg) => ({
     type: "Feature" as const,
     properties: {
       mode: leg.mode,
@@ -219,10 +234,9 @@ export function buildStopsFeatureCollection(stops: StopDto[]) {
 export function buildBoardingStops(
   routePlan: RoutePlanResponse | null,
   selectedRouteIndex: number,
+  multiRoutePlan?: MultiRoutePlanResponse | null,
 ) {
-  if (!routePlan || !routePlan.routes[selectedRouteIndex]) return [];
-
-  const route = routePlan.routes[selectedRouteIndex];
+  const legs = getDisplayLegs(routePlan, selectedRouteIndex, multiRoutePlan);
   const stops: {
     lat: number;
     lng: number;
@@ -231,7 +245,7 @@ export function buildBoardingStops(
     transportType?: LineType;
   }[] = [];
 
-  for (const leg of route.legs) {
+  for (const leg of legs) {
     if (leg.mode !== "WALK" && leg.departureStopLat && leg.departureStopLng) {
       stops.push({
         lat: leg.departureStopLat,

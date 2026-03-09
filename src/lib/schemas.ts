@@ -66,6 +66,92 @@ export const routePlanRequestSchema = z
     message: "Only one of departureTime or arrivalTime can be set",
   });
 
+export const multiRouteStopRequestSchema = z.object({
+  lat: z.number(),
+  lng: z.number(),
+  name: z.string().optional(),
+  dwellMinutes: z.number().int().min(0).max(24 * 60).optional(),
+  departureOverride: z.string().optional(),
+});
+
+export const multiRoutePlanRequestSchema = z.object({
+  stops: z.array(multiRouteStopRequestSchema).min(3).max(5),
+  timeMode: z.enum(["now", "depart", "arrive"]),
+  anchorTime: z.string().optional(),
+  routingPreference: z.enum(["FEWER_TRANSFERS", "LESS_WALKING"]).optional(),
+  liveWindowMinutes: z.number().int().min(1).max(24 * 60).optional(),
+}).superRefine((value, ctx) => {
+  if (value.timeMode !== "now" && !value.anchorTime) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "anchorTime is required unless timeMode is now",
+      path: ["anchorTime"],
+    });
+  }
+
+  value.stops.forEach((stop, index) => {
+    if (index === 0 || index === value.stops.length - 1) {
+      if (stop.dwellMinutes != null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Only intermediate stops can define dwellMinutes",
+          path: ["stops", index, "dwellMinutes"],
+        });
+      }
+      if (stop.departureOverride) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Only intermediate stops can define departureOverride",
+          path: ["stops", index, "departureOverride"],
+        });
+      }
+    }
+  });
+});
+
+export const itineraryStopSchema = z.object({
+  lat: z.number(),
+  lng: z.number(),
+  name: z.string(),
+});
+
+export const multiRouteSegmentSchema = z.object({
+  id: z.string(),
+  segmentIndex: z.number().int().min(0),
+  origin: itineraryStopSchema,
+  destination: itineraryStopSchema,
+  dwellMinutes: z.number().int().min(0),
+  departureOverride: z.string().optional(),
+  requestedDepartureTime: z.string().optional(),
+  requestedArrivalTime: z.string().optional(),
+  route: plannedRouteSchema,
+  departureTime: z.string(),
+  arrivalTime: z.string(),
+  liveEligible: z.boolean(),
+  status: z.enum(["live", "scheduled-only"]),
+});
+
+export const multiRoutePlanFailureSchema = z.object({
+  segmentIndex: z.number().int().min(0),
+  origin: itineraryStopSchema,
+  destination: itineraryStopSchema,
+  message: z.string(),
+});
+
+export const multiRouteItinerarySchema = z.object({
+  segments: z.array(multiRouteSegmentSchema),
+  totalTravelDuration: z.string(),
+  totalDwellMinutes: z.number().int().min(0),
+  totalDistanceMeters: z.string(),
+  startTime: z.string(),
+  endTime: z.string(),
+});
+
+export const multiRoutePlanResponseSchema = z.object({
+  itinerary: multiRouteItinerarySchema.nullable(),
+  failedSegment: multiRoutePlanFailureSchema.optional(),
+});
+
 export const placesQuerySchema = z.string().trim().min(2).max(120);
 
 export const stopIdSchema = z.string().trim().min(1).max(64);

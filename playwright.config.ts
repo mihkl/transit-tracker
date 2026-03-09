@@ -26,14 +26,14 @@ export default defineConfig({
         ...devices["Pixel 7"],
       },
     },
-    // {
-    //   name: "Desktop Chromium",
-    //   testDir: "./tests/e2e/desktop",
-    //   use: {
-    //     ...devices["Desktop Chrome"],
-    //     viewport: { width: 1440, height: 900 },
-    //   },
-    // },
+    {
+      name: "Desktop Chromium",
+      testDir: "./tests/e2e/desktop",
+      use: {
+        ...devices["Desktop Chrome"],
+        viewport: { width: 1440, height: 900 },
+      },
+    },
   ],
   webServer: {
     command: `npm run dev -- --hostname 127.0.0.1 --port ${port}`,

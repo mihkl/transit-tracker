@@ -1,9 +1,23 @@
 "use client";
 
-import { Fragment } from "react";
+import { Fragment, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Footprints, Zap, ArrowRightLeft, X, ArrowUpDown, Search, Bell, ChevronLeft } from "lucide-react";
+import {
+  ArrowRightLeft,
+  ArrowUpDown,
+  Bell,
+  ChevronDown,
+  ChevronLeft,
+  ChevronUp,
+  CornerDownLeft,
+  Footprints,
+  Plus,
+  Search,
+  Trash2,
+  X,
+  Zap,
+} from "lucide-react";
 import { Icon } from "@/components/icon";
 import { PlaceSearchInput } from "./place-search-input";
 import { RouteLegCard, TransferBadge } from "./route-leg-card";
@@ -14,14 +28,25 @@ import { useDragDismiss } from "@/hooks/use-drag-dismiss";
 import { usePlannerSavedLocations } from "@/hooks/use-planner-saved-locations";
 import { useRoutePlannerSelection } from "@/hooks/use-route-planner-selection";
 import { useRoutePlannerInsights } from "@/hooks/use-route-planner-insights";
-import type { RoutePlanResponse, PlannedRoute, RouteLeg } from "@/lib/types";
+import type { MultiRoutePlanResponse, PlannedRoute, RouteLeg, RoutePlanResponse } from "@/lib/types";
 import { SavedPlannerPanel } from "@/components/saved-planner-panel";
-import { useTransitStore } from "@/store/use-transit-store";
+import { useTransitStore, type PlannerStop } from "@/store/use-transit-store";
 import { ROUTING_MODES } from "@/lib/route-filter";
 
 export type TimeOption = "now" | "depart" | "arrive";
 
-/* ── Helpers ────────────────────────────────────────────────── */
+interface ReminderProps {
+  isSet: boolean;
+  minutesUntil: number | null;
+  isLiveAdjusted: boolean;
+  error: string | null;
+  status: {
+    tone: "info" | "warning" | "error";
+    message: string;
+  } | null;
+  onSchedule: () => void;
+  onClear: () => void;
+}
 
 function getRouteTimeRange(route: PlannedRoute) {
   let firstTransitDep = "";
@@ -62,26 +87,45 @@ function getRouteTimeRange(route: PlannedRoute) {
     arr = formatTime(new Date(arrTime.getTime() + walkAfterSeconds * 1000).toISOString());
   }
 
-  return {
-    dep,
-    arr,
-    firstTransitDep,
-    walkBefore: Math.round(walkBeforeSeconds / 60),
-  };
+  return { dep, arr };
 }
 
-/* ── Leg chain (compact badges) ─────────────────────────────── */
+function hasConsecutiveDuplicateStops(stops: PlannerStop[]) {
+  for (let index = 0; index < stops.length - 1; index += 1) {
+    const current = stops[index].point;
+    const next = stops[index + 1].point;
+    if (!current || !next) continue;
+    if (Math.abs(current.lat - next.lat) < 0.0001 && Math.abs(current.lng - next.lng) < 0.0001) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function hasResolvedStops(stops: PlannerStop[]) {
+  return stops.length >= 2 && stops.every((stop) => !!stop.point);
+}
+
+function stopLabel(index: number) {
+  return String.fromCharCode(65 + index);
+}
+
+function stopPlaceholder(index: number, totalStops: number) {
+  if (index === 0) return "From";
+  if (index === totalStops - 1) return "To";
+  return `Stop ${index}`;
+}
 
 function LegChain({ legs }: { legs: RouteLeg[] }) {
   const visible = legs.filter(
-    (l) => !(l.mode === "WALK" && formatDuration(l.duration) === "0 min"),
+    (leg) => !(leg.mode === "WALK" && formatDuration(leg.duration) === "0 min"),
   );
 
   return (
     <div className="flex items-center gap-1.5 flex-wrap">
-      {visible.map((leg, i) => (
-        <div key={i} className="flex items-center gap-1.5">
-          {i > 0 && (
+      {visible.map((leg, index) => (
+        <div key={index} className="flex items-center gap-1.5">
+          {index > 0 && (
             <Icon name="chevron-right-sm" size={8} className="text-foreground/20 shrink-0" />
           )}
           {leg.mode === "WALK" ? (
@@ -103,27 +147,31 @@ function LegChain({ legs }: { legs: RouteLeg[] }) {
   );
 }
 
-/* ── Leg list with interleaved transfer badges ──────────────── */
-
 function LegList({
   route,
   transfersByArrivingLeg,
   onLocateVehicle,
+  allowLocateVehicle = true,
 }: {
   route: PlannedRoute;
   transfersByArrivingLeg: Map<RouteLeg, TransferInfo>;
   onLocateVehicle: (leg: RouteLeg) => void;
+  allowLocateVehicle?: boolean;
 }) {
   const visible = route.legs.filter(
-    (l) => !(l.mode === "WALK" && formatDuration(l.duration) === "0 min"),
+    (leg) => !(leg.mode === "WALK" && formatDuration(leg.duration) === "0 min"),
   );
 
   return (
     <>
-      {visible.map((leg, i) => (
-        <Fragment key={i}>
-          <RouteLegCard leg={leg} onLocateVehicle={onLocateVehicle} />
-          {transfersByArrivingLeg.has(leg) && (
+      {visible.map((leg, index) => (
+        <Fragment key={index}>
+          <RouteLegCard
+            leg={leg}
+            onLocateVehicle={onLocateVehicle}
+            allowLocateVehicle={allowLocateVehicle}
+          />
+          {allowLocateVehicle && transfersByArrivingLeg.has(leg) && (
             <TransferBadge transfer={transfersByArrivingLeg.get(leg)!} />
           )}
         </Fragment>
@@ -132,25 +180,42 @@ function LegList({
   );
 }
 
-/* ── Route card ─────────────────────────────────────────────── */
-
-interface ReminderProps {
-  isSet: boolean;
-  minutesUntil: number | null;
-  isLiveAdjusted: boolean;
-  error: string | null;
-  status: {
-    tone: "info" | "warning" | "error";
-    message: string;
-  } | null;
-  onSchedule: () => void;
-  onClear: () => void;
-}
-
 function getReminderStatusClassName(tone: "info" | "warning" | "error") {
   if (tone === "error") return "text-rose-700";
   if (tone === "warning") return "text-amber-700";
   return "text-sky-700";
+}
+
+function RouteSummary({
+  route,
+  durationClassName,
+  timeClassName,
+  rowClassName = "flex items-baseline justify-between gap-3",
+  showLegChain = true,
+  legChainClassName = "mt-2",
+}: {
+  route: PlannedRoute;
+  durationClassName: string;
+  timeClassName: string;
+  rowClassName?: string;
+  showLegChain?: boolean;
+  legChainClassName?: string;
+}) {
+  const { dep, arr } = getRouteTimeRange(route);
+
+  return (
+    <>
+      <div className={rowClassName}>
+        <span className={durationClassName}>{formatDuration(route.duration)}</span>
+        {dep && arr && <span className={timeClassName}>{dep} — {arr}</span>}
+      </div>
+      {showLegChain && (
+        <div className={legChainClassName}>
+          <LegChain legs={route.legs} />
+        </div>
+      )}
+    </>
+  );
 }
 
 function RouteCard({
@@ -192,13 +257,10 @@ function RouteCard({
           {reminderProps && (
             <>
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (reminderProps.isSet) {
-                    reminderProps.onClear();
-                  } else {
-                    reminderProps.onSchedule();
-                  }
+                onClick={(event) => {
+                  event.stopPropagation();
+                  if (reminderProps.isSet) reminderProps.onClear();
+                  else reminderProps.onSchedule();
                 }}
                 className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-xl border transition-colors text-left cursor-pointer ${
                   reminderProps.isSet
@@ -239,48 +301,6 @@ function RouteCard({
   );
 }
 
-interface RouteSummaryProps {
-  route: PlannedRoute;
-  durationClassName: string;
-  timeClassName: string;
-  rowClassName?: string;
-  showLegChain?: boolean;
-  legChainClassName?: string;
-}
-
-function RouteSummary({
-  route,
-  durationClassName,
-  timeClassName,
-  rowClassName = "flex items-baseline justify-between gap-3",
-  showLegChain = true,
-  legChainClassName = "mt-2",
-}: RouteSummaryProps) {
-  const { dep, arr } = getRouteTimeRange(route);
-
-  return (
-    <>
-      <div className={rowClassName}>
-        <span className={durationClassName}>{formatDuration(route.duration)}</span>
-        {dep && arr && <span className={timeClassName}>{dep} — {arr}</span>}
-      </div>
-      {showLegChain && (
-        <div className={legChainClassName}>
-          <LegChain legs={route.legs} />
-        </div>
-      )}
-    </>
-  );
-}
-
-function NoRoutesMessage({ className }: { className: string }) {
-  return (
-    <div className={className}>
-      No routes found. Try different locations.
-    </div>
-  );
-}
-
 function MobileRouteOption({
   route,
   isSelected,
@@ -309,18 +329,354 @@ function MobileRouteOption({
   );
 }
 
-/* ── Main RoutePlanner ──────────────────────────────────────── */
+function NoRoutesMessage({ className }: { className: string }) {
+  return <div className={className}>No routes found. Try different locations.</div>;
+}
+
+function PlannerStopEditor({
+  stop,
+  index,
+  totalStops,
+  pickingPoint,
+  userLocation,
+  allSavedLocations,
+  handleSaveLocation,
+  isLocationSaved,
+  onStartPicking,
+  onSetStopPoint,
+  onSetStopDwell,
+  onSetStopDepartureOverride,
+  onMoveStop,
+  onRemoveStop,
+}: {
+  stop: PlannerStop;
+  index: number;
+  totalStops: number;
+  pickingPoint: string | null;
+  userLocation: { lat: number; lng: number } | null;
+  allSavedLocations: { lat: number; lng: number; name: string; nickname?: string }[];
+  handleSaveLocation: (point: { lat: number; lng: number; name: string }, nickname?: string) => void;
+  isLocationSaved: (lat: number, lng: number) => boolean;
+  onStartPicking: (stopId: string | null) => void;
+  onSetStopPoint: (stopId: string, place: { lat: number; lng: number; name?: string }) => void;
+  onSetStopDwell: (stopId: string, dwellMinutes: number) => void;
+  onSetStopDepartureOverride: (stopId: string, departureOverride: string) => void;
+  onMoveStop: (stopId: string, direction: -1 | 1) => void;
+  onRemoveStop: (stopId: string) => void;
+}) {
+  const isFirst = index === 0;
+  const isLast = index === totalStops - 1;
+  const isIntermediate = !isFirst && !isLast;
+  const isMultiStop = totalStops > 2;
+  const canMoveUp = index > 0;
+  const canMoveDown = index < totalStops - 1;
+  const canRemove = totalStops > 2 && !isFirst;
+
+  return (
+    <div>
+      <div className="flex items-center gap-2.5">
+        <div
+          className={`w-7 h-7 rounded-full text-[11px] font-bold flex items-center justify-center shrink-0 ${
+            isFirst
+              ? "bg-blue-50 text-blue-600 ring-1 ring-inset ring-blue-200"
+              : isLast
+                ? "bg-rose-50 text-rose-600 ring-1 ring-inset ring-rose-200"
+                : "bg-foreground/[0.04] text-foreground/55 ring-1 ring-inset ring-foreground/10"
+          }`}
+        >
+          {stopLabel(index)}
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <PlaceSearchInput
+            value={stop.point}
+            onSelect={(place) => onSetStopPoint(stop.id, place)}
+            pickingPoint={pickingPoint}
+            pointId={stop.id}
+            onStartPicking={onStartPicking}
+            placeholder={stopPlaceholder(index, totalStops)}
+            currentLocation={userLocation}
+            allowCurrentLocation={isFirst}
+            savedLocations={allSavedLocations}
+            onSaveLocation={handleSaveLocation}
+            isLocationSaved={isLocationSaved}
+          />
+        </div>
+
+        <div className="flex items-center shrink-0">
+          {isMultiStop && (
+            <div className="flex flex-col -my-1">
+              <button
+                type="button"
+                disabled={!canMoveUp}
+                onClick={() => onMoveStop(stop.id, -1)}
+                className="w-6 h-5 rounded text-foreground/30 hover:text-foreground/60 disabled:opacity-0 disabled:pointer-events-none inline-flex items-center justify-center transition-colors"
+                aria-label={`Move stop ${index + 1} up`}
+              >
+                <ChevronUp size={14} />
+              </button>
+              <button
+                type="button"
+                disabled={!canMoveDown}
+                onClick={() => onMoveStop(stop.id, 1)}
+                className="w-6 h-5 rounded text-foreground/30 hover:text-foreground/60 disabled:opacity-0 disabled:pointer-events-none inline-flex items-center justify-center transition-colors"
+                aria-label={`Move stop ${index + 1} down`}
+              >
+                <ChevronDown size={14} />
+              </button>
+            </div>
+          )}
+          {canRemove && (
+            <button
+              type="button"
+              onClick={() => onRemoveStop(stop.id)}
+              className="w-7 h-7 rounded-lg text-foreground/25 hover:text-rose-500 hover:bg-rose-50 inline-flex items-center justify-center transition-colors"
+              aria-label={`Remove stop ${index + 1}`}
+            >
+              <Trash2 size={13} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {isIntermediate && (
+        <label className="mt-1.5 ml-[38px] inline-flex items-center gap-1.5 rounded-lg border border-foreground/8 bg-foreground/[0.02] px-2.5 py-1.5">
+          <span className="text-[10px] uppercase tracking-wider text-foreground/40 font-semibold">
+            Depart at
+          </span>
+          <input
+            type="time"
+            value={stop.departureOverride}
+            onChange={(event) => {
+              onSetStopDepartureOverride(stop.id, event.target.value);
+            }}
+            className="bg-transparent outline-none text-xs font-semibold text-foreground/80 tabular-nums"
+          />
+        </label>
+      )}
+    </div>
+  );
+}
+
+function MultiRouteResults({
+  plan,
+  onLocateVehicle,
+}: {
+  plan: MultiRoutePlanResponse | null;
+  onLocateVehicle: (leg: RouteLeg) => void;
+}) {
+  const itinerary = plan?.itinerary;
+  const failure = plan?.failedSegment;
+  const [expandedSegmentIndex, setExpandedSegmentIndex] = useState<number | null>(
+    itinerary?.segments[0]?.segmentIndex ?? null,
+  );
+
+  if (!itinerary && !failure) return null;
+
+  return (
+    <div className="space-y-3">
+      {itinerary && (
+        <div className="rounded-2xl border border-foreground/8 bg-white p-4 shadow-sm">
+          <div className="flex items-baseline justify-between gap-3">
+            <div>
+              <div className="text-[11px] uppercase tracking-[0.2em] text-foreground/40 font-semibold">
+                Itinerary
+              </div>
+              <div className="mt-1 text-[22px] font-semibold tracking-tight text-foreground/90">
+                {formatDuration(itinerary.totalTravelDuration)}
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-[13px] font-semibold text-foreground/65 tabular-nums">
+                {formatTime(itinerary.startTime)} — {formatTime(itinerary.endTime)}
+              </div>
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {itinerary.segments.map((segment) => (
+              <Badge
+                key={segment.id}
+                variant="secondary"
+                className="rounded-full bg-foreground/[0.04] text-foreground/65"
+              >
+                {segment.origin.name} to {segment.destination.name}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {itinerary?.segments.map((segment, index) => {
+        const isExpanded = expandedSegmentIndex === segment.segmentIndex;
+        const transferMap = new Map<RouteLeg, TransferInfo>();
+
+        return (
+          <div
+            key={segment.id}
+            className={`rounded-2xl border overflow-hidden ${
+              isExpanded
+                ? "border-primary/25 bg-primary/[0.03] shadow-[0_10px_24px_-18px_rgba(0,96,255,0.45)]"
+                : "border-foreground/8 bg-white"
+            }`}
+          >
+            <button
+              onClick={() => setExpandedSegmentIndex(isExpanded ? null : segment.segmentIndex)}
+              className="w-full px-4 py-3.5 text-left"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[11px] uppercase tracking-[0.2em] text-foreground/35 font-semibold">
+                      Leg {index + 1}
+                    </span>
+                    <span className="text-sm font-semibold text-foreground/85">
+                      {segment.origin.name} to {segment.destination.name}
+                    </span>
+                  </div>
+                  <div className="mt-2 flex items-center gap-3 flex-wrap text-[12px] text-foreground/55 font-medium">
+                    <span className="tabular-nums">
+                      {formatTime(segment.departureTime)} — {formatTime(segment.arrivalTime)}
+                    </span>
+                    <span>{formatDuration(segment.route.duration)}</span>
+                    {segment.dwellMinutes > 0 && <span>then stay {segment.dwellMinutes} min</span>}
+                  </div>
+                  <div className="mt-2">
+                    <LegChain legs={segment.route.legs} />
+                  </div>
+                </div>
+                <div className="text-foreground/35">
+                  {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                </div>
+              </div>
+            </button>
+
+            {isExpanded && (
+              <div className="border-t border-foreground/6 px-3 py-3 space-y-2">
+                <LegList
+                  route={segment.route}
+                  transfersByArrivingLeg={transferMap}
+                  onLocateVehicle={onLocateVehicle}
+                />
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {failure && (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50/80 px-4 py-3">
+          <div className="text-[11px] uppercase tracking-[0.2em] text-rose-500 font-semibold">
+            Segment unavailable
+          </div>
+          <div className="mt-1 text-sm font-semibold text-rose-700">
+            {failure.origin.name} to {failure.destination.name}
+          </div>
+          <div className="mt-1 text-[12px] text-rose-700/90">{failure.message}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function desktopSidebar({
+  formBlock,
+  hasRoutes,
+  routePlan,
+  selectedRouteIndex,
+  expandedRoute,
+  handleRouteClick,
+  onLocateVehicle,
+  noResults,
+  onClose,
+  reminderProps,
+  transfersByArrivingLeg,
+  isMultiStopJourney,
+  multiRoutePlan,
+}: {
+  formBlock: ReactNode;
+  hasRoutes: boolean;
+  routePlan: RoutePlanResponse | null;
+  selectedRouteIndex: number;
+  expandedRoute: number | null;
+  handleRouteClick: (index: number) => void;
+  onLocateVehicle: (leg: RouteLeg) => void;
+  noResults: boolean;
+  onClose: () => void;
+  reminderProps?: ReminderProps;
+  transfersByArrivingLeg: Map<RouteLeg, TransferInfo>;
+  isMultiStopJourney: boolean;
+  multiRoutePlan: MultiRoutePlanResponse | null;
+}) {
+  return (
+    <div className="hidden md:flex w-90 border-r border-foreground/6 bg-linear-to-b from-white to-foreground/1.5 flex-col shrink-0">
+      <div className="flex items-center justify-end px-4 h-12 border-b border-foreground/6 shrink-0">
+        <button
+          onClick={onClose}
+          className="p-1.5 rounded-lg hover:bg-foreground/5 text-foreground/60 hover:text-foreground/60 transition-colors"
+          aria-label="Close directions panel"
+        >
+          <X size={16} />
+        </button>
+      </div>
+
+      {formBlock}
+      <div className="h-px bg-foreground/6" />
+
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
+        {isMultiStopJourney ? (
+          <>
+            <MultiRouteResults
+              key={
+                multiRoutePlan?.itinerary?.startTime ??
+                `failure-${multiRoutePlan?.failedSegment?.segmentIndex ?? "none"}`
+              }
+              plan={multiRoutePlan}
+              onLocateVehicle={onLocateVehicle}
+            />
+            {noResults && (
+              <NoRoutesMessage className="px-4 py-8 text-center text-sm text-foreground/55 font-medium" />
+            )}
+          </>
+        ) : (
+          <>
+            {hasRoutes &&
+              routePlan?.routes.map((route, index) => (
+                <RouteCard
+                  key={index}
+                  route={route}
+                  isSelected={index === selectedRouteIndex}
+                  isExpanded={expandedRoute === index}
+                  onClick={() => handleRouteClick(index)}
+                  onLocateVehicle={onLocateVehicle}
+                  reminderProps={index === selectedRouteIndex ? reminderProps : undefined}
+                  transfersByArrivingLeg={index === selectedRouteIndex ? transfersByArrivingLeg : undefined}
+                />
+              ))}
+            {noResults && (
+              <NoRoutesMessage className="px-4 py-8 text-center text-sm text-foreground/55 font-medium" />
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
 
 interface RoutePlannerProps {
   userLocation: { lat: number; lng: number } | null;
-  origin: { lat: number; lng: number; name?: string } | null;
-  destination: { lat: number; lng: number; name?: string } | null;
-  pickingPoint: "origin" | "destination" | null;
-  onStartPicking: (point: "origin" | "destination" | null) => void;
-  onSetOrigin: (place: { lat: number; lng: number; name: string }) => void;
-  onSetDestination: (place: { lat: number; lng: number; name: string }) => void;
+  plannerStops: PlannerStop[];
+  pickingPoint: string | null;
+  onStartPicking: (stopId: string | null) => void;
+  onSetStopPoint: (stopId: string, place: { lat: number; lng: number; name?: string }) => void;
+  onSetStopDwell: (stopId: string, dwellMinutes: number) => void;
+  onSetStopDepartureOverride: (stopId: string, departureOverride: string) => void;
+  onAddStop: () => void;
+  onMoveStop: (stopId: string, direction: -1 | 1) => void;
+  onRemoveStop: (stopId: string) => void;
+  onReturnToStart: () => void;
   onPlanRoute: () => void;
   routePlan: RoutePlanResponse | null;
+  multiRoutePlan: MultiRoutePlanResponse | null;
   planError?: string | null;
   planLoading: boolean;
   selectedRouteIndex: number;
@@ -328,25 +684,31 @@ interface RoutePlannerProps {
   onClose: () => void;
   onLocateVehicle: (leg: RouteLeg) => void;
   timeOption: TimeOption;
-  onTimeOptionChange: (opt: TimeOption) => void;
+  onTimeOptionChange: (option: TimeOption) => void;
   selectedDateTime: string;
-  onDateTimeChange: (dt: string) => void;
-  onSwap: () => void;
+  onDateTimeChange: (dateTime: string) => void;
+  onSwapEndpoints: () => void;
   onClear?: () => void;
   openSelectedRouteDetails?: boolean;
   onConsumeOpenSelectedRouteDetails?: () => void;
+  hasSearchedCurrentDraft: boolean;
 }
 
 export function RoutePlanner({
   userLocation,
-  origin,
-  destination,
+  plannerStops,
   pickingPoint,
   onStartPicking,
-  onSetOrigin,
-  onSetDestination,
+  onSetStopPoint,
+  onSetStopDwell,
+  onSetStopDepartureOverride,
+  onAddStop,
+  onMoveStop,
+  onRemoveStop,
+  onReturnToStart,
   onPlanRoute,
   routePlan,
+  multiRoutePlan,
   planError = null,
   planLoading,
   selectedRouteIndex,
@@ -357,29 +719,43 @@ export function RoutePlanner({
   onTimeOptionChange,
   selectedDateTime,
   onDateTimeChange,
-  onSwap,
+  onSwapEndpoints,
   onClear,
   openSelectedRouteDetails = false,
   onConsumeOpenSelectedRouteDetails,
+  hasSearchedCurrentDraft,
 }: RoutePlannerProps) {
-  const routingMode = useTransitStore((s) => s.routingMode);
-  const setRoutingMode = useTransitStore((s) => s.setRoutingMode);
+  const routingMode = useTransitStore((state) => state.routingMode);
+  const setRoutingMode = useTransitStore((state) => state.setRoutingMode);
+  const isMultiStopJourney = plannerStops.length > 2;
+  const hasPlannerErrors = hasConsecutiveDuplicateStops(plannerStops);
+  const hasValidScheduledTime = timeOption === "now" || selectedDateTime.trim().length > 0;
+  const canSearch =
+    hasResolvedStops(plannerStops) && !hasPlannerErrors && hasValidScheduledTime && !planLoading;
+  const hasRoutes = !isMultiStopJourney && !!routePlan?.routes?.length;
+  const multiHasResults = !!multiRoutePlan?.itinerary || !!multiRoutePlan?.failedSegment;
+
   const {
-    hasRoutes,
-    selectedRoute,
     expandedRoute,
+    selectedRoute,
     mobileDetailRoute,
     detailSheetRef,
     handleRouteClick,
     handleMobileRouteClick,
     closeMobileDetail,
   } = useRoutePlannerSelection({
-    routePlan,
+    routePlan: isMultiStopJourney ? null : routePlan,
     selectedRouteIndex,
     onSelectRoute,
-    openSelectedRouteDetails,
+    openSelectedRouteDetails: isMultiStopJourney ? false : openSelectedRouteDetails,
     onConsumeOpenSelectedRouteDetails,
   });
+  const { savedItems, allSavedLocations, isLocationSaved, handleSaveLocation } =
+    usePlannerSavedLocations();
+  const { transfersByArrivingLeg, reminderProps, isLiveAdjusted, minutesUntil } =
+    useRoutePlannerInsights(selectedRoute);
+  const [mobileEditorExpanded, setMobileEditorExpanded] = useState(false);
+
   const {
     dragY: fullDragY,
     isDragging: isFullDragging,
@@ -404,87 +780,105 @@ export function RoutePlanner({
     velocityThreshold: 0.7,
     onDismiss: closeMobileDetail,
   });
-  const { savedItems, allSavedLocations, isLocationSaved, handleSaveLocation } =
-    usePlannerSavedLocations();
 
-  // Live transfer viability for the selected route
-  const { transfersByArrivingLeg, reminderProps, isLiveAdjusted, minutesUntil } =
-    useRoutePlannerInsights(selectedRoute);
-
+  const origin = plannerStops[0]?.point ?? null;
+  const destination = plannerStops[plannerStops.length - 1]?.point ?? null;
 
   const formBlock = (
-    <div className="p-4 pt-3 space-y-3.5 md:px-5 md:pt-4 md:pb-4 md:space-y-4">
+    <div className="p-4 pt-3 space-y-3 md:px-5 md:pt-4 md:pb-4 md:space-y-3.5">
       <div className="md:hidden flex justify-center -mt-1">
         <div className="h-1 w-10 rounded-full bg-foreground/20" />
       </div>
 
-      {/* Origin / destination inputs */}
-      <div className="rounded-2xl border border-foreground/8 bg-white p-2.5 shadow-sm">
-        <div className="flex gap-2 items-start">
-          <div className="flex-1 space-y-2 min-w-0">
-            <PlaceSearchInput
-              value={origin}
-              onSelect={onSetOrigin}
-              pickingPoint={pickingPoint}
-              pointType="origin"
-              onStartPicking={onStartPicking}
-              currentLocation={userLocation}
-              savedLocations={allSavedLocations}
-              onSaveLocation={handleSaveLocation}
-              isLocationSaved={isLocationSaved}
-            />
-            <PlaceSearchInput
-              value={destination}
-              onSelect={onSetDestination}
-              pickingPoint={pickingPoint}
-              pointType="destination"
-              onStartPicking={onStartPicking}
-              savedLocations={allSavedLocations}
-              onSaveLocation={handleSaveLocation}
-              isLocationSaved={isLocationSaved}
-            />
-          </div>
-          <div className="shrink-0 flex flex-col gap-2">
+      <div className="rounded-2xl border border-foreground/8 bg-white shadow-sm">
+        <div className="divide-y divide-foreground/[0.06]">
+          {plannerStops.map((stop, index) => (
+            <div key={stop.id} className="px-3 py-2.5 first:pt-3 last:pb-3">
+              <PlannerStopEditor
+                stop={stop}
+                index={index}
+                totalStops={plannerStops.length}
+                pickingPoint={pickingPoint}
+                userLocation={userLocation}
+                allSavedLocations={allSavedLocations}
+                handleSaveLocation={handleSaveLocation}
+                isLocationSaved={isLocationSaved}
+                onStartPicking={onStartPicking}
+                onSetStopPoint={onSetStopPoint}
+                onSetStopDwell={onSetStopDwell}
+                onSetStopDepartureOverride={onSetStopDepartureOverride}
+                onMoveStop={onMoveStop}
+                onRemoveStop={onRemoveStop}
+              />
+            </div>
+          ))}
+        </div>
+        <div className="flex items-center border-t border-foreground/6 px-1.5 py-1.5">
+          <button
+            type="button"
+            onClick={onAddStop}
+            disabled={plannerStops.length >= 5}
+            className="h-7 px-2 rounded-md text-[11px] font-medium text-foreground/50 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-foreground/[0.04] hover:text-foreground/70 flex items-center gap-1 transition-colors"
+          >
+            <Plus size={11} />
+            Add stop
+          </button>
+          <button
+            type="button"
+            onClick={onReturnToStart}
+            disabled={!origin || plannerStops.length >= 5}
+            className="h-7 px-2 rounded-md text-[11px] font-medium text-foreground/50 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-foreground/[0.04] hover:text-foreground/70 flex items-center gap-1 transition-colors"
+          >
+            <CornerDownLeft size={11} />
+            Return
+          </button>
+          {!isMultiStopJourney && (
             <button
-              onClick={onSwap}
-              className="h-10 w-10 rounded-xl border border-foreground/8 hover:bg-foreground/4 active:bg-foreground/8 transition-colors text-foreground/60 hover:text-foreground/70 bg-white flex items-center justify-center"
-              title="Swap"
+              type="button"
+              onClick={onSwapEndpoints}
+              className="h-7 px-2 rounded-md text-[11px] font-medium text-foreground/50 hover:bg-foreground/[0.04] hover:text-foreground/70 flex items-center gap-1 transition-colors"
             >
-              <ArrowUpDown size={16} />
+              <ArrowUpDown size={11} />
+              Swap
             </button>
-            <button
-              onClick={() => onClear?.()}
-              className="h-10 w-10 rounded-xl border border-foreground/10 bg-white text-[11px] font-medium text-foreground/60 active:bg-foreground/4 flex items-center justify-center"
-            >
-              Reset
-            </button>
-          </div>
+          )}
+          <button
+            type="button"
+            onClick={() => onClear?.()}
+            className="h-7 px-2 rounded-md text-[11px] font-medium text-foreground/35 hover:bg-foreground/[0.04] hover:text-foreground/55 flex items-center gap-1 transition-colors ml-auto"
+          >
+            <Trash2 size={11} />
+            Reset
+          </button>
         </div>
       </div>
 
-      {/* Time selector + search */}
       <div className="space-y-2 md:space-y-2.5">
         <div className="flex items-center gap-2 md:gap-3">
           <select
             value={timeOption}
-            onChange={(e) => onTimeOptionChange(e.target.value as TimeOption)}
+            onChange={(event) => onTimeOptionChange(event.target.value as TimeOption)}
             className="h-10 rounded-xl border border-foreground/10 bg-white px-3 text-sm text-foreground/80 font-medium focus:outline-none focus:ring-1 focus:ring-primary/30 transition-all flex-1 min-w-0"
           >
             <option value="now">Leave now</option>
             <option value="depart">Depart at</option>
             <option value="arrive">Arrive by</option>
           </select>
-          <SavedPlannerPanel
-            origin={origin}
-            destination={destination}
-            onSetOrigin={onSetOrigin}
-            onSetDestination={onSetDestination}
-            saved={savedItems}
-          />
+          {!isMultiStopJourney && (
+            <SavedPlannerPanel
+              origin={origin}
+              destination={destination}
+              onSetOrigin={(place) => onSetStopPoint(plannerStops[0].id, place)}
+              onSetDestination={(place) =>
+                onSetStopPoint(plannerStops[plannerStops.length - 1].id, place)
+              }
+              saved={savedItems}
+            />
+          )}
           <Button
             size="sm"
             className="h-10 px-5 bg-primary hover:bg-primary/90 text-white font-semibold rounded-xl text-sm shadow-[0_8px_20px_-12px_rgba(0,96,255,0.8)] transition-all active:scale-[0.98] shrink-0"
-            disabled={!origin || !destination || planLoading}
+            disabled={!canSearch}
             onClick={onPlanRoute}
           >
             {planLoading ? (
@@ -504,9 +898,14 @@ export function RoutePlanner({
           <input
             type="datetime-local"
             value={selectedDateTime}
-            onChange={(e) => onDateTimeChange(e.target.value)}
+            onChange={(event) => onDateTimeChange(event.target.value)}
             className="h-10 w-full rounded-xl border border-foreground/10 bg-white px-3 text-sm text-foreground/80 font-medium focus:outline-none focus:ring-1 focus:ring-primary/30 transition-all"
           />
+        )}
+        {hasPlannerErrors && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50/80 px-3 py-2 text-[12px] font-medium text-amber-700">
+            Consecutive stops cannot be the same place.
+          </div>
         )}
         {planError && (
           <div className="rounded-xl border border-rose-200 bg-rose-50/80 px-3 py-2 text-[12px] font-medium text-rose-700">
@@ -514,15 +913,19 @@ export function RoutePlanner({
           </div>
         )}
 
-        {/* Routing mode selector */}
         <div className="flex rounded-xl bg-foreground/4 p-[3px] gap-[3px]">
-          {ROUTING_MODES.map((m) => {
-            const isActive = routingMode === m.value;
-            const IconComponent = m.iconName === "zap" ? Zap : m.iconName === "footprints" ? Footprints : ArrowRightLeft;
+          {ROUTING_MODES.map((mode) => {
+            const isActive = routingMode === mode.value;
+            const IconComponent =
+              mode.iconName === "zap"
+                ? Zap
+                : mode.iconName === "footprints"
+                  ? Footprints
+                  : ArrowRightLeft;
             return (
               <button
-                key={m.value}
-                onClick={() => setRoutingMode(m.value)}
+                key={mode.value}
+                onClick={() => setRoutingMode(mode.value)}
                 className={`flex-1 flex items-center justify-center gap-1.5 h-[34px] rounded-[9px] text-[11px] font-semibold tracking-tight transition-all duration-200 ${
                   isActive
                     ? "bg-white text-foreground/90 shadow-[0_1px_3px_rgba(0,0,0,0.08),0_1px_1px_rgba(0,0,0,0.04)] ring-1 ring-black/[0.04]"
@@ -530,7 +933,7 @@ export function RoutePlanner({
                 }`}
               >
                 <IconComponent size={12} className={isActive ? "text-primary" : ""} strokeWidth={2.5} />
-                <span>{m.label}</span>
+                <span>{mode.label}</span>
               </button>
             );
           })}
@@ -539,12 +942,15 @@ export function RoutePlanner({
     </div>
   );
 
-  const noResults = routePlan?.routes?.length === 0 && !planLoading;
+  const noResults =
+    hasSearchedCurrentDraft &&
+    !planLoading &&
+    !planError &&
+    (isMultiStopJourney ? !multiHasResults : routePlan?.routes?.length === 0);
 
-  if (mobileDetailRoute) {
+  if (!isMultiStopJourney && mobileDetailRoute) {
     return (
       <>
-        {/* Desktop sidebar (keep visible) */}
         {desktopSidebar({
           formBlock,
           hasRoutes,
@@ -557,9 +963,10 @@ export function RoutePlanner({
           onClose,
           reminderProps,
           transfersByArrivingLeg,
+          isMultiStopJourney: false,
+          multiRoutePlan: null,
         })}
 
-        {/* Mobile detail sheet */}
         <div
           ref={detailSheetRef}
           className={`md:hidden absolute bottom-0 left-0 right-0 z-1100 bg-white rounded-t-3xl shadow-sheet border-t border-foreground/8 ${
@@ -569,8 +976,8 @@ export function RoutePlanner({
         >
           <div
             className="flex justify-center pt-2 pb-1 touch-none"
-            onTouchStart={(e) => beginDetailDrag(e.touches[0].clientY)}
-            onTouchMove={(e) => updateDetailDrag(e.touches[0].clientY)}
+            onTouchStart={(event) => beginDetailDrag(event.touches[0].clientY)}
+            onTouchMove={(event) => updateDetailDrag(event.touches[0].clientY)}
             onTouchEnd={endDetailDrag}
             onTouchCancel={endDetailDrag}
           >
@@ -593,12 +1000,9 @@ export function RoutePlanner({
                 showLegChain={false}
               />
             </div>
-            {/* Bell — large target for gloved fingers */}
             {reminderProps && (
               <button
-                onClick={() =>
-                  reminderProps.isSet ? reminderProps.onClear() : reminderProps.onSchedule()
-                }
+                onClick={() => (reminderProps.isSet ? reminderProps.onClear() : reminderProps.onSchedule())}
                 className={`p-2.5 rounded-xl transition-colors active:scale-95 shrink-0 cursor-pointer ${
                   reminderProps.isSet
                     ? "bg-primary/10 text-primary"
@@ -612,14 +1016,13 @@ export function RoutePlanner({
           </div>
 
           <div className="overflow-y-auto max-h-[58vh] p-4 pb-20 space-y-3.5">
-            {/* Reminder countdown banner */}
             {reminderProps?.isSet && (
               <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-primary/6 border border-primary/15">
                 <Bell size={14} className="text-primary shrink-0" />
                 <span className="text-xs text-primary font-semibold">
                   {minutesUntil !== null && minutesUntil > 0
                     ? `Leave in ${minutesUntil} min${isLiveAdjusted ? " · auto-adjusting live" : ""}`
-                  : "Reminder active"}
+                    : "Reminder active"}
                 </span>
               </div>
             )}
@@ -649,7 +1052,6 @@ export function RoutePlanner({
 
   return (
     <>
-      {/* Desktop sidebar */}
       {desktopSidebar({
         formBlock,
         hasRoutes,
@@ -662,103 +1064,84 @@ export function RoutePlanner({
         onClose,
         reminderProps,
         transfersByArrivingLeg,
+        isMultiStopJourney,
+        multiRoutePlan,
       })}
 
-      {/* Mobile fullscreen */}
       <div
         className={`md:hidden absolute inset-0 z-1100 flex flex-col bg-white ${
           isFullDragging ? "" : "transition-transform duration-250 ease-out"
         }`}
         style={{ transform: `translateY(${fullDragY}px)` }}
-        onTouchStart={(e) => beginFullDrag(e.touches[0].clientY, e.touches[0].clientX)}
-        onTouchMove={(e) => updateFullDrag(e.touches[0].clientY, e.touches[0].clientX)}
+        onTouchStart={(event) => beginFullDrag(event.touches[0].clientY, event.touches[0].clientX)}
+        onTouchMove={(event) => updateFullDrag(event.touches[0].clientY, event.touches[0].clientX)}
         onTouchEnd={endFullDrag}
         onTouchCancel={endFullDrag}
       >
-        {formBlock}
+        {isMultiStopJourney && multiHasResults ? (
+          <div className="px-4 pt-4 pb-2">
+            <button
+              type="button"
+              onClick={() => setMobileEditorExpanded((value) => !value)}
+              className="w-full rounded-2xl border border-foreground/8 bg-white px-4 py-3 text-left shadow-sm"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-[11px] uppercase tracking-[0.2em] text-foreground/40 font-semibold">
+                    {mobileEditorExpanded ? "Hide editor" : "Edit itinerary"}
+                  </div>
+                  <div className="mt-1 text-sm font-semibold text-foreground/80 truncate">
+                    {plannerStops
+                      .map((stop, index) => stop.point?.name || stopPlaceholder(index, plannerStops.length))
+                      .join(" · ")}
+                  </div>
+                </div>
+                {mobileEditorExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+              </div>
+            </button>
+          </div>
+        ) : null}
+
+        {(!isMultiStopJourney || !multiHasResults || mobileEditorExpanded) && formBlock}
 
         <div className="h-px bg-foreground/6" />
 
         <div className="flex-1 min-h-0 overflow-y-auto pb-20">
-          {hasRoutes && routePlan && (
-            <div className="p-3 space-y-2.5">
-              {routePlan.routes.map((route, i) => (
-                <MobileRouteOption
-                  key={i}
-                  route={route}
-                  isSelected={i === selectedRouteIndex}
-                  onClick={() => handleMobileRouteClick(i)}
-                />
-              ))}
+          {isMultiStopJourney ? (
+            <div className="p-3 space-y-3">
+              <MultiRouteResults
+                key={
+                  multiRoutePlan?.itinerary?.startTime ??
+                  `failure-${multiRoutePlan?.failedSegment?.segmentIndex ?? "none"}`
+                }
+                plan={multiRoutePlan}
+                onLocateVehicle={onLocateVehicle}
+              />
+              {noResults && (
+                <NoRoutesMessage className="px-4 py-12 text-center text-sm text-foreground/55 font-medium" />
+              )}
             </div>
+          ) : (
+            <>
+              {hasRoutes && routePlan && (
+                <div className="p-3 space-y-2.5">
+                  {routePlan.routes.map((route, index) => (
+                    <MobileRouteOption
+                      key={index}
+                      route={route}
+                      isSelected={index === selectedRouteIndex}
+                      onClick={() => handleMobileRouteClick(index)}
+                    />
+                  ))}
+                </div>
+              )}
+              {noResults && (
+                <NoRoutesMessage className="px-4 py-12 text-center text-sm text-foreground/55 font-medium" />
+              )}
+            </>
           )}
-          {noResults && <NoRoutesMessage className="px-4 py-12 text-center text-sm text-foreground/55 font-medium" />}
         </div>
       </div>
     </>
-  );
-}
-
-/* ── Desktop sidebar (extracted to avoid duplication) ──────── */
-
-function desktopSidebar({
-  formBlock,
-  hasRoutes,
-  routePlan,
-  selectedRouteIndex,
-  expandedRoute,
-  handleRouteClick,
-  onLocateVehicle,
-  noResults,
-  onClose,
-  reminderProps,
-  transfersByArrivingLeg,
-}: {
-  formBlock: React.ReactNode;
-  hasRoutes: boolean;
-  routePlan: RoutePlanResponse | null;
-  selectedRouteIndex: number;
-  expandedRoute: number | null;
-  handleRouteClick: (i: number) => void;
-  onLocateVehicle: (leg: RouteLeg) => void;
-  noResults: boolean;
-  onClose: () => void;
-  reminderProps?: ReminderProps;
-  transfersByArrivingLeg: Map<RouteLeg, TransferInfo>;
-}) {
-  return (
-    <div className="hidden md:flex w-90 border-r border-foreground/6 bg-linear-to-b from-white to-foreground/1.5 flex-col shrink-0">
-      <div className="flex items-center justify-end px-4 h-12 border-b border-foreground/6 shrink-0">
-        <button
-          onClick={onClose}
-          className="p-1.5 rounded-lg hover:bg-foreground/5 text-foreground/60 hover:text-foreground/60 transition-colors"
-          aria-label="Close directions panel"
-        >
-          <X size={16} />
-        </button>
-      </div>
-
-      {formBlock}
-      <div className="h-px bg-foreground/6" />
-
-      {hasRoutes && routePlan && (
-        <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
-          {routePlan.routes.map((route, i) => (
-            <RouteCard
-              key={i}
-              route={route}
-              isSelected={i === selectedRouteIndex}
-              isExpanded={expandedRoute === i}
-              onClick={() => handleRouteClick(i)}
-              onLocateVehicle={onLocateVehicle}
-              reminderProps={i === selectedRouteIndex ? reminderProps : undefined}
-              transfersByArrivingLeg={i === selectedRouteIndex ? transfersByArrivingLeg : undefined}
-            />
-          ))}
-        </div>
-      )}
-
-      {noResults && <NoRoutesMessage className="px-4 py-8 text-center text-sm text-foreground/55 font-medium" />}
-    </div>
   );
 }

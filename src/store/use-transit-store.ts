@@ -1,14 +1,47 @@
 import { create } from "zustand";
-import type { RoutePlanResponse, StopDto } from "@/lib/types";
+import type { MultiRoutePlanResponse, RoutePlanResponse, StopDto } from "@/lib/types";
 import type { LineType } from "@/lib/domain";
 import type { Overlay } from "@/lib/navigation";
-import { resolveRoutePlan, type RoutingMode, type RouteCache } from "@/lib/route-filter";
+import {
+  resolveMultiRoutePlan,
+  resolveRoutePlan,
+  type MultiRouteCache,
+  type RoutingMode,
+  type RouteCache,
+} from "@/lib/route-filter";
 import { toLocalDateTimeString } from "@/lib/format-utils";
 
 export type SelectedLine = { lineNumber: string; type: LineType } | null;
 export type PlannerPoint = { lat: number; lng: number; name?: string } | null;
-export type PickingPoint = "origin" | "destination" | null;
+export type PickingPoint = string | null;
 export type TimeOption = "now" | "depart" | "arrive";
+
+export interface PlannerStop {
+  id: string;
+  point: PlannerPoint;
+  dwellMinutes: number;
+  departureOverride: string;
+}
+
+let plannerStopCounter = 0;
+
+function buildPlannerStopId() {
+  plannerStopCounter += 1;
+  return `planner-stop-${plannerStopCounter}`;
+}
+
+export function createPlannerStop(overrides: Partial<PlannerStop> = {}): PlannerStop {
+  return {
+    id: overrides.id ?? buildPlannerStopId(),
+    point: overrides.point ?? null,
+    dwellMinutes: overrides.dwellMinutes ?? 0,
+    departureOverride: overrides.departureOverride ?? "",
+  };
+}
+
+export function createInitialPlannerStops() {
+  return [createPlannerStop(), createPlannerStop()];
+}
 
 interface TransitStoreState {
   selectedLine: SelectedLine;
@@ -17,12 +50,13 @@ interface TransitStoreState {
   showVehicles: boolean;
   showStops: boolean;
   showPlanner: boolean;
-  origin: PlannerPoint;
-  destination: PlannerPoint;
+  plannerStops: PlannerStop[];
   pickingPoint: PickingPoint;
   routePlan: RoutePlanResponse | null;
+  multiRoutePlan: MultiRoutePlanResponse | null;
   planError: string | null;
   routeCache: RouteCache;
+  multiRouteCache: MultiRouteCache;
   routingMode: RoutingMode;
   planLoading: boolean;
   selectedRouteIndex: number;
@@ -44,12 +78,13 @@ interface TransitStoreActions {
   toggleVehicles: () => void;
   toggleStops: () => void;
   setShowPlanner: (show: boolean) => void;
-  setOrigin: (point: PlannerPoint) => void;
-  setDestination: (point: PlannerPoint) => void;
+  setPlannerStops: (stops: PlannerStop[]) => void;
   setPickingPoint: (point: PickingPoint) => void;
   setRoutePlan: (plan: RoutePlanResponse | null) => void;
+  setMultiRoutePlan: (plan: MultiRoutePlanResponse | null) => void;
   setPlanError: (error: string | null) => void;
   setRouteCache: (cache: RouteCache) => void;
+  setMultiRouteCache: (cache: MultiRouteCache) => void;
   setRoutingMode: (mode: RoutingMode) => void;
   setPlanLoading: (loading: boolean) => void;
   setSelectedRouteIndex: (index: number) => void;
@@ -66,6 +101,14 @@ interface TransitStoreActions {
 
 type TransitStore = TransitStoreState & TransitStoreActions;
 
+function createEmptyRouteCache(): RouteCache {
+  return { fastest: null, lessWalking: null, fewerTransfers: null };
+}
+
+function createEmptyMultiRouteCache(): MultiRouteCache {
+  return { fastest: null, lessWalking: null, fewerTransfers: null };
+}
+
 function getInitialState() {
   const state: TransitStoreState = {
     selectedLine: null,
@@ -74,12 +117,13 @@ function getInitialState() {
     showVehicles: false,
     showStops: false,
     showPlanner: false,
-    origin: null,
-    destination: null,
+    plannerStops: createInitialPlannerStops(),
     pickingPoint: null,
     routePlan: null,
+    multiRoutePlan: null,
     planError: null,
-    routeCache: { fastest: null, lessWalking: null, fewerTransfers: null },
+    routeCache: createEmptyRouteCache(),
+    multiRouteCache: createEmptyMultiRouteCache(),
     routingMode: "fastest",
     planLoading: false,
     selectedRouteIndex: 0,
@@ -106,16 +150,18 @@ export const useTransitStore = create<TransitStore>((set) => ({
   toggleVehicles: () => set((state) => ({ showVehicles: !state.showVehicles })),
   toggleStops: () => set((state) => ({ showStops: !state.showStops })),
   setShowPlanner: (showPlanner) => set({ showPlanner }),
-  setOrigin: (origin) => set({ origin }),
-  setDestination: (destination) => set({ destination }),
+  setPlannerStops: (plannerStops) => set({ plannerStops }),
   setPickingPoint: (pickingPoint) => set({ pickingPoint }),
   setRoutePlan: (routePlan) => set({ routePlan }),
+  setMultiRoutePlan: (multiRoutePlan) => set({ multiRoutePlan }),
   setPlanError: (planError) => set({ planError }),
   setRouteCache: (routeCache) => set({ routeCache }),
+  setMultiRouteCache: (multiRouteCache) => set({ multiRouteCache }),
   setRoutingMode: (mode) =>
     set((state) => ({
       routingMode: mode,
       routePlan: resolveRoutePlan(state.routeCache, mode) ?? state.routePlan,
+      multiRoutePlan: resolveMultiRoutePlan(state.multiRouteCache, mode) ?? state.multiRoutePlan,
       selectedRouteIndex: 0,
     })),
   setPlanLoading: (planLoading) => set({ planLoading }),
@@ -130,12 +176,13 @@ export const useTransitStore = create<TransitStore>((set) => ({
   bumpMapKey: () => set((state) => ({ mapKey: state.mapKey + 1 })),
   clearPlanner: () =>
     set({
-      origin: null,
-      destination: null,
+      plannerStops: createInitialPlannerStops(),
       pickingPoint: null,
       routePlan: null,
+      multiRoutePlan: null,
       planError: null,
-      routeCache: { fastest: null, lessWalking: null, fewerTransfers: null },
+      routeCache: createEmptyRouteCache(),
+      multiRouteCache: createEmptyMultiRouteCache(),
       planLoading: false,
       selectedRouteIndex: 0,
       selectedLine: null,
