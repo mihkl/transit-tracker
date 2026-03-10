@@ -1,11 +1,9 @@
-FROM node:25-alpine AS builder
+FROM ghcr.io/pnpm/pnpm:25-alpine AS builder
 
 # curl + unzip needed by the GTFS download script at build time
 RUN apk add --no-cache curl unzip
 
 WORKDIR /app
-
-RUN corepack enable && corepack prepare pnpm@latest --activate
 
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
