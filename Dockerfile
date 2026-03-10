@@ -1,7 +1,10 @@
-FROM ghcr.io/pnpm/pnpm:25-alpine AS builder
+FROM node:25-alpine AS builder
 
 # curl + unzip needed by the GTFS download script at build time
 RUN apk add --no-cache curl unzip
+RUN curl -fsSL https://get.pnpm.io/install.sh | ENV="$HOME/.shrc" SHELL="$(which sh)" sh -
+ENV PNPM_HOME="/root/.local/share/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
 
 WORKDIR /app
 
