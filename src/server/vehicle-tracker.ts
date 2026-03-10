@@ -17,6 +17,10 @@ export class VehicleTracker {
     return this.vehicles;
   }
 
+  clear() {
+    this.vehicles.clear();
+  }
+
   processReadings(readings: GpsReading[]) {
     const updated: VehicleState[] = [];
 
