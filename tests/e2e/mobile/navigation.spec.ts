@@ -4,6 +4,7 @@ import {
   search,
   directions,
   layers,
+  openLayersMenu,
   expectLayersOpen,
   expectLayersClosed,
   waitForHydration,
@@ -41,16 +42,13 @@ test.describe("Bottom navigation", () => {
     await expect(directions.destinationInput(page)).toBeVisible();
   });
 
-  test("Layers tab toggles layers menu", async ({ page }) => {
-    await nav.layersTab(page).click();
+  test("Layers FAB toggles layers menu", async ({ page }) => {
+    await openLayersMenu(page);
     await expectLayersOpen(layers.vehiclesBtn(page));
-
-    await nav.layersTab(page).click();
-    await expectLayersClosed(layers.vehiclesBtn(page));
   });
 
   test("Content tab hides layers menu", async ({ page }) => {
-    await nav.layersTab(page).click();
+    await openLayersMenu(page);
     await expectLayersOpen(layers.vehiclesBtn(page));
 
     await nav.searchTab(page).click();

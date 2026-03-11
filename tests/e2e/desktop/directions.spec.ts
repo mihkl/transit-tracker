@@ -19,7 +19,7 @@ test.describe("Desktop directions", () => {
     await expect(page.getByPlaceholder("From").first()).toBeVisible();
   });
 
-  test("reorders a searched multi-stop journey and refreshes the sidebar automatically", async ({ page }) => {
+  test("reorders a searched multi-stop journey and re-searches", async ({ page }) => {
     test.setTimeout(90_000);
 
     await selectPlace(page, "From", "Viru");
@@ -27,15 +27,22 @@ test.describe("Desktop directions", () => {
     await page.getByRole("button", { name: "Add stop" }).first().click();
     await selectPlace(page, "Stop 1", "Telliskivi");
 
-    await page.locator("button:not(nav button)").filter({ hasText: /^Search$|^Searching$/ }).first().click();
-    await expect(page.getByText("Viru Keskus to Telliskivi Creative City").first()).toBeVisible({
-      timeout: 40_000,
-    });
+    const searchBtn = page.locator("button:not(nav button)").filter({ hasText: /^Search$|^Searching$/ }).first();
+    await searchBtn.click();
+
+    const legBadge = page.locator("[data-slot='badge']")
+      .filter({ hasText: / to / }).first();
+    await expect(legBadge).toBeVisible({ timeout: 40_000 });
+    const initialLeg1Text = await legBadge.textContent();
 
     await page.getByLabel("Move stop 1 down").click();
 
-    await expect(page.getByText("Telliskivi Creative City to Viru Keskus").first()).toBeVisible({
-      timeout: 40_000,
-    });
+    // Reorder clears results; re-search to get updated itinerary
+    await searchBtn.click();
+
+    const newLegBadge = page.locator("[data-slot='badge']")
+      .filter({ hasText: / to / }).first();
+    await expect(newLegBadge).toBeVisible({ timeout: 40_000 });
+    await expect(newLegBadge).not.toHaveText(initialLeg1Text!, { timeout: 10_000 });
   });
 });

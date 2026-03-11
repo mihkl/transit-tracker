@@ -1,6 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
 import {
-  nav,
   layers,
   expectLayersOpen,
   expectLayersClosed,
@@ -8,7 +7,7 @@ import {
 } from "../helpers/selectors";
 
 async function openLayersMenu(page: Page) {
-  await nav.layersTab(page).click();
+  await layers.fab(page).click();
   await expectLayersOpen(layers.stopsBtn(page));
 }
 

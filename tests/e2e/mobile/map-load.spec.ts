@@ -12,7 +12,6 @@ test.describe("Map page load", () => {
     await expect(nav.nearbyTab(page)).toBeVisible();
     await expect(nav.searchTab(page)).toBeVisible();
     await expect(nav.directionsTab(page)).toBeVisible();
-    await expect(nav.layersTab(page)).toBeVisible();
   });
 
   test("map canvas renders", async ({ page }) => {
