@@ -19,6 +19,7 @@
   "dependencies": {
     "@libsql/client": "^0.17.0",
     "@sentry/nextjs": "^10.42.0",
+    "@tailwindcss/oxide-win32-x64-msvc": "^4.2.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",

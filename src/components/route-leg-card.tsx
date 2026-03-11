@@ -38,7 +38,7 @@ export function RouteLegCard({
   return (
     <button
       type="button"
-      className={`rounded-xl border border-foreground/8 bg-white px-3 py-3 transition-all duration-150 ${
+      className={`w-full text-left rounded-xl border border-foreground/8 bg-white px-3 py-3 transition-all duration-150 ${
         canLocateVehicle ? "cursor-pointer hover:bg-foreground/[0.02] active:scale-[0.99]" : ""
       }`}
       style={{ borderLeftWidth: 3, borderLeftColor: color }}
