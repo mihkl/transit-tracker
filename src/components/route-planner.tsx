@@ -39,7 +39,6 @@ type TimeOption = "now" | "depart" | "arrive";
 interface ReminderProps {
   isSet: boolean;
   minutesUntil: number | null;
-  isLiveAdjusted: boolean;
   error: string | null;
   status: {
     tone: "info" | "warning" | "error";
@@ -277,7 +276,7 @@ function StaleRouteBanner({ route, onReplan }: { route: PlannedRoute; onReplan?:
       <span className="flex-1 text-xs font-medium">
         {isExpired
           ? "This trip has already departed."
-          : "This route was restored from your reminder. Times may be outdated."}
+          : "This trip was opened from your reminder and will refresh live updates automatically."}
       </span>
       {onReplan && (
         <button
@@ -355,9 +354,9 @@ function RouteCard({
                 <span className="text-xs font-semibold">
                   {reminderProps.isSet
                     ? reminderProps.minutesUntil !== null && reminderProps.minutesUntil > 0
-                      ? `Leave in ${reminderProps.minutesUntil} min${reminderProps.isLiveAdjusted ? " · auto-adjusting" : ""}`
+                      ? `Leave in ${reminderProps.minutesUntil} min`
                       : "Reminder active · tap to cancel"
-                    : "Set smart leave reminder"}
+                    : "Set leave reminder"}
                 </span>
               </button>
               {!reminderProps.isSet && reminderProps.status && (
@@ -661,6 +660,7 @@ function desktopSidebar({
   routePlan,
   selectedRouteIndex,
   expandedRoute,
+  liveSelectedRoute,
   handleRouteClick,
   onLocateVehicle,
   onReplan,
@@ -676,6 +676,7 @@ function desktopSidebar({
   routePlan: RoutePlanResponse | null;
   selectedRouteIndex: number;
   expandedRoute: number | null;
+  liveSelectedRoute: PlannedRoute | null;
   handleRouteClick: (index: number) => void;
   onLocateVehicle: (leg: RouteLeg) => void;
   onReplan?: () => void;
@@ -722,7 +723,7 @@ function desktopSidebar({
               routePlan?.routes.map((route, index) => (
                 <RouteCard
                   key={getRouteKey(route, index)}
-                  route={route}
+                  route={index === selectedRouteIndex && liveSelectedRoute ? liveSelectedRoute : route}
                   isSelected={index === selectedRouteIndex}
                   isExpanded={expandedRoute === index}
                   onClick={() => handleRouteClick(index)}
@@ -970,6 +971,7 @@ function MobileRouteDetailSheet({
   routePlan,
   selectedRouteIndex,
   expandedRoute,
+  liveSelectedRoute,
   handleRouteClick,
   onLocateVehicle,
   onReplan,
@@ -986,12 +988,12 @@ function MobileRouteDetailSheet({
   endDetailDrag,
   closeMobileDetail,
   minutesUntil,
-  isLiveAdjusted,
 }: {
   formBlock: ReactNode;
   routePlan: RoutePlanResponse | null;
   selectedRouteIndex: number;
   expandedRoute: number | null;
+  liveSelectedRoute: PlannedRoute | null;
   handleRouteClick: (index: number) => void;
   onLocateVehicle: (leg: RouteLeg) => void;
   onReplan?: () => void;
@@ -1008,7 +1010,6 @@ function MobileRouteDetailSheet({
   endDetailDrag: () => void;
   closeMobileDetail: () => void;
   minutesUntil: number | null;
-  isLiveAdjusted: boolean;
 }) {
   return (
     <>
@@ -1018,6 +1019,7 @@ function MobileRouteDetailSheet({
         routePlan,
         selectedRouteIndex,
         expandedRoute,
+        liveSelectedRoute,
         handleRouteClick,
         onLocateVehicle,
         onReplan,
@@ -1084,7 +1086,7 @@ function MobileRouteDetailSheet({
               <Bell size={14} className="text-primary shrink-0" />
               <span className="text-xs text-primary font-semibold">
                 {minutesUntil !== null && minutesUntil > 0
-                  ? `Leave in ${minutesUntil} min${isLiveAdjusted ? " · auto-adjusting live" : ""}`
+                  ? `Leave in ${minutesUntil} min`
                   : "Reminder active"}
               </span>
             </div>
@@ -1316,8 +1318,12 @@ export function RoutePlanner({
   });
   const { savedItems, allSavedLocations, isLocationSaved, handleSaveLocation } =
     usePlannerSavedLocations();
-  const { transfersByArrivingLeg, reminderProps, isLiveAdjusted, minutesUntil } =
+  const { liveRoute, transfersByArrivingLeg, reminderProps, minutesUntil } =
     useRoutePlannerInsights(selectedRoute);
+  const displayMobileDetailRoute =
+    mobileDetailRoute && liveRoute && selectedRoute && mobileDetailRoute === selectedRoute
+      ? liveRoute
+      : mobileDetailRoute;
 
   const {
     dragY: fullDragY,
@@ -1400,6 +1406,7 @@ export function RoutePlanner({
         routePlan={routePlan}
         selectedRouteIndex={selectedRouteIndex}
         expandedRoute={expandedRoute}
+        liveSelectedRoute={liveRoute}
         handleRouteClick={handleRouteClick}
         onLocateVehicle={onLocateVehicle}
         onReplan={handleReplan}
@@ -1407,7 +1414,7 @@ export function RoutePlanner({
         onClose={onClose}
         reminderProps={reminderProps}
         transfersByArrivingLeg={transfersByArrivingLeg}
-        mobileDetailRoute={mobileDetailRoute}
+        mobileDetailRoute={displayMobileDetailRoute ?? mobileDetailRoute}
         detailSheetRef={detailSheetRef}
         isDetailDragging={isDetailDragging}
         detailDragY={detailDragY}
@@ -1416,7 +1423,6 @@ export function RoutePlanner({
         endDetailDrag={endDetailDrag}
         closeMobileDetail={closeMobileDetail}
         minutesUntil={minutesUntil}
-        isLiveAdjusted={isLiveAdjusted}
       />
     );
   }
@@ -1429,6 +1435,7 @@ export function RoutePlanner({
         routePlan,
         selectedRouteIndex,
         expandedRoute,
+        liveSelectedRoute: liveRoute,
         handleRouteClick,
         onLocateVehicle,
         onReplan: handleReplan,

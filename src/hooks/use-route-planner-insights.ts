@@ -8,7 +8,6 @@ import { useTransferViability, type TransferInfo } from "@/hooks/use-transfer-vi
 interface RouteReminderState {
   isSet: boolean;
   minutesUntil: number | null;
-  isLiveAdjusted: boolean;
   error: string | null;
   status: ReminderStatusMessage | null;
   onSchedule: () => void;
@@ -16,16 +15,52 @@ interface RouteReminderState {
 }
 
 export function useRoutePlannerInsights(selectedRoute: PlannedRoute | null) {
-  const transfers = useTransferViability(selectedRoute);
-  const transfersByArrivingLeg = useMemo<Map<RouteLeg, TransferInfo>>(
-    () => new Map(transfers.map((transfer) => [transfer.arrivingLeg, transfer])),
-    [transfers],
-  );
+  const { transfers, liveDelays } = useTransferViability(selectedRoute);
+
+  const liveRoute = useMemo<PlannedRoute | null>(() => {
+    if (!selectedRoute) return null;
+
+    let hasLiveOverrides = false;
+    const legs = selectedRoute.legs.map((leg) => {
+      if (!liveDelays.has(leg)) return leg;
+      hasLiveOverrides = true;
+      const liveDelay = liveDelays.get(leg) ?? undefined;
+      return {
+        ...leg,
+        delay: liveDelay,
+      };
+    });
+
+    return hasLiveOverrides ? { ...selectedRoute, legs } : selectedRoute;
+  }, [selectedRoute, liveDelays]);
+
+  const transfersByArrivingLeg = useMemo<Map<RouteLeg, TransferInfo>>(() => {
+    if (!selectedRoute || !liveRoute) return new Map();
+
+    const clonedLegByOriginal = new Map<RouteLeg, RouteLeg>(
+      selectedRoute.legs.map((leg, index) => [leg, liveRoute.legs[index] ?? leg]),
+    );
+
+    return new Map(
+      transfers.map((transfer) => {
+        const arrivingLeg = clonedLegByOriginal.get(transfer.arrivingLeg) ?? transfer.arrivingLeg;
+        const departingLeg =
+          clonedLegByOriginal.get(transfer.departingLeg) ?? transfer.departingLeg;
+        return [
+          arrivingLeg,
+          {
+            ...transfer,
+            arrivingLeg,
+            departingLeg,
+          },
+        ];
+      }),
+    );
+  }, [selectedRoute, liveRoute, transfers]);
 
   const {
     leaveInfo,
     isSet,
-    isLiveAdjusted,
     minutesUntil,
     lastError,
     reminderStatus,
@@ -37,7 +72,6 @@ export function useRoutePlannerInsights(selectedRoute: PlannedRoute | null) {
     ? {
         isSet,
         minutesUntil,
-        isLiveAdjusted,
         error: lastError,
         status: reminderStatus,
         onSchedule: scheduleReminder,
@@ -46,9 +80,9 @@ export function useRoutePlannerInsights(selectedRoute: PlannedRoute | null) {
     : undefined;
 
   return {
+    liveRoute,
     transfersByArrivingLeg,
     reminderProps,
-    isLiveAdjusted,
     minutesUntil,
   };
 }

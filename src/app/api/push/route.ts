@@ -3,7 +3,7 @@ import { env } from "@/lib/env";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { getClientIdentifier } from "@/lib/request-client";
 import { cancelNotification, scheduleNotification, vapidPublicKey, PushCapacityError } from "@/server/push-scheduler";
-import { LEAVE_MAIN_JOB_KEY, LEAVE_MAIN_SNOOZE_PREFIX, DELAY_UPDATE_PREFIX } from "@/lib/push-constants";
+import { LEAVE_MAIN_JOB_KEY } from "@/lib/push-constants";
 
 export const dynamic = "force-dynamic";
 
@@ -61,25 +61,13 @@ function toSafeAppPath(value: unknown) {
 function toSafeJobKey(value: unknown) {
   const key = toSafeString(value, MAX_JOB_KEY_LEN);
   if (!key) return null;
-  if (key === LEAVE_MAIN_JOB_KEY) return key;
-  if (key.startsWith(LEAVE_MAIN_SNOOZE_PREFIX)) {
-    return /^leave-main-snooze-\d+$/.test(key) ? key : null;
-  }
-  if (key.startsWith(DELAY_UPDATE_PREFIX)) {
-    return /^delay-update-\d+$/.test(key) ? key : null;
-  }
-  return null;
+  return key === LEAVE_MAIN_JOB_KEY ? key : null;
 }
 
 function toSafeJobPrefix(value: unknown) {
   const prefix = toSafeString(value, MAX_JOB_KEY_LEN);
   if (!prefix) return undefined;
-  if (prefix === LEAVE_MAIN_JOB_KEY || prefix === DELAY_UPDATE_PREFIX) return prefix;
-  return undefined;
-}
-
-function toJobPrefix(jobKey: string) {
-  return jobKey.startsWith(DELAY_UPDATE_PREFIX) ? DELAY_UPDATE_PREFIX : LEAVE_MAIN_JOB_KEY;
+  return prefix === LEAVE_MAIN_JOB_KEY ? prefix : undefined;
 }
 
 function parseScheduleBody(value: unknown) {
@@ -202,7 +190,7 @@ export async function POST(req: NextRequest) {
         url: body.url,
         timestamp: body.timestamp,
         category: body.category,
-        jobPrefix: toJobPrefix(body.jobKey),
+        jobPrefix: LEAVE_MAIN_JOB_KEY,
       },
       body.jobKey,
     );

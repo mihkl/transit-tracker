@@ -5,7 +5,6 @@ import webpush from "web-push";
 import type { PushSubscription } from "web-push";
 import { migrate } from "drizzle-orm/libsql/migrator";
 import { env } from "@/lib/env";
-import { DELAY_UPDATE_PREFIX } from "@/lib/push-constants";
 import { pushDb } from "@/server/push-db";
 import { pushNotifications } from "@/server/push-schema";
 
@@ -56,7 +55,6 @@ const PRUNE_SENT_AFTER_MS = 3 * 24 * 60 * 60 * 1000;
 const PRUNE_FAILED_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_ACTIVE_NOTIFICATIONS = 5_000;
 const MAX_ACTIVE_PER_ENDPOINT = 12;
-const MAX_ACTIVE_DELAY_UPDATES_PER_ENDPOINT = 4;
 const STATE_KEY = "__transitPushSchedulerState__";
 
 function getState() {
@@ -89,10 +87,6 @@ async function initializePushStore() {
 
 function toNotificationId(endpoint: string, jobKey: string) {
   return createHash("sha256").update(`${endpoint}::${jobKey}`).digest("hex");
-}
-
-function isDelayUpdateJob(jobKey: string) {
-  return jobKey.startsWith(DELAY_UPDATE_PREFIX);
 }
 
 async function getExistingNotificationId(endpoint: string, jobKey: string) {
@@ -129,18 +123,9 @@ async function enforceNotificationLimits(endpoint: string, jobKey: string) {
     eq(pushNotifications.status, "sending"),
   );
 
-  const [totalActive, endpointActive, delayActive] = await Promise.all([
+  const [totalActive, endpointActive] = await Promise.all([
     countActiveNotifications(activeStatuses),
     countActiveNotifications(and(activeStatuses, eq(pushNotifications.endpoint, endpoint))),
-    isDelayUpdateJob(jobKey)
-      ? countActiveNotifications(
-          and(
-            activeStatuses,
-            eq(pushNotifications.endpoint, endpoint),
-            like(pushNotifications.jobKey, `${DELAY_UPDATE_PREFIX}%`),
-          ),
-        )
-      : Promise.resolve(0),
   ]);
 
   if (totalActive >= MAX_ACTIVE_NOTIFICATIONS) {
@@ -148,9 +133,6 @@ async function enforceNotificationLimits(endpoint: string, jobKey: string) {
   }
   if (endpointActive >= MAX_ACTIVE_PER_ENDPOINT) {
     throw new PushCapacityError("Push subscription has reached its pending limit");
-  }
-  if (isDelayUpdateJob(jobKey) && delayActive >= MAX_ACTIVE_DELAY_UPDATES_PER_ENDPOINT) {
-    throw new PushCapacityError("Too many pending delay updates for this subscription");
   }
 }
 

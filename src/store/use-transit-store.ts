@@ -71,6 +71,7 @@ interface TransitStoreState {
   openSelectedRouteDetails: boolean;
   restoredFromSnapshot: boolean;
   tripBanner: TripBanner | null;
+  hasActiveTrip: boolean;
   timeOption: TimeOption;
   selectedDateTime: string;
   activeOverlay: Overlay;
@@ -102,6 +103,7 @@ interface TransitStoreActions {
   restoreRouteSnapshot: (route: PlannedRoute, plannerStops?: PlannerStop[]) => void;
   setRestoredFromSnapshot: (restored: boolean) => void;
   setTripBanner: (banner: TripBanner | null) => void;
+  setHasActiveTrip: (hasActiveTrip: boolean) => void;
   setTimeOption: (option: TimeOption) => void;
   setSelectedDateTime: (value: string) => void;
   setActiveOverlay: (overlay: Overlay) => void;
@@ -143,6 +145,7 @@ function getInitialState() {
     openSelectedRouteDetails: false,
     restoredFromSnapshot: false,
     tripBanner: null,
+    hasActiveTrip: false,
     timeOption: "now",
     selectedDateTime: toLocalDateTimeString(new Date()),
     activeOverlay: null,
@@ -194,6 +197,7 @@ export const useTransitStore = create<TransitStore>((set) => ({
     }),
   setRestoredFromSnapshot: (restoredFromSnapshot) => set({ restoredFromSnapshot }),
   setTripBanner: (tripBanner) => set({ tripBanner }),
+  setHasActiveTrip: (hasActiveTrip) => set({ hasActiveTrip }),
   setTimeOption: (timeOption) => set({ timeOption }),
   setSelectedDateTime: (selectedDateTime) => set({ selectedDateTime }),
   setActiveOverlay: (activeOverlay) => set({ activeOverlay }),

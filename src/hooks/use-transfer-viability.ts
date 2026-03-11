@@ -15,6 +15,11 @@ export interface TransferInfo {
   walkSeconds: number;
 }
 
+interface LiveTransferState {
+  transfers: TransferInfo[];
+  liveDelays: Map<RouteLeg, DelayInfo | null>;
+}
+
 const POLL_INTERVAL_MS = 20_000;
 const TIGHT_THRESHOLD_S = 180;
 
@@ -83,31 +88,43 @@ function computeTransfers(
 }
 
 export function useTransferViability(route: PlannedRoute | null) {
-  const [transfers, setTransfers] = useState<TransferInfo[]>([]);
+  const [state, setState] = useState<LiveTransferState>({
+    transfers: [],
+    liveDelays: new Map(),
+  });
   const pollRef = useRef<(() => Promise<void>) | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     let intervalId: ReturnType<typeof setInterval> | null = null;
 
+    const publishState = (currentRoute: PlannedRoute, liveDelays: Map<RouteLeg, DelayInfo | null>) => {
+      if (cancelled) return;
+      setState({
+        transfers: computeTransfers(currentRoute, liveDelays),
+        liveDelays: new Map(liveDelays),
+      });
+    };
+
     async function runAsync() {
       if (!route) {
-        if (!cancelled) setTransfers([]);
+        if (!cancelled) {
+          setState({
+            transfers: [],
+            liveDelays: new Map(),
+          });
+        }
         return;
       }
 
       const currentRoute = route;
       const transitLegs = currentRoute.legs.filter((l) => l.mode !== "WALK");
-      if (transitLegs.length < 2) {
-        if (!cancelled) setTransfers([]);
-        return;
-      }
-
       const liveDelays = new Map<RouteLeg, DelayInfo | null>(
         transitLegs.map((leg) => [leg, leg.delay ?? null]),
       );
+      publishState(currentRoute, liveDelays);
 
-      if (!cancelled) setTransfers(computeTransfers(currentRoute, liveDelays));
+      if (transitLegs.length === 0) return;
 
       async function pollAsync() {
         await Promise.all(
@@ -116,7 +133,7 @@ export function useTransferViability(route: PlannedRoute | null) {
             liveDelays.set(leg, delay);
           }),
         );
-        if (!cancelled) setTransfers(computeTransfers(currentRoute, liveDelays));
+        publishState(currentRoute, liveDelays);
       }
 
       pollRef.current = pollAsync;
@@ -140,5 +157,5 @@ export function useTransferViability(route: PlannedRoute | null) {
     };
   }, [route]);
 
-  return transfers;
+  return state;
 }

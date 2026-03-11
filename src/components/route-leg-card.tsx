@@ -13,6 +13,36 @@ interface RouteLegCardProps {
   allowLocateVehicle?: boolean;
 }
 
+function getDisplayTimes(isoString: string | undefined, leg: RouteLeg) {
+  const scheduledTime = formatTime(isoString);
+  if (!scheduledTime || !leg.delay || leg.delay.status === "unknown") {
+    return {
+      scheduledTime,
+      effectiveTime: scheduledTime,
+      hasLiveTime: false,
+    };
+  }
+
+  const baseTime = new Date(isoString ?? "");
+  if (Number.isNaN(baseTime.getTime())) {
+    return {
+      scheduledTime,
+      effectiveTime: scheduledTime,
+      hasLiveTime: false,
+    };
+  }
+
+  const effectiveTime = formatTime(
+    new Date(baseTime.getTime() + leg.delay.estimatedDelaySeconds * 1000).toISOString(),
+  );
+
+  return {
+    scheduledTime,
+    effectiveTime,
+    hasLiveTime: effectiveTime !== scheduledTime,
+  };
+}
+
 export function RouteLegCard({
   leg,
   onLocateVehicle,
@@ -20,8 +50,8 @@ export function RouteLegCard({
 }: RouteLegCardProps) {
   const isTransit = leg.mode !== "WALK" && !!leg.lineNumber;
   const canLocateVehicle = isTransit && allowLocateVehicle && !!onLocateVehicle;
-  const depTime = formatTime(leg.scheduledDeparture);
-  const arrTime = formatTime(leg.scheduledArrival);
+  const departureTime = getDisplayTimes(leg.scheduledDeparture, leg);
+  const arrivalTime = getDisplayTimes(leg.scheduledArrival, leg);
   const color = getTransportColor(leg.mode);
 
   if (leg.mode === "WALK") {
@@ -86,9 +116,20 @@ export function RouteLegCard({
               <span className="text-xs text-foreground/80 font-medium truncate">
                 {leg.departureStop}
               </span>
-              {depTime && (
-                <span className="text-xs text-foreground/60 font-mono shrink-0 tabular-nums font-semibold">
-                  {depTime}
+              {departureTime.effectiveTime && (
+                <span className="shrink-0 text-right">
+                  <span
+                    className={`block text-xs font-mono tabular-nums font-semibold ${
+                      departureTime.hasLiveTime ? "text-emerald-700" : "text-foreground/60"
+                    }`}
+                  >
+                    {departureTime.effectiveTime}
+                  </span>
+                  {departureTime.hasLiveTime && (
+                    <span className="block text-[10px] font-mono tabular-nums text-foreground/35 line-through">
+                      {departureTime.scheduledTime}
+                    </span>
+                  )}
                 </span>
               )}
             </div>
@@ -98,9 +139,20 @@ export function RouteLegCard({
               <span className="text-xs text-foreground/80 font-medium truncate">
                 {leg.arrivalStop}
               </span>
-              {arrTime && (
-                <span className="text-xs text-foreground/60 font-mono shrink-0 tabular-nums font-semibold">
-                  {arrTime}
+              {arrivalTime.effectiveTime && (
+                <span className="shrink-0 text-right">
+                  <span
+                    className={`block text-xs font-mono tabular-nums font-semibold ${
+                      arrivalTime.hasLiveTime ? "text-emerald-700" : "text-foreground/60"
+                    }`}
+                  >
+                    {arrivalTime.effectiveTime}
+                  </span>
+                  {arrivalTime.hasLiveTime && (
+                    <span className="block text-[10px] font-mono tabular-nums text-foreground/35 line-through">
+                      {arrivalTime.scheduledTime}
+                    </span>
+                  )}
                 </span>
               )}
             </div>
