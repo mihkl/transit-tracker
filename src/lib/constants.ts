@@ -1,7 +1,7 @@
 import type { DelayStatus, TransitMode, TransportType } from "@/lib/domain";
 import { modeToTransportType, normalizeTransitMode, toModeLabel } from "@/lib/domain";
 
-export const TALLINN_CENTER: [number, number] = [59.4372, 24.7536];
+export const TALLINN_CENTER: [number, number] = [59.4372, 24.7573];
 export const DEFAULT_ZOOM = 13;
 
 export const TYPE_COLORS: Record<TransportType, string> = {

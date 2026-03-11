@@ -254,10 +254,33 @@ export function clearStoredActiveTrip() {
   clearRouteSnapshot();
 }
 
+/** Buffer after the last leg's scheduled arrival before auto-expiring the trip */
+const TRIP_END_BUFFER_MS = 10 * 60 * 1000;
+
+function isTripOver(snapshot: StoredRouteSnapshot) {
+  const legs = snapshot.route?.legs;
+  if (!legs?.length) return false;
+
+  for (let i = legs.length - 1; i >= 0; i--) {
+    const arrival = legs[i].scheduledArrival;
+    if (arrival) {
+      const arrivalMs = new Date(arrival).getTime();
+      if (!Number.isNaN(arrivalMs)) {
+        return Date.now() > arrivalMs + TRIP_END_BUFFER_MS;
+      }
+    }
+  }
+  return false;
+}
+
 export function loadStoredActiveTrip() {
   const reminder = loadStoredReminder();
   const snapshot = loadStoredRouteSnapshot();
   if (reminder && snapshot) {
+    if (isTripOver(snapshot)) {
+      clearStoredActiveTrip();
+      return null;
+    }
     return { reminder, snapshot };
   }
   if (reminder || snapshot) {
@@ -389,6 +412,7 @@ export function useLeaveReminder(route: PlannedRoute | null) {
   const [leaveAtMs, setLeaveAtMs] = useState<number | null>(null);
   const [lastError, setLastError] = useState<string | null>(null);
   const [supportStatus, setSupportStatus] = useState<ReminderStatusMessage | null>(null);
+  const [scheduling, setScheduling] = useState(false);
 
   const baseInfo = useMemo(() => (route ? getReminderBaseInfo(route) : null), [route]);
 
@@ -466,6 +490,7 @@ export function useLeaveReminder(route: PlannedRoute | null) {
     if (!route || !baseInfo || typeof window === "undefined" || !("Notification" in window)) return;
 
     try {
+      setScheduling(true);
       setLastError(null);
 
       const currentSupportStatus = getPushSupportStatus();
@@ -511,6 +536,8 @@ export function useLeaveReminder(route: PlannedRoute | null) {
       useTransitStore.getState().setHasActiveTrip(true);
     } catch {
       setLastError("Failed to schedule reminder. Please try again.");
+    } finally {
+      setScheduling(false);
     }
   }, [route, baseInfo, permission, routeKey]);
 
@@ -568,6 +595,7 @@ export function useLeaveReminder(route: PlannedRoute | null) {
   return {
     leaveInfo,
     isSet,
+    scheduling,
     permission,
     minutesUntil,
     lastError,

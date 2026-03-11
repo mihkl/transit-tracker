@@ -18,6 +18,7 @@ import {
   X,
   Zap,
   AlertTriangle,
+  Loader2,
 } from "lucide-react";
 import { Icon } from "@/components/icon";
 import { PlaceSearchInput } from "./place-search-input";
@@ -38,6 +39,7 @@ type TimeOption = "now" | "depart" | "arrive";
 
 interface ReminderProps {
   isSet: boolean;
+  scheduling: boolean;
   minutesUntil: number | null;
   error: string | null;
   status: {
@@ -337,26 +339,36 @@ function RouteCard({
               <button
                 onClick={(event) => {
                   event.stopPropagation();
+                  if (reminderProps.scheduling) return;
                   if (reminderProps.isSet) reminderProps.onClear();
                   else reminderProps.onSchedule();
                 }}
+                disabled={reminderProps.scheduling}
                 className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-xl border transition-colors text-left cursor-pointer ${
-                  reminderProps.isSet
-                    ? "bg-primary/6 border-primary/20 text-primary"
-                    : "bg-foreground/2 border-foreground/8 text-foreground/60 hover:text-foreground/80"
+                  reminderProps.scheduling
+                    ? "bg-foreground/2 border-foreground/8 text-foreground/40"
+                    : reminderProps.isSet
+                      ? "bg-primary/6 border-primary/20 text-primary"
+                      : "bg-foreground/2 border-foreground/8 text-foreground/60 hover:text-foreground/80"
                 }`}
               >
-                <Bell
-                  size={14}
-                  fill={reminderProps.isSet ? "currentColor" : "none"}
-                  className="shrink-0"
-                />
+                {reminderProps.scheduling ? (
+                  <Loader2 size={14} className="shrink-0 animate-spin" />
+                ) : (
+                  <Bell
+                    size={14}
+                    fill={reminderProps.isSet ? "currentColor" : "none"}
+                    className="shrink-0"
+                  />
+                )}
                 <span className="text-xs font-semibold">
-                  {reminderProps.isSet
-                    ? reminderProps.minutesUntil !== null && reminderProps.minutesUntil > 0
-                      ? `Leave in ${reminderProps.minutesUntil} min`
-                      : "Reminder active · tap to cancel"
-                    : "Set leave reminder"}
+                  {reminderProps.scheduling
+                    ? "Setting up reminder…"
+                    : reminderProps.isSet
+                      ? reminderProps.minutesUntil !== null && reminderProps.minutesUntil > 0
+                        ? `Leave in ${reminderProps.minutesUntil} min`
+                        : "Reminder active · tap to cancel"
+                      : "Set leave reminder"}
                 </span>
               </button>
               {!reminderProps.isSet && reminderProps.status && (
@@ -1066,15 +1078,25 @@ function MobileRouteDetailSheet({
           </div>
           {reminderProps && (
             <button
-              onClick={() => (reminderProps.isSet ? reminderProps.onClear() : reminderProps.onSchedule())}
+              onClick={() => {
+                if (reminderProps.scheduling) return;
+                reminderProps.isSet ? reminderProps.onClear() : reminderProps.onSchedule();
+              }}
+              disabled={reminderProps.scheduling}
               className={`p-2.5 rounded-xl transition-colors active:scale-95 shrink-0 cursor-pointer ${
-                reminderProps.isSet
-                  ? "bg-primary/10 text-primary"
-                  : "text-foreground/40 hover:text-foreground/70"
+                reminderProps.scheduling
+                  ? "text-foreground/30"
+                  : reminderProps.isSet
+                    ? "bg-primary/10 text-primary"
+                    : "text-foreground/40 hover:text-foreground/70"
               }`}
-              title={reminderProps.isSet ? "Cancel reminder" : "Remind me to leave"}
+              title={reminderProps.scheduling ? "Setting up…" : reminderProps.isSet ? "Cancel reminder" : "Remind me to leave"}
             >
-              <Bell size={20} fill={reminderProps.isSet ? "currentColor" : "none"} />
+              {reminderProps.scheduling ? (
+                <Loader2 size={20} className="animate-spin" />
+              ) : (
+                <Bell size={20} fill={reminderProps.isSet ? "currentColor" : "none"} />
+              )}
             </button>
           )}
         </div>

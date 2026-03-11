@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useCallback } from "react";
+import { useEffect } from "react";
 import { X, Navigation, AlertTriangle } from "lucide-react";
 import { useTransitStore } from "@/store/use-transit-store";
 import { navigateTo } from "@/lib/navigation";
@@ -28,39 +28,33 @@ function restoreStoredTrip() {
 function PersistentActiveTripBanner() {
   const hasActiveTrip = useTransitStore((s) => s.hasActiveTrip);
 
-  const handleOpenTrip = useCallback(() => {
-    restoreStoredTrip();
-  }, []);
-
   if (!hasActiveTrip) return null;
 
   return (
-    <button
-      type="button"
-      onClick={handleOpenTrip}
-      className="group flex w-full items-center gap-2.5 cursor-pointer rounded-full bg-foreground/85 backdrop-blur-xl px-2 py-1.5 shadow-[0_2px_20px_-4px_rgba(0,0,0,0.3)] transition-all duration-200 hover:bg-foreground/90 hover:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.4)] active:scale-[0.97]"
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={restoreStoredTrip}
+      onKeyDown={(e) => { if (e.key === "Enter") restoreStoredTrip(); }}
+      className="group flex items-center gap-2 cursor-pointer rounded-xl border border-foreground/10 bg-white/95 backdrop-blur-md h-12 pl-2.5 pr-1.5 shadow-lg transition-all duration-150 hover:shadow-xl hover:border-primary/25 active:scale-[0.97]"
     >
-      <span className="relative flex items-center justify-center w-7 h-7 rounded-full bg-primary/20">
-        <Navigation size={13} className="text-primary-foreground" fill="currentColor" />
-        <span className="absolute top-0 right-0 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-foreground/85 animate-pulse" />
+      <span className="relative flex items-center justify-center w-7 h-7 rounded-lg bg-primary/10 shrink-0">
+        <Navigation size={13} className="text-primary" fill="currentColor" />
+        <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 ring-[1.5px] ring-white" />
       </span>
-      <span className="text-[13px] font-semibold text-white tracking-tight pr-1">
-        Active trip
-      </span>
-      <svg
-        className="w-4 h-4 text-white/50 group-hover:text-white/80 transition-colors shrink-0 mr-0.5"
-        viewBox="0 0 16 16"
-        fill="none"
+      <span className="text-xs font-semibold text-foreground/80 whitespace-nowrap">Active trip</span>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          clearStoredActiveTrip();
+          useTransitStore.getState().setHasActiveTrip(false);
+        }}
+        className="shrink-0 rounded-full p-1 transition-colors hover:bg-foreground/10 text-foreground/30 hover:text-foreground/60"
+        aria-label="Dismiss active trip"
       >
-        <path
-          d="M6 4l4 4-4 4"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    </button>
+        <X size={13} />
+      </button>
+    </div>
   );
 }
 
@@ -81,12 +75,12 @@ function TransientTripBanner() {
 
   return (
     <div
-      className={`flex items-center gap-2.5 rounded-full px-2 py-1.5 shadow-[0_2px_20px_-4px_rgba(0,0,0,0.3)] backdrop-blur-xl transition-all duration-200 ${
+      className={`flex items-center gap-2 rounded-xl border h-12 pl-2.5 pr-1.5 shadow-lg backdrop-blur-md transition-all duration-150 ${
         isReminder
-          ? "bg-foreground/85 text-white cursor-pointer hover:bg-foreground/90 active:scale-[0.97]"
+          ? "border-foreground/10 bg-white/95 text-foreground cursor-pointer hover:shadow-xl hover:border-primary/25 active:scale-[0.97]"
           : isUnavailable
-            ? "bg-amber-50/95 border border-amber-200/60 text-amber-800"
-            : "bg-red-50/95 border border-red-200/60 text-red-800"
+            ? "bg-amber-50/95 border-amber-200/60 text-amber-800"
+            : "bg-red-50/95 border-red-200/60 text-red-800"
       }`}
       onClick={() => {
         if (tripBanner.onTap) {
@@ -96,24 +90,22 @@ function TransientTripBanner() {
       }}
     >
       {isReminder ? (
-        <span className="relative flex items-center justify-center w-7 h-7 rounded-full bg-primary/20 shrink-0">
-          <Navigation size={13} className="text-primary-foreground" fill="currentColor" />
-          <span className="absolute top-0 right-0 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-foreground/85 animate-pulse" />
+        <span className="relative flex items-center justify-center w-7 h-7 rounded-lg bg-primary/10 shrink-0">
+          <Navigation size={13} className="text-primary" fill="currentColor" />
+          <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 ring-[1.5px] ring-white" />
         </span>
       ) : (
-        <span className="flex items-center justify-center w-7 h-7 rounded-full bg-current/10 shrink-0">
+        <span className="flex items-center justify-center w-7 h-7 rounded-lg bg-current/10 shrink-0">
           <AlertTriangle size={13} />
         </span>
       )}
-      <span className="flex-1 text-[13px] font-semibold tracking-tight truncate">{tripBanner.message}</span>
+      <span className="flex-1 text-xs font-medium truncate">{tripBanner.message}</span>
       <button
         onClick={(e) => {
           e.stopPropagation();
           setTripBanner(null);
         }}
-        className={`shrink-0 rounded-full p-1 transition-colors ${
-          isReminder ? "hover:bg-white/20" : "hover:bg-black/10"
-        }`}
+        className="shrink-0 rounded-full p-1 transition-colors hover:bg-foreground/5"
       >
         <X size={13} />
       </button>
@@ -122,8 +114,22 @@ function TransientTripBanner() {
 }
 
 export function TripBanner() {
+  const hasActiveTrip = useTransitStore((s) => s.hasActiveTrip);
+
+  // Periodically check if the trip has ended and auto-dismiss
+  useEffect(() => {
+    if (!hasActiveTrip) return;
+    const id = setInterval(() => {
+      const trip = loadStoredActiveTrip();
+      if (!trip) {
+        useTransitStore.getState().setHasActiveTrip(false);
+      }
+    }, 60_000);
+    return () => clearInterval(id);
+  }, [hasActiveTrip]);
+
   return (
-    <div className="fixed z-50 above-bottom-nav left-3 md:bottom-6 md:left-auto md:right-6 w-auto max-w-55 space-y-2 animate-in fade-in slide-in-from-bottom-3 md:slide-in-from-bottom-3 duration-300">
+    <div className="fixed z-50 left-1/2 -translate-x-1/2 md:bottom-6 space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-300" style={{ bottom: "calc(5rem + env(safe-area-inset-bottom, 0px))" }}>
       <PersistentActiveTripBanner />
       <TransientTripBanner />
     </div>

@@ -7,6 +7,7 @@ import { useTransferViability, type TransferInfo } from "@/hooks/use-transfer-vi
 
 interface RouteReminderState {
   isSet: boolean;
+  scheduling: boolean;
   minutesUntil: number | null;
   error: string | null;
   status: ReminderStatusMessage | null;
@@ -61,6 +62,7 @@ export function useRoutePlannerInsights(selectedRoute: PlannedRoute | null) {
   const {
     leaveInfo,
     isSet,
+    scheduling,
     minutesUntil,
     lastError,
     reminderStatus,
@@ -71,6 +73,7 @@ export function useRoutePlannerInsights(selectedRoute: PlannedRoute | null) {
   const reminderProps: RouteReminderState | undefined = leaveInfo
     ? {
         isSet,
+        scheduling,
         minutesUntil,
         error: lastError,
         status: reminderStatus,

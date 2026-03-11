@@ -55,7 +55,7 @@ export function HomeMobileOverlays({
         </div>
       )}
 
-      <div className="fixed right-2 z-1250 pointer-events-none md:hidden" style={{ bottom: "calc(5rem + env(safe-area-inset-bottom, 0px))" }}>
+      {!activeOverlay && <div className="fixed right-2 z-1250 pointer-events-none md:hidden" style={{ bottom: "calc(5rem + env(safe-area-inset-bottom, 0px))" }}>
         <div className="flex flex-col items-end gap-2">
           <div
             className={`flex flex-col items-end gap-2 transition-all duration-200 ${
@@ -117,7 +117,7 @@ export function HomeMobileOverlays({
             <Layers size={22} strokeWidth={showMobileLayers ? 2.5 : 1.8} />
           </button>
         </div>
-      </div>
+      </div>}
     </>
   );
 }
