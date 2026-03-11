@@ -49,7 +49,9 @@ export function RouteLegCard({
   allowLocateVehicle = true,
 }: RouteLegCardProps) {
   const isTransit = leg.mode !== "WALK" && !!leg.lineNumber;
-  const canLocateVehicle = isTransit && allowLocateVehicle && !!onLocateVehicle;
+  const hasLiveVehicleData = !!leg.delay && leg.delay.status !== "unknown";
+  const canLocateVehicle =
+    isTransit && hasLiveVehicleData && allowLocateVehicle && !!onLocateVehicle;
   const departureTime = getDisplayTimes(leg.scheduledDeparture, leg);
   const arrivalTime = getDisplayTimes(leg.scheduledArrival, leg);
   const color = getTransportColor(leg.mode);
@@ -161,7 +163,7 @@ export function RouteLegCard({
       </div>
 
       {canLocateVehicle && (
-        <div className="mt-2 text-[11px] text-foreground/45 font-medium">Tap to locate on map</div>
+        <div className="mt-2 text-[11px] text-foreground/45 font-medium">Tap to see vehicles on line</div>
       )}
     </button>
   );

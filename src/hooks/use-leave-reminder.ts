@@ -26,7 +26,6 @@ export interface ReminderStatusMessage {
 
 interface ReminderBaseInfo extends LeaveInfo {
   baseLeaveTimeMs: number;
-  walkBeforeSeconds: number;
   scheduledDepartureMs: number;
 }
 
@@ -47,7 +46,6 @@ const ROUTE_SNAPSHOT_KEY = "transit-reminder-route-snapshot";
 const SNAPSHOT_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 const REMINDER_EXPIRY_MS = 30 * 60 * 1000;
 
-const SAFETY_BUFFER_SECONDS = 2 * 60;
 const PRE_NOTIFICATION_MS = 2 * 60 * 1000;
 const SW_READY_TIMEOUT_MS = 8_000;
 
@@ -135,8 +133,7 @@ function getReminderBaseInfo(route: PlannedRoute) {
 
   if (!firstTransitDep) return null;
 
-  const leaveMs =
-    firstTransitDep.getTime() - walkBeforeSeconds * 1000 - SAFETY_BUFFER_SECONDS * 1000;
+  const leaveMs = firstTransitDep.getTime() - walkBeforeSeconds * 1000;
 
   if (leaveMs < Date.now() - 60_000) return null;
 
@@ -150,7 +147,6 @@ function getReminderBaseInfo(route: PlannedRoute) {
     }),
     departureStop,
     baseLeaveTimeMs: leaveMs,
-    walkBeforeSeconds,
     scheduledDepartureMs: firstTransitDep.getTime(),
   };
 }

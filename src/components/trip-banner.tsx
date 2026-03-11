@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useCallback } from "react";
-import { X, Bell, AlertTriangle } from "lucide-react";
+import { X, Navigation, AlertTriangle } from "lucide-react";
 import { useTransitStore } from "@/store/use-transit-store";
 import { navigateTo } from "@/lib/navigation";
 import { clearStoredActiveTrip, loadStoredActiveTrip } from "@/hooks/use-leave-reminder";
@@ -35,19 +35,32 @@ function PersistentActiveTripBanner() {
   if (!hasActiveTrip) return null;
 
   return (
-    <div className="rounded-2xl border border-primary/25 bg-primary/95 px-4 py-3 text-white shadow-lg backdrop-blur-sm">
-      <button
-        type="button"
-        onClick={handleOpenTrip}
-        className="flex w-full items-center gap-3 text-left cursor-pointer"
+    <button
+      type="button"
+      onClick={handleOpenTrip}
+      className="group flex w-full items-center gap-2.5 cursor-pointer rounded-full bg-foreground/85 backdrop-blur-xl px-2 py-1.5 shadow-[0_2px_20px_-4px_rgba(0,0,0,0.3)] transition-all duration-200 hover:bg-foreground/90 hover:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.4)] active:scale-[0.97]"
+    >
+      <span className="relative flex items-center justify-center w-7 h-7 rounded-full bg-primary/20">
+        <Navigation size={13} className="text-primary-foreground" fill="currentColor" />
+        <span className="absolute top-0 right-0 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-foreground/85 animate-pulse" />
+      </span>
+      <span className="text-[13px] font-semibold text-white tracking-tight pr-1">
+        Active trip
+      </span>
+      <svg
+        className="w-4 h-4 text-white/50 group-hover:text-white/80 transition-colors shrink-0 mr-0.5"
+        viewBox="0 0 16 16"
+        fill="none"
       >
-        <Bell size={18} className="shrink-0" fill="currentColor" />
-        <div className="min-w-0 flex-1">
-          <div className="text-sm font-semibold">Active trip</div>
-          <div className="text-xs text-white/80">Tap to reopen live trip details</div>
-        </div>
-      </button>
-    </div>
+        <path
+          d="M6 4l4 4-4 4"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </button>
   );
 }
 
@@ -68,12 +81,12 @@ function TransientTripBanner() {
 
   return (
     <div
-      className={`flex items-center gap-3 rounded-2xl border px-4 py-3 shadow-lg backdrop-blur-sm ${
+      className={`flex items-center gap-2.5 rounded-full px-2 py-1.5 shadow-[0_2px_20px_-4px_rgba(0,0,0,0.3)] backdrop-blur-xl transition-all duration-200 ${
         isReminder
-          ? "bg-primary/95 border-primary/30 text-white cursor-pointer"
+          ? "bg-foreground/85 text-white cursor-pointer hover:bg-foreground/90 active:scale-[0.97]"
           : isUnavailable
-            ? "bg-yellow-50/95 border-yellow-200 text-yellow-800"
-            : "bg-red-50/95 border-red-200 text-red-800"
+            ? "bg-amber-50/95 border border-amber-200/60 text-amber-800"
+            : "bg-red-50/95 border border-red-200/60 text-red-800"
       }`}
       onClick={() => {
         if (tripBanner.onTap) {
@@ -83,21 +96,26 @@ function TransientTripBanner() {
       }}
     >
       {isReminder ? (
-        <Bell size={18} className="shrink-0" fill="currentColor" />
+        <span className="relative flex items-center justify-center w-7 h-7 rounded-full bg-primary/20 shrink-0">
+          <Navigation size={13} className="text-primary-foreground" fill="currentColor" />
+          <span className="absolute top-0 right-0 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-foreground/85 animate-pulse" />
+        </span>
       ) : (
-        <AlertTriangle size={18} className="shrink-0" />
+        <span className="flex items-center justify-center w-7 h-7 rounded-full bg-current/10 shrink-0">
+          <AlertTriangle size={13} />
+        </span>
       )}
-      <span className="flex-1 text-sm font-medium">{tripBanner.message}</span>
+      <span className="flex-1 text-[13px] font-semibold tracking-tight truncate">{tripBanner.message}</span>
       <button
         onClick={(e) => {
           e.stopPropagation();
           setTripBanner(null);
         }}
         className={`shrink-0 rounded-full p-1 transition-colors ${
-          isReminder ? "hover:bg-white/20" : "hover:bg-black/5"
+          isReminder ? "hover:bg-white/20" : "hover:bg-black/10"
         }`}
       >
-        <X size={14} />
+        <X size={13} />
       </button>
     </div>
   );
@@ -105,7 +123,7 @@ function TransientTripBanner() {
 
 export function TripBanner() {
   return (
-    <div className="fixed top-14 left-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
+    <div className="fixed z-50 above-bottom-nav left-3 md:bottom-6 md:left-auto md:right-6 w-auto max-w-55 space-y-2 animate-in fade-in slide-in-from-bottom-3 md:slide-in-from-bottom-3 duration-300">
       <PersistentActiveTripBanner />
       <TransientTripBanner />
     </div>
