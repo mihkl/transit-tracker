@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { Bus, Car, Layers, MapPin } from "lucide-react";
 import { BottomSheet } from "@/components/bottom-sheet";
 import { QuickActionsPanel } from "@/components/quick-actions-panel";
@@ -28,6 +28,10 @@ export function HomeMobileOverlays({
   const toggleTraffic = useTransitStore((s) => s.toggleTraffic);
   const showStops = useTransitStore((s) => s.showStops);
   const toggleStops = useTransitStore((s) => s.toggleStops);
+
+  useEffect(() => {
+    if (activeOverlay) setShowMobileLayers(false);
+  }, [activeOverlay, setShowMobileLayers]);
 
   const handleLayerClick = useCallback(
     (action: () => void) => {

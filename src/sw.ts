@@ -22,7 +22,6 @@ interface ReminderPayload {
   jobPrefix?: string;
 }
 
-const skipCloseCancelTags = new Set<string>();
 
 self.addEventListener("push", (event) => {
   const data = (event.data?.json() ?? {}) as ReminderPayload;
@@ -73,15 +72,26 @@ async function focusOrOpenAsync(targetUrl: string) {
     type: "window",
     includeUncontrolled: true,
   });
-  for (const client of clients) {
-    if (client.type !== "window") continue;
-    const windowClient = client as WindowClient;
-    if ("navigate" in windowClient) {
-      await windowClient.navigate(targetUrl);
-    }
-    await windowClient.focus();
+
+  // Prefer visible/focused tab
+  const windowClients = clients.filter(
+    (c): c is WindowClient => c.type === "window",
+  );
+  windowClients.sort((a, b) => {
+    const aVisible = a.visibilityState === "visible" ? 1 : 0;
+    const bVisible = b.visibilityState === "visible" ? 1 : 0;
+    return bVisible - aVisible;
+  });
+
+  if (windowClients.length > 0) {
+    const best = windowClients[0];
+    // Non-disruptive: send a message instead of navigating
+    best.postMessage({ type: "trip-reminder", url: targetUrl });
+    await best.focus();
     return;
   }
+
+  // No existing window — cold start, navigate directly
   await self.clients.openWindow(targetUrl);
 }
 
@@ -143,10 +153,6 @@ async function cancelScheduledUpdatesAsync(jobPrefix?: string) {
 }
 
 self.addEventListener("notificationclick", (event) => {
-  const clickedTag = event.notification.tag;
-  if (clickedTag && event.action !== "dismiss") {
-    skipCloseCancelTags.add(clickedTag);
-  }
   event.notification.close();
 
   event.waitUntil(
@@ -183,16 +189,9 @@ self.addEventListener("notificationclick", (event) => {
   );
 });
 
-self.addEventListener("notificationclose", (event) => {
-  if (event.notification.tag && skipCloseCancelTags.has(event.notification.tag)) {
-    skipCloseCancelTags.delete(event.notification.tag);
-    return;
-  }
-  const data = (event.notification.data ?? {}) as {
-    jobPrefix?: string;
-  };
-  event.waitUntil(cancelScheduledUpdatesAsync(data.jobPrefix));
-});
+// Swipe-dismiss should NOT cancel scheduled updates — only the explicit
+// "Dismiss" action button cancels them (see notificationclick handler).
+self.addEventListener("notificationclose", () => {});
 
 // --- Lifecycle ---
 

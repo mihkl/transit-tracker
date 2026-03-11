@@ -17,6 +17,7 @@ import {
   Trash2,
   X,
   Zap,
+  AlertTriangle,
 } from "lucide-react";
 import { Icon } from "@/components/icon";
 import { PlaceSearchInput } from "./place-search-input";
@@ -241,12 +242,65 @@ function RouteSummary({
   );
 }
 
+function getFirstTransitDepartureMs(route: PlannedRoute) {
+  for (const leg of route.legs) {
+    if (leg.mode !== "WALK" && leg.scheduledDeparture) {
+      return new Date(leg.scheduledDeparture).getTime();
+    }
+  }
+  return null;
+}
+
+function StaleRouteBanner({ route, onReplan }: { route: PlannedRoute; onReplan?: () => void }) {
+  const restoredFromSnapshot = useTransitStore((s) => s.restoredFromSnapshot);
+  const [now] = useState(() => Date.now());
+
+  if (!restoredFromSnapshot) return null;
+
+  const depMs = getFirstTransitDepartureMs(route);
+  if (!depMs) return null;
+
+  const minutesPast = (now - depMs) / 60_000;
+  if (minutesPast < 2) return null;
+
+  const isExpired = minutesPast > 10;
+
+  return (
+    <div
+      className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-left ${
+        isExpired
+          ? "bg-red-50 border-red-200 text-red-700"
+          : "bg-yellow-50 border-yellow-200 text-yellow-700"
+      }`}
+    >
+      <AlertTriangle size={14} className="shrink-0" />
+      <span className="flex-1 text-xs font-medium">
+        {isExpired
+          ? "This trip has already departed."
+          : "This route was restored from your reminder. Times may be outdated."}
+      </span>
+      {onReplan && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onReplan();
+          }}
+          className="shrink-0 text-xs font-semibold underline underline-offset-2"
+        >
+          Re-plan
+        </button>
+      )}
+    </div>
+  );
+}
+
 function RouteCard({
   route,
   isSelected,
   isExpanded,
   onClick,
   onLocateVehicle,
+  onReplan,
   reminderProps,
   transfersByArrivingLeg,
 }: {
@@ -255,6 +309,7 @@ function RouteCard({
   isExpanded: boolean;
   onClick: () => void;
   onLocateVehicle: (leg: RouteLeg) => void;
+  onReplan?: () => void;
   reminderProps?: ReminderProps;
   transfersByArrivingLeg?: Map<RouteLeg, TransferInfo>;
 }) {
@@ -277,6 +332,7 @@ function RouteCard({
 
       {isExpanded && (
         <div className="px-3 pb-3 pt-1 border-t border-foreground/6 space-y-1.5">
+          <StaleRouteBanner route={route} onReplan={onReplan} />
           {reminderProps && (
             <>
               <button
@@ -607,6 +663,7 @@ function desktopSidebar({
   expandedRoute,
   handleRouteClick,
   onLocateVehicle,
+  onReplan,
   noResults,
   onClose,
   reminderProps,
@@ -621,6 +678,7 @@ function desktopSidebar({
   expandedRoute: number | null;
   handleRouteClick: (index: number) => void;
   onLocateVehicle: (leg: RouteLeg) => void;
+  onReplan?: () => void;
   noResults: boolean;
   onClose: () => void;
   reminderProps?: ReminderProps;
@@ -669,6 +727,7 @@ function desktopSidebar({
                   isExpanded={expandedRoute === index}
                   onClick={() => handleRouteClick(index)}
                   onLocateVehicle={onLocateVehicle}
+                  onReplan={onReplan}
                   reminderProps={index === selectedRouteIndex ? reminderProps : undefined}
                   transfersByArrivingLeg={index === selectedRouteIndex ? transfersByArrivingLeg : undefined}
                 />
@@ -913,6 +972,7 @@ function MobileRouteDetailSheet({
   expandedRoute,
   handleRouteClick,
   onLocateVehicle,
+  onReplan,
   noResults,
   onClose,
   reminderProps,
@@ -934,6 +994,7 @@ function MobileRouteDetailSheet({
   expandedRoute: number | null;
   handleRouteClick: (index: number) => void;
   onLocateVehicle: (leg: RouteLeg) => void;
+  onReplan?: () => void;
   noResults: boolean;
   onClose: () => void;
   reminderProps?: ReminderProps;
@@ -959,6 +1020,7 @@ function MobileRouteDetailSheet({
         expandedRoute,
         handleRouteClick,
         onLocateVehicle,
+        onReplan,
         noResults,
         onClose,
         reminderProps,
@@ -1016,6 +1078,7 @@ function MobileRouteDetailSheet({
         </div>
 
         <div className="overflow-y-auto max-h-[58vh] p-4 pb-20 space-y-3.5">
+          <StaleRouteBanner route={mobileDetailRoute} onReplan={onReplan} />
           {reminderProps?.isSet && (
             <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-primary/6 border border-primary/15">
               <Bell size={14} className="text-primary shrink-0" />
@@ -1281,6 +1344,12 @@ export function RoutePlanner({
     onDismiss: closeMobileDetail,
   });
 
+  const setRestoredFromSnapshot = useTransitStore((state) => state.setRestoredFromSnapshot);
+  const handleReplan = () => {
+    setRestoredFromSnapshot(false);
+    onPlanRoute();
+  };
+
   const origin = plannerStops[0]?.point ?? null;
   const destination = plannerStops[plannerStops.length - 1]?.point ?? null;
   const formBlock = (
@@ -1333,6 +1402,7 @@ export function RoutePlanner({
         expandedRoute={expandedRoute}
         handleRouteClick={handleRouteClick}
         onLocateVehicle={onLocateVehicle}
+        onReplan={handleReplan}
         noResults={noResults}
         onClose={onClose}
         reminderProps={reminderProps}
@@ -1361,6 +1431,7 @@ export function RoutePlanner({
         expandedRoute,
         handleRouteClick,
         onLocateVehicle,
+        onReplan: handleReplan,
         noResults,
         onClose,
         reminderProps,

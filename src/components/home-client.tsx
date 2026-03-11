@@ -7,6 +7,7 @@ import { HomeStateEffects } from "@/components/home/home-state-effects";
 import { HomeRoutePlannerLayer } from "@/components/home/home-route-planner-layer";
 import { HomeMapLayer } from "@/components/home/home-map-layer";
 import { HomeMobileOverlays } from "@/components/home/home-mobile-overlays";
+import { TripBanner } from "@/components/trip-banner";
 import { useVehicleStream } from "@/hooks/use-vehicle-stream";
 import { useAnimatedVehicles } from "@/hooks/use-animated-vehicles";
 import { useUserLocation } from "@/hooks/use-user-location";
@@ -570,6 +571,7 @@ export function HomeClient({ shapes, lines }: HomeClientProps) {
   return (
     <div className="h-dvh flex flex-col">
       <HomeStateEffects />
+      <TripBanner />
       <FilterPanel vehicleCount={controller.vehicles.length} lines={lines} />
 
       <div className="flex-1 flex relative overflow-hidden">

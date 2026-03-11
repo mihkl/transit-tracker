@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import type { PlannedRoute, RouteLeg } from "@/lib/types";
+import { useTransitStore, type PlannerStop } from "@/store/use-transit-store";
 import { parseDurationSeconds } from "@/lib/route-time";
 import { fetchLegDelayAsync } from "@/lib/leg-delay";
 import {
@@ -39,14 +40,14 @@ interface StoredReminder {
   lastDelayPushAt?: number;
 }
 
-interface StoredRouteSnapshot {
+export interface StoredRouteSnapshot {
   route: PlannedRoute;
+  plannerStops?: PlannerStop[];
   savedAt: number;
 }
 
 const STORAGE_KEY = "transit-leave-reminder";
 const ROUTE_SNAPSHOT_KEY = "transit-reminder-route-snapshot";
-const SNAPSHOT_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 
 const SAFETY_BUFFER_SECONDS = 2 * 60;
 const RESCHEDULE_THRESHOLD_MS = 60_000;
@@ -274,10 +275,11 @@ function hasMatchingRoute(
   return !!stored && !!routeKey && stored.routeKey === routeKey;
 }
 
-function saveRouteSnapshot(route: PlannedRoute) {
+function saveRouteSnapshot(route: PlannedRoute, plannerStops?: PlannerStop[]) {
   try {
     const payload: StoredRouteSnapshot = {
       route,
+      plannerStops,
       savedAt: Date.now(),
     };
     localStorage.setItem(ROUTE_SNAPSHOT_KEY, JSON.stringify(payload));
@@ -288,17 +290,6 @@ function clearRouteSnapshot() {
   try {
     localStorage.removeItem(ROUTE_SNAPSHOT_KEY);
   } catch {}
-}
-
-function hasFreshRouteSnapshot() {
-  try {
-    const raw = localStorage.getItem(ROUTE_SNAPSHOT_KEY);
-    if (!raw) return false;
-    const parsed = JSON.parse(raw) as StoredRouteSnapshot;
-    return Date.now() - parsed.savedAt <= SNAPSHOT_MAX_AGE_MS;
-  } catch {
-    return false;
-  }
 }
 
 function urlBase64ToUint8Array(base64String: string) {
@@ -551,7 +542,8 @@ export function useLeaveReminder(route: PlannedRoute | null) {
         lastDelaySeconds: delaySeconds,
         lastDelayPushAt: 0,
       });
-      saveRouteSnapshot(route);
+      const currentStops = useTransitStore.getState().plannerStops;
+      saveRouteSnapshot(route, currentStops);
 
       setIsSet(true);
       setNotifyAtMs(nextNotifyAt);
@@ -677,9 +669,7 @@ export function useLeaveReminder(route: PlannedRoute | null) {
     const stored = loadStoredReminder();
     if (!hasMatchingRoute(stored, routeKey)) return;
     clearStoredReminder();
-    if (!hasFreshRouteSnapshot()) {
-      clearRouteSnapshot();
-    }
+    clearRouteSnapshot();
 
     setIsSet(false);
     setNotifyAtMs(null);

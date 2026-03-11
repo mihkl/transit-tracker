@@ -43,6 +43,12 @@ function createInitialPlannerStops() {
   return [createPlannerStop(), createPlannerStop()];
 }
 
+export interface TripBanner {
+  type: "reminder" | "unavailable" | "expired";
+  message: string;
+  onTap?: () => void;
+}
+
 interface TransitStoreState {
   selectedLine: SelectedLine;
   selectedStop: StopDto | null;
@@ -63,6 +69,8 @@ interface TransitStoreState {
   routeFitRequest: number;
   focusedVehicleId: string | null;
   openSelectedRouteDetails: boolean;
+  restoredFromSnapshot: boolean;
+  tripBanner: TripBanner | null;
   timeOption: TimeOption;
   selectedDateTime: string;
   activeOverlay: Overlay;
@@ -91,7 +99,9 @@ interface TransitStoreActions {
   bumpRouteFitRequest: () => void;
   setFocusedVehicleId: (vehicleId: string | null) => void;
   setOpenSelectedRouteDetails: (open: boolean) => void;
-  restoreRouteSnapshot: (route: PlannedRoute) => void;
+  restoreRouteSnapshot: (route: PlannedRoute, plannerStops?: PlannerStop[]) => void;
+  setRestoredFromSnapshot: (restored: boolean) => void;
+  setTripBanner: (banner: TripBanner | null) => void;
   setTimeOption: (option: TimeOption) => void;
   setSelectedDateTime: (value: string) => void;
   setActiveOverlay: (overlay: Overlay) => void;
@@ -131,6 +141,8 @@ function getInitialState() {
     routeFitRequest: 0,
     focusedVehicleId: null,
     openSelectedRouteDetails: false,
+    restoredFromSnapshot: false,
+    tripBanner: null,
     timeOption: "now",
     selectedDateTime: toLocalDateTimeString(new Date()),
     activeOverlay: null,
@@ -170,15 +182,18 @@ export const useTransitStore = create<TransitStore>((set) => ({
   bumpRouteFitRequest: () => set((state) => ({ routeFitRequest: state.routeFitRequest + 1 })),
   setFocusedVehicleId: (focusedVehicleId) => set({ focusedVehicleId }),
   setOpenSelectedRouteDetails: (openSelectedRouteDetails) => set({ openSelectedRouteDetails }),
-  restoreRouteSnapshot: (route) =>
+  restoreRouteSnapshot: (route, plannerStops) =>
     set({
       showPlanner: true,
-      plannerStops: createInitialPlannerStops(),
+      plannerStops: plannerStops?.length ? plannerStops : createInitialPlannerStops(),
       routePlan: { routes: [route] },
       multiRoutePlan: null,
       selectedRouteIndex: 0,
       openSelectedRouteDetails: true,
+      restoredFromSnapshot: true,
     }),
+  setRestoredFromSnapshot: (restoredFromSnapshot) => set({ restoredFromSnapshot }),
+  setTripBanner: (tripBanner) => set({ tripBanner }),
   setTimeOption: (timeOption) => set({ timeOption }),
   setSelectedDateTime: (selectedDateTime) => set({ selectedDateTime }),
   setActiveOverlay: (activeOverlay) => set({ activeOverlay }),
@@ -201,5 +216,7 @@ export const useTransitStore = create<TransitStore>((set) => ({
       timeOption: "now",
       selectedDateTime: toLocalDateTimeString(new Date()),
       openSelectedRouteDetails: false,
+      restoredFromSnapshot: false,
+      tripBanner: null,
     }),
 }));
