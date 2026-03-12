@@ -34,13 +34,7 @@ async function pollGpsAsync() {
   const now = new Date();
 
   const url = `${GPS_URL}?ver=${Date.now()}`;
-  const res = await fetchWithTimeoutAsync(url, 10_000, {
-    headers: {
-      // avoid undici/zlib response decompression for the hot GPS poll.
-      "Accept-Encoding": "identity",
-      Accept: "application/json, text/plain;q=0.9, */*;q=0.8",
-    },
-  });
+  const res = await fetchWithTimeoutAsync(url);
   const rawText = await res.text();
   const trimmedBody = rawText.trim();
 
