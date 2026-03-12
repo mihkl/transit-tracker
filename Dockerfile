@@ -1,4 +1,4 @@
-FROM node:24-alpine AS builder
+FROM node:25-alpine AS builder
 
 # curl + unzip needed by the GTFS download script at build time
 RUN apk add --no-cache curl unzip
@@ -16,7 +16,7 @@ RUN pnpm run build
 
 # ---
 
-FROM platformatic/node-caged:24-slim AS runner
+FROM platformatic/node-caged:25-slim AS runner
 
 WORKDIR /app
 
