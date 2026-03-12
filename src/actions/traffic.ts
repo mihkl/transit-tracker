@@ -43,6 +43,40 @@ interface TrafficCacheEntry {
 
 const trafficCache = new Map<string, TrafficCacheEntry>();
 const TRAFFIC_CACHE_TTL = 30_000;
+const TRAFFIC_CACHE_MAX_ENTRIES = 64;
+
+function pruneTrafficCache(now = Date.now()) {
+  for (const [key, entry] of trafficCache) {
+    if (now - entry.timestamp >= TRAFFIC_CACHE_TTL) {
+      trafficCache.delete(key);
+    }
+  }
+
+  while (trafficCache.size > TRAFFIC_CACHE_MAX_ENTRIES) {
+    const oldestKey = trafficCache.keys().next().value as string | undefined;
+    if (!oldestKey) break;
+    trafficCache.delete(oldestKey);
+  }
+}
+
+function getCachedTrafficEntry(key: string, now = Date.now()) {
+  const cached = trafficCache.get(key);
+  if (!cached) return null;
+  if (now - cached.timestamp >= TRAFFIC_CACHE_TTL) {
+    trafficCache.delete(key);
+    return null;
+  }
+
+  // Refresh insertion order so hot keys are retained when trimming.
+  trafficCache.delete(key);
+  trafficCache.set(key, cached);
+  return cached;
+}
+
+function setTrafficCacheEntry(key: string, data: unknown, now = Date.now()) {
+  trafficCache.set(key, { data, timestamp: now });
+  pruneTrafficCache(now);
+}
 
 function emptyTrafficIncidents(): TrafficIncidentCollection {
   return { type: "FeatureCollection", features: [] };
@@ -50,8 +84,8 @@ function emptyTrafficIncidents(): TrafficIncidentCollection {
 
 export async function getTrafficFlowAsync() {
   const cacheKey = "flow:tileinfo:relative0";
-  const cached = trafficCache.get(cacheKey);
-  if (cached && Date.now() - cached.timestamp < TRAFFIC_CACHE_TTL) {
+  const cached = getCachedTrafficEntry(cacheKey);
+  if (cached) {
     return cached.data as TrafficFlowTileInfo;
   }
 
@@ -66,7 +100,7 @@ export async function getTrafficFlowAsync() {
     minZoom: 0,
   };
 
-  trafficCache.set(cacheKey, { data: result, timestamp: Date.now() });
+  setTrafficCacheEntry(cacheKey, result);
   return result;
 }
 
@@ -157,8 +191,8 @@ export async function getTrafficIncidentsAsync(bounds: {
     };
 
     const cacheKey = `incidents:${normalizedBounds.minLat},${normalizedBounds.minLng},${normalizedBounds.maxLat},${normalizedBounds.maxLng}`;
-    const cached = trafficCache.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < TRAFFIC_CACHE_TTL) {
+    const cached = getCachedTrafficEntry(cacheKey);
+    if (cached) {
       return { data: cached.data as TrafficIncidentCollection, error: null };
     }
 
@@ -242,7 +276,7 @@ export async function getTrafficIncidentsAsync(bounds: {
     }
 
     const result: TrafficIncidentCollection = { type: "FeatureCollection", features };
-    trafficCache.set(cacheKey, { data: result, timestamp: Date.now() });
+    setTrafficCacheEntry(cacheKey, result);
     return { data: result, error: null };
   } catch (error) {
     captureUnexpectedError(error, {

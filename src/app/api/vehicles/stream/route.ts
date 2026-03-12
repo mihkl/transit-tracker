@@ -9,10 +9,37 @@ export async function GET(request: NextRequest) {
   await transitState.initializeAsync();
 
   const encoder = new TextEncoder();
+  let keepAliveInterval: ReturnType<typeof setInterval> | null = null;
+  let unsubscribe: (() => void) | null = null;
+  let closeController: (() => void) | null = null;
+  let cleanedUp = false;
+
+  const cleanup = () => {
+    if (cleanedUp) return;
+    cleanedUp = true;
+
+    unsubscribe?.();
+    unsubscribe = null;
+
+    if (keepAliveInterval) {
+      clearInterval(keepAliveInterval);
+      keepAliveInterval = null;
+    }
+
+    closeController?.();
+    closeController = null;
+  };
 
   const stream = new ReadableStream({
     start(controller) {
       let lastHash = "";
+      closeController = () => {
+        try {
+          controller.close();
+        } catch {
+          return;
+        }
+      };
 
       const send = () => {
         try {
@@ -51,25 +78,20 @@ export async function GET(request: NextRequest) {
 
       send();
 
-      const unsubscribe = transitState.onUpdate(send);
+      unsubscribe = transitState.onUpdate(send);
 
-      const keepAliveInterval = setInterval(() => {
+      keepAliveInterval = setInterval(() => {
         try {
           controller.enqueue(encoder.encode(": keepalive\n\n"));
         } catch {
-          clearInterval(keepAliveInterval);
+          cleanup();
         }
       }, 30000);
 
-      request.signal.addEventListener("abort", () => {
-        unsubscribe();
-        clearInterval(keepAliveInterval);
-        try {
-          controller.close();
-        } catch {
-          return;
-        }
-      });
+      request.signal.addEventListener("abort", cleanup, { once: true });
+    },
+    cancel() {
+      cleanup();
     },
   });
 
