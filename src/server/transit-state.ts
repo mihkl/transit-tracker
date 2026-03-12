@@ -115,7 +115,6 @@ class TransitState {
   private initialized = false;
   private initializing = false;
   private updateCallbacks: Set<() => void> = new Set();
-  private stopGracePeriod: ReturnType<typeof setTimeout> | null = null;
 
   async initializeAsync() {
     if (this.initialized || this.initializing) return;
@@ -129,9 +128,10 @@ class TransitState {
       this.poller = new GpsPollerService((readings) => {
         this.processReadings(readings);
       }, GPS_POLL_INTERVAL_MS);
+      this.poller.start();
 
       this.initialized = true;
-      console.log("GTFS loaded, GPS poller ready (starts on first listener).");
+      console.log("GTFS loaded, GPS poller started.");
     } catch (err) {
       this.initializing = false;
       captureUnexpectedError(err, { area: "transit-state" });
@@ -145,32 +145,7 @@ class TransitState {
 
   onUpdate(callback: () => void) {
     this.updateCallbacks.add(callback);
-    this.ensurePolling();
-    return () => {
-      this.updateCallbacks.delete(callback);
-      this.checkStopPolling();
-    };
-  }
-
-  private ensurePolling() {
-    if (this.stopGracePeriod) {
-      clearTimeout(this.stopGracePeriod);
-      this.stopGracePeriod = null;
-    }
-    this.poller?.start();
-  }
-
-  private checkStopPolling() {
-    if (this.updateCallbacks.size > 0) return;
-    if (this.stopGracePeriod) return;
-
-    this.stopGracePeriod = setTimeout(() => {
-      this.stopGracePeriod = null;
-      if (this.updateCallbacks.size === 0) {
-        this.poller?.stop();
-        this.tracker?.clear();
-      }
-    }, 30_000);
+    return () => this.updateCallbacks.delete(callback);
   }
 
   private notifyUpdate() {
@@ -277,7 +252,7 @@ class TransitState {
       initialized: this.initialized,
       initializing: this.initializing,
       activeSubscriberCount: this.updateCallbacks.size,
-      stopGracePeriodActive: this.stopGracePeriod !== null,
+      stopGracePeriodActive: false,
       trackedVehicleCount: this.tracker?.getVehicles().size ?? 0,
       poller: this.poller?.getDebugSnapshot() ?? null,
     };
