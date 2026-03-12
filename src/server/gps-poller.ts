@@ -153,6 +153,14 @@ export class GpsPollerService {
     }
   }
 
+  getDebugSnapshot() {
+    return {
+      intervalMs: this.intervalMs,
+      running: this.intervalId !== null,
+      isPolling: this.isPolling,
+    };
+  }
+
   private async pollAsync() {
     if (this.isPolling) return;
     this.isPolling = true;

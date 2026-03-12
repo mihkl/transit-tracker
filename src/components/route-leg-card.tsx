@@ -11,7 +11,6 @@ interface RouteLegCardProps {
   leg: RouteLeg;
   onLocateVehicle?: (leg: RouteLeg) => void;
   allowLocateVehicle?: boolean;
-  hasVehicleData?: boolean;
 }
 
 function getDisplayTimes(isoString: string | undefined, leg: RouteLeg) {
@@ -48,11 +47,10 @@ export function RouteLegCard({
   leg,
   onLocateVehicle,
   allowLocateVehicle = true,
-  hasVehicleData = false,
 }: RouteLegCardProps) {
   const isTransit = leg.mode !== "WALK" && !!leg.lineNumber;
   const canLocateVehicle =
-    isTransit && hasVehicleData && allowLocateVehicle && !!onLocateVehicle;
+    isTransit && allowLocateVehicle && !!onLocateVehicle;
   const departureTime = getDisplayTimes(leg.scheduledDeparture, leg);
   const arrivalTime = getDisplayTimes(leg.scheduledArrival, leg);
   const color = getTransportColor(leg.mode);

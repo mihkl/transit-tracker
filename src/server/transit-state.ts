@@ -272,6 +272,17 @@ class TransitState {
     return findNearestStop(this.stopGrid, lat, lng, STOP_MATCH_RADIUS_M);
   }
 
+  getDebugSnapshot() {
+    return {
+      initialized: this.initialized,
+      initializing: this.initializing,
+      activeSubscriberCount: this.updateCallbacks.size,
+      stopGracePeriodActive: this.stopGracePeriod !== null,
+      trackedVehicleCount: this.tracker?.getVehicles().size ?? 0,
+      poller: this.poller?.getDebugSnapshot() ?? null,
+    };
+  }
+
   private toDto(v: VehicleState) {
     const routeKey =
       v.matchedRouteId !== null && v.matchedDirectionId !== null
