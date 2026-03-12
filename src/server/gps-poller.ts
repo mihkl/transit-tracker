@@ -148,14 +148,12 @@ export class GpsPollerService {
     this.pollAsync();
 
     this.intervalId = setInterval(() => this.pollAsync(), this.intervalMs);
-    console.log(`GPS poller started (every ${this.intervalMs / 1000}s)`);
   }
 
   stop() {
     if (this.intervalId) {
       clearInterval(this.intervalId);
       this.intervalId = null;
-      console.log("GPS poller stopped");
     }
   }
 

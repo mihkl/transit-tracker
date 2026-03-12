@@ -131,7 +131,7 @@ class TransitState {
       this.poller.start();
 
       this.initialized = true;
-      console.log("GTFS loaded, GPS poller started.");
+      this.initializing = false;
     } catch (err) {
       this.initializing = false;
       captureUnexpectedError(err, { area: "transit-state" });
@@ -252,7 +252,6 @@ class TransitState {
       initialized: this.initialized,
       initializing: this.initializing,
       activeSubscriberCount: this.updateCallbacks.size,
-      stopGracePeriodActive: false,
       trackedVehicleCount: this.tracker?.getVehicles().size ?? 0,
       poller: this.poller?.getDebugSnapshot() ?? null,
     };
