@@ -35,7 +35,37 @@ async function pollGpsAsync() {
 
   const url = `${GPS_URL}?ver=${Date.now()}`;
   const res = await fetchWithTimeoutAsync(url);
-  const raw = await res.json();
+  const rawText = await res.text();
+  const trimmedBody = rawText.trim();
+
+  if (!trimmedBody) {
+    captureExpectedMessage("GPS response body was empty", {
+      area: "gps",
+      extra: {
+        status: res.status,
+        contentType: res.headers.get("content-type"),
+      },
+    });
+    return [];
+  }
+
+  let raw: unknown;
+  try {
+    raw = JSON.parse(trimmedBody);
+  } catch (error) {
+    captureExpectedMessage("GPS response JSON parse error", {
+      area: "gps",
+      extra: {
+        status: res.status,
+        contentType: res.headers.get("content-type"),
+        bodyLength: rawText.length,
+        bodyPreview: trimmedBody.slice(0, 400),
+        error: error instanceof Error ? error.message : String(error),
+      },
+    });
+    return [];
+  }
+
   const parsed = geoJsonEnvelopeSchema.safeParse(raw);
   if (!parsed.success) {
     captureExpectedMessage("GPS response validation error", {
