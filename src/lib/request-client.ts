@@ -20,6 +20,8 @@ function sanitizeClientId(value?: string | null) {
 }
 
 export function getClientIdentifier(requestHeaders: Headers) {
+  const realIp = requestHeaders.get("x-real-ip")?.trim();
+
   const forwardedFor = requestHeaders.get("x-forwarded-for") ?? "";
   const forwardedIp = forwardedFor
     .split(",")
@@ -27,8 +29,9 @@ export function getClientIdentifier(requestHeaders: Headers) {
     .filter(Boolean)
     .at(0);
 
-  const realIp = requestHeaders.get("x-real-ip")?.trim();
-  const candidate = forwardedIp || realIp || requestHeaders.get("cf-connecting-ip")?.trim() || "unknown";
+  // x-real-ip is Railway's authoritative header (set by their edge proxy).
+  // x-forwarded-for is NOT set or sanitized by Railway, so it can be spoofed by clients.
+  const candidate = realIp || forwardedIp || "unknown";
   return candidate.replace(/^\[?::ffff:/i, "").replace(/\]?$/, "").replace(/:\d+$/, "") || "unknown";
 }
 
