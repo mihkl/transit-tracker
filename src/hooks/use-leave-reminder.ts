@@ -29,13 +29,13 @@ interface ReminderBaseInfo extends LeaveInfo {
   scheduledDepartureMs: number;
 }
 
-export interface StoredReminder {
+interface StoredReminder {
   notifyAt: number;
   leaveAt: number;
   routeKey?: string;
 }
 
-export interface StoredRouteSnapshot {
+interface StoredRouteSnapshot {
   route: PlannedRoute;
   plannerStops?: PlannerStop[];
   savedAt: number;

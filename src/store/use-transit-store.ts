@@ -43,7 +43,7 @@ function createInitialPlannerStops() {
   return [createPlannerStop(), createPlannerStop()];
 }
 
-export interface TripBanner {
+interface TripBanner {
   type: "reminder" | "unavailable" | "expired";
   message: string;
   onTap?: () => void;
