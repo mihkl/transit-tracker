@@ -5,6 +5,7 @@ import { X, Navigation, AlertTriangle } from "lucide-react";
 import { useTransitStore } from "@/store/use-transit-store";
 import { navigateTo } from "@/lib/navigation";
 import { clearStoredActiveTrip, loadStoredActiveTrip } from "@/hooks/use-leave-reminder";
+import { useIsDesktop } from "@/hooks/use-is-desktop";
 
 function restoreStoredTrip() {
   const activeTrip = loadStoredActiveTrip();
@@ -115,6 +116,7 @@ function TransientTripBanner() {
 
 export function TripBanner() {
   const hasActiveTrip = useTransitStore((s) => s.hasActiveTrip);
+  const isDesktop = useIsDesktop();
 
   // Periodically check if the trip has ended and auto-dismiss
   useEffect(() => {
@@ -129,7 +131,14 @@ export function TripBanner() {
   }, [hasActiveTrip]);
 
   return (
-    <div className="fixed z-50 left-1/2 -translate-x-1/2 md:bottom-6 space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-300" style={{ bottom: "calc(5rem + env(safe-area-inset-bottom, 0px))" }}>
+    <div
+      className="fixed z-50 left-1/2 -translate-x-1/2 space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-300"
+      style={{
+        bottom: isDesktop
+          ? "1.5rem"
+          : "max(calc(5rem + env(safe-area-inset-bottom, 0px)), calc(var(--mobile-bottom-sheet-offset, 0px) + 0.75rem + env(safe-area-inset-bottom, 0px)))",
+      }}
+    >
       <PersistentActiveTripBanner />
       <TransientTripBanner />
     </div>

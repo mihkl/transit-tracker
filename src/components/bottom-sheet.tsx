@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { useDragDismiss } from "@/hooks/use-drag-dismiss";
 
 interface BottomSheetProps {
@@ -14,11 +15,47 @@ export function BottomSheet({ open, onClose, children }: BottomSheetProps) {
     velocityThreshold: 0.7,
     onDismiss: onClose,
   });
+  const sheetRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+
+    const root = document.documentElement;
+
+    if (!open) {
+      root.style.removeProperty("--mobile-bottom-sheet-offset");
+      return;
+    }
+
+    const updateOffset = () => {
+      const height = sheetRef.current?.getBoundingClientRect().height ?? 0;
+      root.style.setProperty("--mobile-bottom-sheet-offset", `${Math.round(height)}px`);
+    };
+
+    updateOffset();
+
+    const resizeObserver =
+      typeof ResizeObserver !== "undefined" && sheetRef.current
+        ? new ResizeObserver(() => updateOffset())
+        : null;
+    if (resizeObserver && sheetRef.current) {
+      resizeObserver.observe(sheetRef.current);
+    }
+
+    window.addEventListener("resize", updateOffset);
+
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", updateOffset);
+      root.style.removeProperty("--mobile-bottom-sheet-offset");
+    };
+  }, [open]);
 
   return (
     <div className="md:hidden">
       {/* Sheet */}
       <div
+        ref={sheetRef}
         className={`fixed bottom-0 left-0 right-0 z-[1100] bg-white rounded-t-3xl shadow-sheet ${
           isDragging
             ? ""

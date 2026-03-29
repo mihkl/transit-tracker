@@ -31,6 +31,7 @@ export function HomeMapLayer({
   const pickingPoint = useTransitStore((s) => s.pickingPoint);
   const focusedVehicleId = useTransitStore((s) => s.focusedVehicleId);
   const selectedStop = useTransitStore((s) => s.selectedStop);
+  const setSelectedStop = useTransitStore((s) => s.setSelectedStop);
   const showTraffic = useTransitStore((s) => s.showTraffic);
   const showStops = useTransitStore((s) => s.showStops);
 
@@ -52,6 +53,8 @@ export function HomeMapLayer({
         onVehicleClick={onVehicleClick}
         onDeselectVehicle={onDeselectVehicle}
         selectedStop={selectedStop}
+        onSelectStop={setSelectedStop}
+        onClearSelectedStop={() => setSelectedStop(null)}
         showTraffic={showTraffic}
         showStops={showStops}
       />

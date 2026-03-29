@@ -42,6 +42,8 @@ const INITIAL_VIEW_STATE = {
   zoom: DEFAULT_ZOOM,
 };
 
+const MOBILE_FOCUSED_VEHICLE_VERTICAL_OFFSET_RATIO = 0.1;
+
 type ViewState = typeof INITIAL_VIEW_STATE;
 type MapBounds = {
   minLat: number;
@@ -144,6 +146,11 @@ function getBoardingStopKey(stop: {
   lineNumber?: string;
 }) {
   return `boarding:${stop.lat}:${stop.lng}:${stop.name}:${stop.lineNumber ?? ""}`;
+}
+
+function getFocusedVehicleFlyToOffset(isDesktop: boolean): [number, number] {
+  if (isDesktop || typeof window === "undefined") return [0, 0];
+  return [0, -Math.round(window.innerHeight * MOBILE_FOCUSED_VEHICLE_VERTICAL_OFFSET_RATIO)];
 }
 
 interface MapCanvasProps {
@@ -450,6 +457,8 @@ export interface MapViewInnerProps {
   onVehicleClick: (id: string) => void;
   onDeselectVehicle: () => void;
   selectedStop: StopDto | null;
+  onSelectStop: (stop: StopDto) => void;
+  onClearSelectedStop: () => void;
   showTraffic?: boolean;
   showStops?: boolean;
 }
@@ -467,6 +476,8 @@ function useMapViewController({
   onVehicleClick,
   onDeselectVehicle,
   selectedStop,
+  onSelectStop,
+  onClearSelectedStop,
   showTraffic = false,
   showStops = false,
 }: MapViewInnerProps) {
@@ -474,13 +485,11 @@ function useMapViewController({
   const [state, dispatch] = useReducer(mapUiReducer, INITIAL_UI_STATE);
   const viewStateRef = useRef(INITIAL_VIEW_STATE);
   const {
-    popupStop,
-    setPopupStop,
     stopArrivals,
     arrivalsLoading,
-    openStopPopupAsync,
-    clearStopPopup,
-  } = useStopPopupArrivals();
+    loadStopArrivalsAsync,
+    clearStopArrivals,
+  } = useStopPopupArrivals(selectedStop);
   const vehicleEta = useVehicleEta(state.popupVehicle);
   const isDesktop = useIsDesktop();
   const webglCleanupRef = useRef<(() => void) | null>(null);
@@ -547,19 +556,15 @@ function useMapViewController({
     }
 
     const map = mapRef.current?.getMap();
-    const shape = selectedVehicle.routeKey && shapes ? shapes[selectedVehicle.routeKey] : null;
 
     if (map) {
-      if (shape && shape.length > 0) {
-        fitMapToPoints(map, shape, { isDesktop, reserveBottomSpace: !isDesktop });
-      } else {
-        const currentZoom = map.getZoom();
-        map.flyTo({
-          center: [selectedVehicle.longitude, selectedVehicle.latitude],
-          zoom: Math.max(currentZoom, 14),
-          duration: 600,
-        });
-      }
+      const currentZoom = map.getZoom();
+      map.flyTo({
+        center: [selectedVehicle.longitude, selectedVehicle.latitude],
+        zoom: Math.max(currentZoom, 14),
+        offset: getFocusedVehicleFlyToOffset(isDesktop),
+        duration: 600,
+      });
       dispatch({ type: "setPopupVehicle", popupVehicle: selectedVehicle });
       return;
     }
@@ -567,21 +572,18 @@ function useMapViewController({
     dispatch({
       type: "syncFocusedVehicle",
       popupVehicle: selectedVehicle,
-      viewStatePatch:
-        !shape || shape.length === 0
-          ? {
-              longitude: selectedVehicle.longitude,
-              latitude: selectedVehicle.latitude,
-              zoom: Math.max(viewStateRef.current.zoom, 14),
-            }
-          : undefined,
+      viewStatePatch: {
+        longitude: selectedVehicle.longitude,
+        latitude: selectedVehicle.latitude,
+        zoom: Math.max(viewStateRef.current.zoom, 14),
+      },
     });
-  }, [focusedVehicleId, isDesktop, shapes]);
+  }, [focusedVehicleId, isDesktop]);
 
-  const openStopPopupForStop = useCallback(async (stop: StopDto) => {
+  const selectStop = useCallback((stop: StopDto) => {
     dispatch({ type: "setPopupVehicle", popupVehicle: null });
-    await openStopPopupAsync(stop);
-  }, [openStopPopupAsync]);
+    onSelectStop(stop);
+  }, [onSelectStop]);
 
   const handleMapClick = useCallback(
     (event: MapLayerMouseEvent) => {
@@ -598,7 +600,7 @@ function useMapViewController({
         if (vehicle) {
           onVehicleClick(vehicle.id);
           dispatch({ type: "setPopupVehicle", popupVehicle: vehicle });
-          setPopupStop(null);
+          onClearSelectedStop();
           return;
         }
       }
@@ -612,27 +614,27 @@ function useMapViewController({
         const stopId = String(stopFeature.properties?.stopId ?? "");
         const stop = allStops.find((item) => item.stopId === stopId);
         if (stop) {
-          void openStopPopupForStop(stop);
+          selectStop(stop);
           return;
         }
       }
 
       onDeselectVehicle();
       dispatch({ type: "setPopupVehicle", popupVehicle: null });
-      setPopupStop(null);
+      onClearSelectedStop();
     },
-    [allStops, onDeselectVehicle, onMapClick, onVehicleClick, openStopPopupForStop, pickingPoint, setPopupStop],
+    [allStops, onClearSelectedStop, onDeselectVehicle, onMapClick, onVehicleClick, pickingPoint, selectStop],
   );
 
   useEffect(() => {
     if (!selectedStop) {
-      clearStopPopup();
+      clearStopArrivals();
       return;
     }
 
     dispatch({ type: "centerOnStop", stop: selectedStop });
-    void openStopPopupAsync(selectedStop);
-  }, [clearStopPopup, openStopPopupAsync, selectedStop]);
+    void loadStopArrivalsAsync(selectedStop);
+  }, [clearStopArrivals, loadStopArrivalsAsync, selectedStop]);
 
   useEffect(() => {
     if (!state.popupVehicle) return;
@@ -709,9 +711,9 @@ function useMapViewController({
 
   const handleBottomSheetClose = useCallback(() => {
     dispatch({ type: "setPopupVehicle", popupVehicle: null });
-    clearStopPopup();
+    onClearSelectedStop();
     onDeselectVehicle();
-  }, [clearStopPopup, onDeselectVehicle]);
+  }, [onClearSelectedStop, onDeselectVehicle]);
 
   const handleLocateMe = useCallback(() => {
     if (!userLocation || !mapRef.current) return;
@@ -727,8 +729,6 @@ function useMapViewController({
   return {
     mapRef,
     state,
-    popupStop,
-    setPopupStop,
     stopArrivals,
     arrivalsLoading,
     vehicleEta,
@@ -749,7 +749,6 @@ function useMapViewController({
     handleMapLoad,
     handleBottomSheetClose,
     handleLocateMe,
-    openStopPopupForStop,
     dispatch,
   };
 }
@@ -763,8 +762,6 @@ export function MapViewInner(props: MapViewInnerProps) {
   const {
     mapRef,
     state,
-    popupStop,
-    setPopupStop,
     stopArrivals,
     arrivalsLoading,
     vehicleEta,
@@ -785,7 +782,6 @@ export function MapViewInner(props: MapViewInnerProps) {
     handleMapLoad,
     handleBottomSheetClose,
     handleLocateMe,
-    openStopPopupForStop,
     dispatch,
   } = useMapViewController(props);
 
@@ -795,7 +791,7 @@ export function MapViewInner(props: MapViewInnerProps) {
         mapRef={mapRef}
         viewState={state.viewState}
         popupVehicle={state.popupVehicle}
-        popupStop={popupStop}
+        popupStop={selectedStop}
         stopArrivals={stopArrivals}
         arrivalsLoading={arrivalsLoading}
         selectedStop={selectedStop}
@@ -824,29 +820,31 @@ export function MapViewInner(props: MapViewInnerProps) {
         onMapClick={handleMapClick}
         onMapLoad={handleMapLoad}
         onPopupVehicleClose={() => dispatch({ type: "setPopupVehicle", popupVehicle: null })}
-        onPopupStopClose={() => setPopupStop(null)}
+        onPopupStopClose={props.onClearSelectedStop}
         onSelectedStopMarkerClick={(event) => {
           event.originalEvent.stopPropagation();
-          if (selectedStop) {
-            void openStopPopupForStop(selectedStop);
-          }
         }}
       />
 
       {userLocation && (
         <button
           onClick={handleLocateMe}
-          className="fixed md:absolute above-bottom-nav left-3 z-10 w-12 h-12 rounded-xl bg-white shadow-fab flex items-center justify-center text-foreground/60 hover:text-foreground/80 active:scale-95 transition-all duration-150"
+          className="fixed md:absolute left-2 md:left-3 z-10 h-12 w-12 rounded-full border border-foreground/10 bg-white/95 text-foreground/60 shadow-lg backdrop-blur-md flex items-center justify-center hover:text-foreground/80 active:scale-95 transition-all duration-150"
+          style={{
+            bottom: isDesktop
+              ? "1.5rem"
+              : "max(calc(5rem + env(safe-area-inset-bottom, 0px)), calc(var(--mobile-bottom-sheet-offset, 0px) + 0.75rem + env(safe-area-inset-bottom, 0px)))",
+          }}
           title="Center on my location"
         >
           <Icon name="crosshair" className="w-5 h-5" />
         </button>
       )}
 
-      <BottomSheet open={!!(state.popupVehicle || popupStop)} onClose={handleBottomSheetClose}>
+      <BottomSheet open={!!(state.popupVehicle || selectedStop)} onClose={handleBottomSheetClose}>
         {state.popupVehicle && <VehiclePopup vehicle={state.popupVehicle} etaSeconds={vehicleEta} />}
-        {popupStop && (
-          <StopPopup stop={popupStop} arrivals={stopArrivals} loading={arrivalsLoading} />
+        {selectedStop && (
+          <StopPopup stop={selectedStop} arrivals={stopArrivals} loading={arrivalsLoading} />
         )}
       </BottomSheet>
     </>

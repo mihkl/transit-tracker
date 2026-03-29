@@ -9,13 +9,11 @@ async function fetchArrivalsAsync(stopId: string) {
   return getStopArrivalsAsync(stopId);
 }
 
-export function useStopPopupArrivals() {
-  const [popupStop, setPopupStop] = useState<StopDto | null>(null);
+export function useStopPopupArrivals(stop: StopDto | null) {
   const [stopArrivals, setStopArrivals] = useState<StopArrival[]>([]);
   const [arrivalsLoading, setArrivalsLoading] = useState(false);
 
-  const openStopPopupAsync = useCallback(async (stop: StopDto) => {
-    setPopupStop(stop);
+  const loadStopArrivalsAsync = useCallback(async (stop: StopDto) => {
     setArrivalsLoading(true);
     setStopArrivals([]);
 
@@ -31,22 +29,21 @@ export function useStopPopupArrivals() {
     }
   }, []);
 
-  const clearStopPopup = useCallback(() => {
-    setPopupStop(null);
+  const clearStopArrivals = useCallback(() => {
     setStopArrivals([]);
     setArrivalsLoading(false);
   }, []);
 
   useEffect(() => {
-    if (!popupStop) return;
+    if (!stop) return;
 
     const refreshAsync = async () => {
       try {
-        setStopArrivals(await fetchArrivalsAsync(popupStop.stopId));
+        setStopArrivals(await fetchArrivalsAsync(stop.stopId));
       } catch (err) {
         captureUnexpectedError(err, {
           area: "stop-arrivals",
-          extra: { stopId: popupStop.stopId, phase: "refresh" },
+          extra: { stopId: stop.stopId, phase: "refresh" },
         });
       }
     };
@@ -65,14 +62,12 @@ export function useStopPopupArrivals() {
       clearInterval(intervalId);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
-  }, [popupStop]);
+  }, [stop]);
 
   return {
-    popupStop,
-    setPopupStop,
     stopArrivals,
     arrivalsLoading,
-    openStopPopupAsync,
-    clearStopPopup,
+    loadStopArrivalsAsync,
+    clearStopArrivals,
   };
 }

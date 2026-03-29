@@ -78,17 +78,35 @@ function parseSiriLine(line: string) {
   // Everything after the 4th comma: "destination[,optional trailing fields]"
   // The realtimeMarker is the last comma-delimited token (may be empty string).
   const afterFixed = line.slice(ends[3] + 1);
-  const lastComma = afterFixed.lastIndexOf(",");
   let destination: string;
   let realtimeMarker = "";
+  let secondsUntilArrival: number | null = null;
 
-  if (lastComma > 0) {
-    destination = afterFixed.slice(0, lastComma).trim();
-    realtimeMarker = afterFixed.slice(lastComma + 1).trim();
-    // If splitting left us with an empty destination, treat the whole tail as destination.
+  const tailParts = afterFixed.split(",");
+
+  if (tailParts.length > 1) {
+    realtimeMarker = tailParts.pop()?.trim() ?? "";
+
+    const trailingNumericParts: string[] = [];
+    while (tailParts.length > 0) {
+      const candidate = tailParts[tailParts.length - 1].trim();
+      if (!/^\d+$/.test(candidate)) break;
+      trailingNumericParts.unshift(candidate);
+      tailParts.pop();
+    }
+
+    if (trailingNumericParts.length > 0) {
+      const siriEtaSeconds = Number(trailingNumericParts[trailingNumericParts.length - 1]);
+      if (Number.isFinite(siriEtaSeconds) && siriEtaSeconds >= 0) {
+        secondsUntilArrival = siriEtaSeconds;
+      }
+    }
+
+    destination = tailParts.join(",").trim();
     if (!destination) {
       destination = afterFixed.trim();
       realtimeMarker = "";
+      secondsUntilArrival = null;
     }
   } else {
     destination = afterFixed.trim();
@@ -108,6 +126,7 @@ function parseSiriLine(line: string) {
     scheduleTime,
     destination,
     realtimeMarker,
+    secondsUntilArrival,
   };
 }
 
@@ -135,7 +154,15 @@ async function fetchFromSiriAsync(stopId: string) {
     const parsed = parseSiriLine(lines[i]);
     if (!parsed) continue;
 
-    const { transportType, route, expectedTime, scheduleTime, destination, realtimeMarker } =
+    const {
+      transportType,
+      route,
+      expectedTime,
+      scheduleTime,
+      destination,
+      realtimeMarker,
+      secondsUntilArrival,
+    } =
       parsed;
     const delaySeconds = expectedTime - scheduleTime;
     const hasRealtime = hasRealtimeData(expectedTime, scheduleTime, realtimeMarker);
@@ -147,7 +174,7 @@ async function fetchFromSiriAsync(stopId: string) {
       scheduleTime,
       hasRealtime,
       destination,
-      secondsUntilArrival: computeSecondsUntilFromClock(nowSeconds, expectedTime),
+      secondsUntilArrival: secondsUntilArrival ?? computeSecondsUntilFromClock(nowSeconds, expectedTime),
       delaySeconds,
     });
     if (!parsedDeparture.success) continue;

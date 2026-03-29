@@ -55,7 +55,13 @@ export function HomeMobileOverlays({
         </div>
       )}
 
-      {!activeOverlay && <div className="fixed right-2 z-1250 pointer-events-none md:hidden" style={{ bottom: "calc(5rem + env(safe-area-inset-bottom, 0px))" }}>
+      {!activeOverlay && <div
+        className="fixed right-2 z-1250 pointer-events-none md:hidden"
+        style={{
+          bottom:
+            "max(calc(5rem + env(safe-area-inset-bottom, 0px)), calc(var(--mobile-bottom-sheet-offset, 0px) + 0.75rem + env(safe-area-inset-bottom, 0px)))",
+        }}
+      >
         <div className="flex flex-col items-end gap-2">
           <div
             className={`flex flex-col items-end gap-2 transition-all duration-200 ${

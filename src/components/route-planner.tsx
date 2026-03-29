@@ -118,6 +118,16 @@ function stopPlaceholder(index: number, totalStops: number) {
   return `Stop ${index}`;
 }
 
+function formatReminderLeadTime(minutesUntil: number) {
+  if (minutesUntil < 60) return `${minutesUntil} min`;
+
+  const hours = Math.floor(minutesUntil / 60);
+  const minutes = minutesUntil % 60;
+
+  if (minutes === 0) return `${hours} h`;
+  return `${hours} h ${minutes} min`;
+}
+
 function getLegKey(leg: RouteLeg, index: number) {
   return [
     leg.mode,
@@ -366,7 +376,7 @@ function RouteCard({
                     ? "Setting up reminder…"
                     : reminderProps.isSet
                       ? reminderProps.minutesUntil !== null && reminderProps.minutesUntil > 0
-                        ? `Leave in ${reminderProps.minutesUntil} min`
+                        ? `Leave in ${formatReminderLeadTime(reminderProps.minutesUntil)}`
                         : "Reminder active · tap to cancel"
                       : "Set leave reminder"}
                 </span>
@@ -1080,7 +1090,8 @@ function MobileRouteDetailSheet({
             <button
               onClick={() => {
                 if (reminderProps.scheduling) return;
-                reminderProps.isSet ? reminderProps.onClear() : reminderProps.onSchedule();
+                if (reminderProps.isSet) reminderProps.onClear();
+                else reminderProps.onSchedule();
               }}
               disabled={reminderProps.scheduling}
               className={`p-2.5 rounded-xl transition-colors active:scale-95 shrink-0 cursor-pointer ${
@@ -1108,7 +1119,7 @@ function MobileRouteDetailSheet({
               <Bell size={14} className="text-primary shrink-0" />
               <span className="text-xs text-primary font-semibold">
                 {minutesUntil !== null && minutesUntil > 0
-                  ? `Leave in ${minutesUntil} min`
+                  ? `Leave in ${formatReminderLeadTime(minutesUntil)}`
                   : "Reminder active"}
               </span>
             </div>
