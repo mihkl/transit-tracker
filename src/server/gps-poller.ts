@@ -4,6 +4,7 @@ import { z } from "zod";
 import { fetchWithTimeoutAsync } from "./fetch-with-timeout";
 
 const GPS_URL = "https://gis.ee/tallinn/gps.php";
+const GPS_FAILURE_REPORT_THRESHOLD = 3;
 
 const geoJsonEnvelopeSchema = z.object({
   type: z.literal("FeatureCollection"),
@@ -30,7 +31,24 @@ const geoJsonFeatureSchema = z.object({
   }),
 });
 
-async function pollGpsAsync() {
+type GpsPollSuccess = {
+  ok: true;
+  readings: GpsReading[];
+};
+
+type GpsPollFailure = {
+  ok: false;
+  message: string;
+  extra: Record<string, unknown>;
+};
+
+type GpsPollResult = GpsPollSuccess | GpsPollFailure;
+
+function logGpsWarning(message: string, extra: Record<string, unknown>) {
+  console.warn(message, extra);
+}
+
+async function pollGpsAsync(): Promise<GpsPollResult> {
   const now = new Date();
 
   const url = `${GPS_URL}?ver=${Date.now()}`;
@@ -39,22 +57,23 @@ async function pollGpsAsync() {
   const trimmedBody = rawText.trim();
 
   if (!trimmedBody) {
-    captureExpectedMessage("GPS response body was empty", {
-      area: "gps",
+    return {
+      ok: false,
+      message: "GPS response body was empty",
       extra: {
         status: res.status,
         contentType: res.headers.get("content-type"),
       },
-    });
-    return [];
+    };
   }
 
   let raw: unknown;
   try {
     raw = JSON.parse(trimmedBody);
   } catch (error) {
-    captureExpectedMessage("GPS response JSON parse error", {
-      area: "gps",
+    return {
+      ok: false,
+      message: "GPS response JSON parse error",
       extra: {
         status: res.status,
         contentType: res.headers.get("content-type"),
@@ -62,17 +81,16 @@ async function pollGpsAsync() {
         bodyPreview: trimmedBody.slice(0, 400),
         error: error instanceof Error ? error.message : String(error),
       },
-    });
-    return [];
+    };
   }
 
   const parsed = geoJsonEnvelopeSchema.safeParse(raw);
   if (!parsed.success) {
-    captureExpectedMessage("GPS response validation error", {
-      area: "gps",
+    return {
+      ok: false,
+      message: "GPS response validation error",
       extra: { issue: parsed.error.issues[0]?.message ?? parsed.error.message },
-    });
-    return [];
+    };
   }
   const data = parsed.data;
 
@@ -109,20 +127,23 @@ async function pollGpsAsync() {
     });
   }
 
-  return validFeatures.map((feature) => {
-    const { properties, geometry } = feature;
-    const [lng, lat] = geometry.coordinates;
-    return {
-      transportType: properties.type,
-      lineNumber: String(properties.line),
-      longitude: lng,
-      latitude: lat,
-      heading: properties.direction,
-      id: properties.id,
-      destination: properties.destination || "",
-      timestamp: now,
-    } satisfies GpsReading;
-  });
+  return {
+    ok: true,
+    readings: validFeatures.map((feature) => {
+      const { properties, geometry } = feature;
+      const [lng, lat] = geometry.coordinates;
+      return {
+        transportType: properties.type,
+        lineNumber: String(properties.line),
+        longitude: lng,
+        latitude: lat,
+        heading: properties.direction,
+        id: properties.id,
+        destination: properties.destination || "",
+        timestamp: now,
+      } satisfies GpsReading;
+    }),
+  };
 }
 
 export class GpsPollerService {
@@ -130,6 +151,8 @@ export class GpsPollerService {
   private onData: (readings: GpsReading[]) => void;
   private intervalMs: number;
   private isPolling = false;
+  private consecutiveFailureCount = 0;
+  private outageReported = false;
 
   constructor(onData: (readings: GpsReading[]) => void, intervalMs = 6_000) {
     this.onData = onData;
@@ -156,6 +179,8 @@ export class GpsPollerService {
       intervalMs: this.intervalMs,
       running: this.intervalId !== null,
       isPolling: this.isPolling,
+      consecutiveFailureCount: this.consecutiveFailureCount,
+      outageReported: this.outageReported,
     };
   }
 
@@ -163,12 +188,46 @@ export class GpsPollerService {
     if (this.isPolling) return;
     this.isPolling = true;
     try {
-      const readings = await pollGpsAsync();
-      this.onData(readings);
+      const result = await pollGpsAsync();
+      if (!result.ok) {
+        this.handleExpectedFailure(result.message, result.extra);
+        return;
+      }
+
+      this.consecutiveFailureCount = 0;
+      this.outageReported = false;
+      this.onData(result.readings);
     } catch (err) {
       captureUnexpectedError(err, { area: "gps" });
     } finally {
       this.isPolling = false;
     }
+  }
+
+  private handleExpectedFailure(message: string, extra: Record<string, unknown>) {
+    this.consecutiveFailureCount += 1;
+    logGpsWarning(message, {
+      ...extra,
+      consecutiveFailures: this.consecutiveFailureCount,
+    });
+
+    if (
+      this.consecutiveFailureCount < GPS_FAILURE_REPORT_THRESHOLD ||
+      this.outageReported
+    ) {
+      return;
+    }
+
+    this.outageReported = true;
+    captureExpectedMessage("GPS feed is unstable", {
+      area: "gps",
+      extra: {
+        consecutiveFailures: this.consecutiveFailureCount,
+        threshold: GPS_FAILURE_REPORT_THRESHOLD,
+        lastFailureMessage: message,
+        lastFailure: extra,
+      },
+      fingerprint: ["gps-feed-unstable"],
+    });
   }
 }

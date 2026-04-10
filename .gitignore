@@ -62,3 +62,4 @@ data/push-notifications.sqlite
 /heap-snapshots
 /heap-polls-test
 scripts/poll-railway-heap.ps1
+/thesis
