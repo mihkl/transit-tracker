@@ -44,10 +44,6 @@ type GpsPollFailure = {
 
 type GpsPollResult = GpsPollSuccess | GpsPollFailure;
 
-function logGpsWarning(message: string, extra: Record<string, unknown>) {
-  console.warn(message, extra);
-}
-
 async function pollGpsAsync(): Promise<GpsPollResult> {
   const now = new Date();
 
@@ -206,10 +202,6 @@ export class GpsPollerService {
 
   private handleExpectedFailure(message: string, extra: Record<string, unknown>) {
     this.consecutiveFailureCount += 1;
-    logGpsWarning(message, {
-      ...extra,
-      consecutiveFailures: this.consecutiveFailureCount,
-    });
 
     if (
       this.consecutiveFailureCount < GPS_FAILURE_REPORT_THRESHOLD ||

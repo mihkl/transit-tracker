@@ -44,7 +44,7 @@ export async function searchPlacesActionAsync(
     const raw = await searchPlacesAsync(parsedQuery.data);
     const seen = new Set<string>();
     return {
-      results: raw.filter((r) => {
+      results: raw.filter((r: { name: string; address: string; }) => {
         const key = `${r.name}|${r.address}`;
         if (seen.has(key)) return false;
         seen.add(key);
