@@ -78,20 +78,29 @@ export function StopIcon({ size = 12 }: { size?: number }) {
   );
 }
 
-export function UserLocationDot() {
+export function UserHeadingIndicator({
+  heading,
+  mapBearing = 0,
+}: {
+  heading: number;
+  mapBearing?: number;
+}) {
   return (
-    <div style={{ position: "relative", width: 20, height: 20 }}>
-      {/* Pulsing outer ring */}
-      <div
-        className="animate-ping absolute inset-0 rounded-full bg-blue-400"
-        style={{ opacity: 0.5 }}
-      />
-      {/* Solid inner dot */}
-      <div
-        className="relative rounded-full bg-blue-500 border-2 border-white"
-        style={{ width: 20, height: 20, boxShadow: "0 1px 4px rgba(0,0,0,0.3)" }}
-      />
-    </div>
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={44}
+      height={44}
+      viewBox="0 0 44 44"
+      aria-hidden="true"
+      style={{
+        display: "block",
+        pointerEvents: "none",
+        transform: `rotate(${heading - mapBearing}deg)`,
+      }}
+    >
+      <path d="M22 3 33 25Q22 18 11 25Z" fill="#60a5fa" opacity={0.28} />
+      <path d="M22 7 29 22Q22 18 15 22Z" fill="#2563eb" opacity={0.62} />
+    </svg>
   );
 }
 

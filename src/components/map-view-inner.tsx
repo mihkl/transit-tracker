@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useCallback, useRef, useEffect, useReducer, type RefObject } from "react";
-import Map, { Marker, Source, Layer, Popup, type MapRef } from "react-map-gl/maplibre";
+import Map, { GeolocateControl, Marker, Source, Layer, Popup, type MapRef } from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { MultiRoutePlanResponse, RoutePlanResponse, StopDto, VehicleDto } from "@/lib/types";
 import { TALLINN_CENTER, DEFAULT_ZOOM, TYPE_COLORS } from "@/lib/constants";
@@ -12,14 +12,17 @@ import {
   PinIcon,
   StopIcon,
   BoardingStopIcon,
-  UserLocationDot,
+  UserHeadingIndicator,
 } from "@/components/map-icons";
 import { VehiclePopup } from "@/components/vehicle-popup";
 import { StopPopup } from "@/components/stop-popup";
 import { useIsDesktop } from "@/hooks/use-is-desktop";
 import { useTrafficData } from "@/hooks/use-traffic-data";
-import { Icon } from "@/components/icon";
-import { useUserLocation } from "@/hooks/use-user-location";
+import {
+  requestUserHeadingPermission,
+  updateUserLocationFromGeolocation,
+  useUserLocation,
+} from "@/hooks/use-user-location";
 import { useStops } from "@/hooks/use-stops";
 import { useVehicleEta } from "@/hooks/use-vehicle-eta";
 import { useStopPopupArrivals } from "@/hooks/use-stop-popup-arrivals";
@@ -40,6 +43,7 @@ const INITIAL_VIEW_STATE = {
   longitude: TALLINN_CENTER[1],
   latitude: TALLINN_CENTER[0],
   zoom: DEFAULT_ZOOM,
+  bearing: 0,
 };
 
 const MOBILE_FOCUSED_VEHICLE_VERTICAL_OFFSET_RATIO = 0.1;
@@ -168,7 +172,7 @@ interface MapCanvasProps {
   routeLegsGeoJson: ReturnType<typeof buildRouteLegFeatures>;
   vehicleRouteGeoJson: ReturnType<typeof buildVehicleRouteFeature>;
   vehiclesGeoJson: ReturnType<typeof buildVehiclesFeatureCollection>;
-  userLocation: { lat: number; lng: number } | null;
+  userLocation: ReturnType<typeof useUserLocation>;
   showTraffic: boolean;
   showStops: boolean;
   trafficData: ReturnType<typeof useTrafficData>;
@@ -185,6 +189,7 @@ interface MapCanvasProps {
   onDragEnd: () => void;
   onMapClick: (event: MapLayerMouseEvent) => void;
   onMapLoad: () => void;
+  onGeolocate: (event: GeolocationPosition) => void;
   onPopupVehicleClose: () => void;
   onPopupStopClose: () => void;
   onSelectedStopMarkerClick: (event: { originalEvent: { stopPropagation: () => void } }) => void;
@@ -222,6 +227,7 @@ function MapCanvas({
   onDragEnd,
   onMapClick,
   onMapLoad,
+  onGeolocate,
   onPopupVehicleClose,
   onPopupStopClose,
   onSelectedStopMarkerClick,
@@ -383,9 +389,25 @@ function MapCanvas({
         </Source>
       )}
 
-      {userLocation && (
+      <GeolocateControl
+        position="bottom-left"
+        style={{
+          marginBottom: isDesktop
+            ? "1.5rem"
+            : "max(calc(5rem + env(safe-area-inset-bottom, 0px)), calc(var(--mobile-bottom-sheet-offset, 0px) + 0.75rem + env(safe-area-inset-bottom, 0px)))",
+          marginLeft: isDesktop ? "0.75rem" : "0.5rem",
+        }}
+        positionOptions={{ enableHighAccuracy: true, maximumAge: 30_000, timeout: 15_000 }}
+        trackUserLocation
+        showAccuracyCircle
+        showUserLocation
+        fitBoundsOptions={{ maxZoom: 15 }}
+        onGeolocate={onGeolocate}
+      />
+
+      {userLocation?.heading != null && (
         <Marker longitude={userLocation.lng} latitude={userLocation.lat} anchor="center">
-          <UserLocationDot />
+          <UserHeadingIndicator heading={userLocation.heading} mapBearing={viewState.bearing ?? 0} />
         </Marker>
       )}
 
@@ -507,6 +529,7 @@ function useMapViewController({
   const handleMapLoad = useCallback(() => {
     const map = mapRef.current?.getMap();
     const canvas = map?.getCanvas();
+    const container = map?.getContainer();
     if (!canvas || !map) return;
 
     addVehicleArrowImage(map);
@@ -520,12 +543,20 @@ function useMapViewController({
       const currentMap = mapRef.current?.getMap();
       if (currentMap) addVehicleArrowImage(currentMap);
     };
+    const handleControlClick = (event: MouseEvent) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest(".maplibregl-ctrl-geolocate")) {
+        void requestUserHeadingPermission();
+      }
+    };
 
     canvas.addEventListener("webglcontextlost", handleLost);
     canvas.addEventListener("webglcontextrestored", handleRestored);
+    container?.addEventListener("click", handleControlClick, true);
     webglCleanupRef.current = () => {
       canvas.removeEventListener("webglcontextlost", handleLost);
       canvas.removeEventListener("webglcontextrestored", handleRestored);
+      container?.removeEventListener("click", handleControlClick, true);
     };
 
     dispatch({ type: "setMapBounds", mapBounds: getMapBounds(map) });
@@ -715,16 +746,9 @@ function useMapViewController({
     onDeselectVehicle();
   }, [onClearSelectedStop, onDeselectVehicle]);
 
-  const handleLocateMe = useCallback(() => {
-    if (!userLocation || !mapRef.current) return;
-    const map = mapRef.current.getMap();
-    const currentZoom = map?.getZoom() ?? DEFAULT_ZOOM;
-    map?.flyTo({
-      center: [userLocation.lng, userLocation.lat],
-      zoom: Math.max(currentZoom, 15),
-      duration: 600,
-    });
-  }, [userLocation]);
+  const handleGeolocate = useCallback((event: GeolocationPosition) => {
+    updateUserLocationFromGeolocation(event);
+  }, []);
 
   return {
     mapRef,
@@ -748,7 +772,7 @@ function useMapViewController({
     handleMapClick,
     handleMapLoad,
     handleBottomSheetClose,
-    handleLocateMe,
+    handleGeolocate,
     dispatch,
   };
 }
@@ -781,7 +805,7 @@ export function MapViewInner(props: MapViewInnerProps) {
     handleMapClick,
     handleMapLoad,
     handleBottomSheetClose,
-    handleLocateMe,
+    handleGeolocate,
     dispatch,
   } = useMapViewController(props);
 
@@ -819,27 +843,13 @@ export function MapViewInner(props: MapViewInnerProps) {
         onDragEnd={() => dispatch({ type: "setDragging", isDragging: false })}
         onMapClick={handleMapClick}
         onMapLoad={handleMapLoad}
+        onGeolocate={handleGeolocate}
         onPopupVehicleClose={() => dispatch({ type: "setPopupVehicle", popupVehicle: null })}
         onPopupStopClose={props.onClearSelectedStop}
         onSelectedStopMarkerClick={(event) => {
           event.originalEvent.stopPropagation();
         }}
       />
-
-      {userLocation && (
-        <button
-          onClick={handleLocateMe}
-          className="fixed md:absolute left-2 md:left-3 z-10 h-12 w-12 rounded-full border border-foreground/10 bg-white/95 text-foreground/60 shadow-lg backdrop-blur-md flex items-center justify-center hover:text-foreground/80 active:scale-95 transition-all duration-150"
-          style={{
-            bottom: isDesktop
-              ? "1.5rem"
-              : "max(calc(5rem + env(safe-area-inset-bottom, 0px)), calc(var(--mobile-bottom-sheet-offset, 0px) + 0.75rem + env(safe-area-inset-bottom, 0px)))",
-          }}
-          title="Center on my location"
-        >
-          <Icon name="crosshair" className="w-5 h-5" />
-        </button>
-      )}
 
       <BottomSheet open={!!(state.popupVehicle || selectedStop)} onClose={handleBottomSheetClose}>
         {state.popupVehicle && <VehiclePopup vehicle={state.popupVehicle} etaSeconds={vehicleEta} />}

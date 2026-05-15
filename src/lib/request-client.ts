@@ -14,7 +14,6 @@ interface RateLimitContext {
   requesterType: RateLimitRequesterType;
   requesters: RateLimitRequester[];
   clientIdProvided: boolean;
-  clientIdAccepted: boolean;
   anonymousIdProvided: boolean;
   anonymousIdAccepted: boolean;
 }
@@ -173,7 +172,6 @@ export async function getRateLimitContext(
     requesterType: primaryRequester.requesterType,
     requesters,
     clientIdProvided,
-    clientIdAccepted: false,
     anonymousIdProvided: anonymousRequester !== null,
     anonymousIdAccepted: anonymousRequester !== null,
   };

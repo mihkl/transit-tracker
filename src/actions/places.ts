@@ -26,7 +26,6 @@ export async function searchPlacesActionAsync(
         tags: {
           requester_type: requester.requesterType,
           client_id_provided: requester.clientIdProvided,
-          client_id_accepted: requester.clientIdAccepted,
           anonymous_id_provided: requester.anonymousIdProvided,
           anonymous_id_accepted: requester.anonymousIdAccepted,
           rate_limit_backend: limit.backend,
