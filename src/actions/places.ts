@@ -3,7 +3,7 @@
 import { headers } from "next/headers";
 import { searchPlacesAsync } from "@/server/google-routes";
 import { consumeRateLimit } from "@/lib/rate-limit";
-import { getRateLimitContext } from "@/lib/request-client";
+import { getRateLimitContext, getRateLimitKeys } from "@/lib/request-client";
 import { placesQuerySchema } from "@/lib/schemas";
 import { captureExpectedMessage, captureUnexpectedError } from "@/lib/monitoring";
 
@@ -17,8 +17,8 @@ export async function searchPlacesActionAsync(
   }
 
   try {
-    const requester = getRateLimitContext(await headers(), clientId);
-    const limit = await consumeRateLimit("places", `searchPlaces:${requester.requester}`);
+    const requester = await getRateLimitContext(await headers(), clientId);
+    const limit = await consumeRateLimit("places", getRateLimitKeys("searchPlaces", requester));
     if (!limit.ok) {
       captureExpectedMessage("Places search rate limit exceeded", {
         area: "places",
@@ -27,6 +27,8 @@ export async function searchPlacesActionAsync(
           requester_type: requester.requesterType,
           client_id_provided: requester.clientIdProvided,
           client_id_accepted: requester.clientIdAccepted,
+          anonymous_id_provided: requester.anonymousIdProvided,
+          anonymous_id_accepted: requester.anonymousIdAccepted,
           rate_limit_backend: limit.backend,
           rate_limit_reason: limit.reason,
         },

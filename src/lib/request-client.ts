@@ -1,22 +1,111 @@
-import { createHash } from "node:crypto";
+import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { cookies } from "next/headers";
+import { env } from "@/lib/env";
 
-type RateLimitRequesterType = "client" | "ip" | "fingerprint" | "unknown";
+type RateLimitRequesterType = "anonymous" | "ip" | "fingerprint" | "unknown";
+
+interface RateLimitRequester {
+  requester: string;
+  requesterType: RateLimitRequesterType;
+}
 
 interface RateLimitContext {
   requester: string;
   requesterType: RateLimitRequesterType;
+  requesters: RateLimitRequester[];
   clientIdProvided: boolean;
   clientIdAccepted: boolean;
+  anonymousIdProvided: boolean;
+  anonymousIdAccepted: boolean;
 }
 
-function sanitizeClientId(value?: string | null) {
-  const trimmed = value?.trim();
-  if (!trimmed) return null;
+const RATE_LIMIT_COOKIE_NAME = "transit-rate-limit-id";
+const RATE_LIMIT_COOKIE_MAX_AGE_SEC = 60 * 60 * 24 * 365;
+const RATE_LIMIT_ID_PATTERN = /^[a-zA-Z0-9_-]{16,64}$/;
 
-  const normalized = trimmed.replace(/[^a-zA-Z0-9_-]/g, "");
-  if (normalized.length < 8) return null;
+const DEV_COOKIE_SECRET_KEY = "__transitDevRateLimitCookieSecret__";
 
-  return normalized.slice(0, 128);
+function getGlobalScope() {
+  return globalThis as typeof globalThis & {
+    [DEV_COOKIE_SECRET_KEY]?: string;
+  };
+}
+
+function getRateLimitCookieSecret() {
+  if (env.RATE_LIMIT_COOKIE_SECRET) return env.RATE_LIMIT_COOKIE_SECRET;
+  if (env.NODE_ENV === "production") return null;
+
+  const scoped = getGlobalScope();
+  scoped[DEV_COOKIE_SECRET_KEY] ??= randomBytes(32).toString("base64url");
+  return scoped[DEV_COOKIE_SECRET_KEY];
+}
+
+function signAnonymousId(id: string, secret: string) {
+  return createHmac("sha256", secret).update(id).digest("base64url");
+}
+
+function verifySignature(id: string, signature: string, secret: string) {
+  const expected = Buffer.from(signAnonymousId(id, secret), "base64url");
+  const provided = Buffer.from(signature, "base64url");
+  return expected.length === provided.length && timingSafeEqual(expected, provided);
+}
+
+function parseSignedAnonymousId(value: string | undefined, secret: string) {
+  if (!value) return null;
+
+  const separatorIndex = value.lastIndexOf(".");
+  if (separatorIndex <= 0) return null;
+
+  const id = value.slice(0, separatorIndex);
+  const signature = value.slice(separatorIndex + 1);
+  if (!RATE_LIMIT_ID_PATTERN.test(id) || !signature) return null;
+
+  try {
+    return verifySignature(id, signature, secret) ? id : null;
+  } catch {
+    return null;
+  }
+}
+
+function createSignedAnonymousId(secret: string) {
+  const id = randomBytes(18).toString("base64url");
+  return {
+    id,
+    value: `${id}.${signAnonymousId(id, secret)}`,
+  };
+}
+
+async function getAnonymousRequester(): Promise<RateLimitRequester | null> {
+  const secret = getRateLimitCookieSecret();
+  if (!secret) return null;
+
+  try {
+    const cookieStore = await cookies();
+    const existingCookie = cookieStore.get(RATE_LIMIT_COOKIE_NAME)?.value;
+    const existingId = parseSignedAnonymousId(existingCookie, secret);
+    if (existingId) {
+      return {
+        requester: `anon:${existingId}`,
+        requesterType: "anonymous",
+      };
+    }
+
+    const created = createSignedAnonymousId(secret);
+    cookieStore.set(RATE_LIMIT_COOKIE_NAME, created.value, {
+      httpOnly: true,
+      maxAge: RATE_LIMIT_COOKIE_MAX_AGE_SEC,
+      path: "/",
+      sameSite: "lax",
+      secure: env.NODE_ENV === "production",
+    });
+
+    return {
+      requester: `anon:${created.id}`,
+      requesterType: "anonymous",
+    };
+  } catch {
+    return null;
+  }
 }
 
 export function getClientIdentifier(requestHeaders: Headers) {
@@ -31,32 +120,16 @@ export function getClientIdentifier(requestHeaders: Headers) {
 
   // x-real-ip is Railway's authoritative header (set by their edge proxy).
   // x-forwarded-for is NOT set or sanitized by Railway, so it can be spoofed by clients.
-  const candidate = realIp || forwardedIp || "unknown";
+  const candidate = realIp || (env.NODE_ENV === "production" ? null : forwardedIp) || "unknown";
   return candidate.replace(/^\[?::ffff:/i, "").replace(/\]?$/, "").replace(/:\d+$/, "") || "unknown";
 }
 
-export function getRateLimitContext(
-  requestHeaders: Headers,
-  explicitClientId?: string | null,
-): RateLimitContext {
-  const clientIdProvided = !!explicitClientId?.trim();
-  const clientId = sanitizeClientId(explicitClientId);
-  if (clientId) {
-    return {
-      requester: `client:${clientId}`,
-      requesterType: "client",
-      clientIdProvided,
-      clientIdAccepted: true,
-    };
-  }
-
+function getNetworkRequester(requestHeaders: Headers): RateLimitRequester {
   const ip = getClientIdentifier(requestHeaders);
   if (ip !== "unknown") {
     return {
       requester: `ip:${ip}`,
       requesterType: "ip",
-      clientIdProvided,
-      clientIdAccepted: false,
     };
   }
 
@@ -72,8 +145,6 @@ export function getRateLimitContext(
     return {
       requester: "unknown",
       requesterType: "unknown",
-      clientIdProvided,
-      clientIdAccepted: false,
     };
   }
 
@@ -81,7 +152,33 @@ export function getRateLimitContext(
   return {
     requester: `fp:${fingerprint}`,
     requesterType: "fingerprint",
+  };
+}
+
+export async function getRateLimitContext(
+  requestHeaders: Headers,
+  explicitClientId?: string | null,
+): Promise<RateLimitContext> {
+  const clientIdProvided = !!explicitClientId?.trim();
+  const anonymousRequester = await getAnonymousRequester();
+  const networkRequester = getNetworkRequester(requestHeaders);
+  const requesters = [anonymousRequester, networkRequester].filter((requester, index, all) => (
+    requester !== null &&
+    all.findIndex((candidate) => candidate?.requester === requester.requester) === index
+  )) as RateLimitRequester[];
+
+  const [primaryRequester] = requesters;
+  return {
+    requester: primaryRequester.requester,
+    requesterType: primaryRequester.requesterType,
+    requesters,
     clientIdProvided,
     clientIdAccepted: false,
+    anonymousIdProvided: anonymousRequester !== null,
+    anonymousIdAccepted: anonymousRequester !== null,
   };
+}
+
+export function getRateLimitKeys(operation: string, context: RateLimitContext) {
+  return context.requesters.map(({ requester }) => `${operation}:${requester}`);
 }

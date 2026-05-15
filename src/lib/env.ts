@@ -4,6 +4,7 @@ const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   APP_ORIGIN: z.string().url().optional(),
   REDIS_URL: z.string().trim().min(1).optional(),
+  RATE_LIMIT_COOKIE_SECRET: z.string().trim().min(32).optional(),
   TOMTOM_API_KEY: z.string().trim().min(1).optional(),
   TOMTOM_SERVER_API_KEY: z.string().trim().min(1).optional(),
   TOMTOM_BASE_URL: z.string().url().default("https://api.tomtom.com"),

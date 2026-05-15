@@ -209,76 +209,83 @@ function isRateLimitRejection(result: unknown): result is { msBeforeNext: number
   );
 }
 
-export async function consumeRateLimit(name: LimitName, key: string) {
+export async function consumeRateLimit(name: LimitName, key: string | string[]) {
   const scoped = getGlobalScope();
-  const limiterState = await getLimiterState(name);
+  let limiterState = await getLimiterState(name);
+  const keys = Array.isArray(key) ? key : [key];
 
-  try {
-    await limiterState.limiter.consume(toKey(key));
-    return {
-      ok: true,
-      retryAfterSec: 0,
-      backend: limiterState.backend,
-      reason: limiterState.reason,
-    };
-  } catch (result) {
-    if (isRateLimitRejection(result)) {
+  for (const currentKey of keys) {
+    try {
+      await limiterState.limiter.consume(toKey(currentKey));
+    } catch (result) {
+      if (isRateLimitRejection(result)) {
+        return {
+          ok: false,
+          retryAfterSec: Math.max(1, Math.ceil(result.msBeforeNext / 1000)),
+          backend: limiterState.backend,
+          reason: limiterState.reason,
+        };
+      }
+
+      captureUnexpectedError(result, {
+        area: "rate-limit",
+        extra: {
+          limiter: name,
+          backend: limiterState.backend,
+          reason: limiterState.reason,
+        },
+      });
+
+      if (limiterState.backend === "redis") {
+        const fallback = createMemoryLimiter(name, "connect_error");
+        scoped[RATE_LIMITER_KEY] ??= {};
+        scoped[RATE_LIMITER_KEY]![name] = fallback;
+        limiterState = fallback;
+
+        try {
+          await limiterState.limiter.consume(toKey(currentKey));
+        } catch (fallbackResult) {
+          if (isRateLimitRejection(fallbackResult)) {
+            return {
+              ok: false,
+              retryAfterSec: Math.max(1, Math.ceil(fallbackResult.msBeforeNext / 1000)),
+              backend: limiterState.backend,
+              reason: limiterState.reason,
+            };
+          }
+
+          captureUnexpectedError(fallbackResult, {
+            area: "rate-limit",
+            extra: {
+              limiter: name,
+              backend: limiterState.backend,
+              reason: limiterState.reason,
+            },
+          });
+          return {
+            ok: true,
+            retryAfterSec: 0,
+            backend: limiterState.backend,
+            reason: limiterState.reason,
+          };
+        }
+
+        continue;
+      }
+
       return {
-        ok: false,
-        retryAfterSec: Math.max(1, Math.ceil(result.msBeforeNext / 1000)),
+        ok: true,
+        retryAfterSec: 0,
         backend: limiterState.backend,
         reason: limiterState.reason,
       };
     }
-
-    captureUnexpectedError(result, {
-      area: "rate-limit",
-      extra: {
-        limiter: name,
-        backend: limiterState.backend,
-        reason: limiterState.reason,
-      },
-    });
-
-    if (limiterState.backend === "redis") {
-      const fallback = createMemoryLimiter(name, "connect_error");
-      scoped[RATE_LIMITER_KEY] ??= {};
-      scoped[RATE_LIMITER_KEY]![name] = fallback;
-
-      try {
-        await fallback.limiter.consume(toKey(key));
-        return {
-          ok: true,
-          retryAfterSec: 0,
-          backend: fallback.backend,
-          reason: fallback.reason,
-        };
-      } catch (fallbackResult) {
-        if (isRateLimitRejection(fallbackResult)) {
-          return {
-            ok: false,
-            retryAfterSec: Math.max(1, Math.ceil(fallbackResult.msBeforeNext / 1000)),
-            backend: fallback.backend,
-            reason: fallback.reason,
-          };
-        }
-
-        captureUnexpectedError(fallbackResult, {
-          area: "rate-limit",
-          extra: {
-            limiter: name,
-            backend: fallback.backend,
-            reason: fallback.reason,
-          },
-        });
-      }
-    }
-
-    return {
-      ok: true,
-      retryAfterSec: 0,
-      backend: limiterState.backend,
-      reason: limiterState.reason,
-    };
   }
+
+  return {
+    ok: true,
+    retryAfterSec: 0,
+    backend: limiterState.backend,
+    reason: limiterState.reason,
+  };
 }

@@ -16,7 +16,7 @@ import type {
 } from "@/lib/types";
 import { parseDurationSeconds } from "@/lib/route-time";
 import { consumeRateLimit } from "@/lib/rate-limit";
-import { getRateLimitContext } from "@/lib/request-client";
+import { getRateLimitContext, getRateLimitKeys } from "@/lib/request-client";
 import { normalizeTransitMode } from "@/lib/domain";
 import {
   multiRoutePlanRequestSchema,
@@ -236,8 +236,8 @@ async function buildRoutePlanResponseAsync(
 }
 
 async function consumeRoutingRateLimitAsync(clientId?: string, operation = "planRoute") {
-  const requester = getRateLimitContext(await headers(), clientId);
-  const limit = await consumeRateLimit("routes", `${operation}:${requester.requester}`);
+  const requester = await getRateLimitContext(await headers(), clientId);
+  const limit = await consumeRateLimit("routes", getRateLimitKeys(operation, requester));
 
   if (!limit.ok) {
     captureExpectedMessage("Route planning rate limit exceeded", {
@@ -247,6 +247,8 @@ async function consumeRoutingRateLimitAsync(clientId?: string, operation = "plan
         requester_type: requester.requesterType,
         client_id_provided: requester.clientIdProvided,
         client_id_accepted: requester.clientIdAccepted,
+        anonymous_id_provided: requester.anonymousIdProvided,
+        anonymous_id_accepted: requester.anonymousIdAccepted,
         rate_limit_backend: limit.backend,
         rate_limit_reason: limit.reason,
       },
