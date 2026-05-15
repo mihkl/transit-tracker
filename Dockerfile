@@ -2,7 +2,7 @@ FROM node:25-alpine AS builder
 
 # curl + unzip needed by the GTFS download script at build time
 RUN apk add --no-cache curl unzip
-RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
+RUN npm install -g pnpm@9.15.9
 
 WORKDIR /app
 
