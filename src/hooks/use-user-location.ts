@@ -11,8 +11,15 @@ export type UserLocation = {
 
 let currentLocation: UserLocation = null;
 let currentDeviceHeading: number | null = null;
+let smoothedHeading: number | null = null;
+let headingStaleTimer: ReturnType<typeof setTimeout> | null = null;
 let watchingDeviceHeading = false;
 const listeners = new Set<() => void>();
+
+const DEVICE_HEADING_STALE_MS = 4_000;
+const HEADING_JITTER_DEGREES = 2;
+const HEADING_SMOOTHING_FACTOR = 0.28;
+const MOVEMENT_HEADING_MIN_SPEED_MPS = 0.75;
 
 function emit() {
   for (const cb of listeners) cb();
@@ -23,8 +30,64 @@ function normalizeHeading(value: number | null | undefined) {
   return ((value % 360) + 360) % 360;
 }
 
+function headingDeltaDegrees(from: number, to: number) {
+  return ((to - from + 540) % 360) - 180;
+}
+
+function smoothHeading(nextHeading: number) {
+  if (smoothedHeading === null) {
+    smoothedHeading = nextHeading;
+    return smoothedHeading;
+  }
+
+  const delta = headingDeltaDegrees(smoothedHeading, nextHeading);
+  if (Math.abs(delta) < HEADING_JITTER_DEGREES) {
+    return smoothedHeading;
+  }
+
+  smoothedHeading = normalizeHeading(smoothedHeading + delta * HEADING_SMOOTHING_FACTOR);
+  return smoothedHeading;
+}
+
+function clearHeadingWhenStale() {
+  headingStaleTimer = null;
+  currentDeviceHeading = null;
+  smoothedHeading = null;
+
+  if (!currentLocation || currentLocation.heading === null) return;
+
+  currentLocation = { ...currentLocation, heading: null };
+  emit();
+}
+
+function scheduleHeadingStaleTimeout() {
+  if (headingStaleTimer !== null) {
+    clearTimeout(headingStaleTimer);
+  }
+
+  headingStaleTimer = setTimeout(clearHeadingWhenStale, DEVICE_HEADING_STALE_MS);
+}
+
+function updateHeadingFromReading(rawHeading: number | null) {
+  const normalized = normalizeHeading(rawHeading);
+  if (normalized === null) return currentDeviceHeading;
+
+  const nextHeading = smoothHeading(normalized);
+  if (nextHeading === null) return currentDeviceHeading;
+
+  currentDeviceHeading = nextHeading;
+  scheduleHeadingStaleTimeout();
+  return currentDeviceHeading;
+}
+
+function getMovementHeading(coords: GeolocationCoordinates) {
+  const speed = typeof coords.speed === "number" && Number.isFinite(coords.speed) ? coords.speed : 0;
+  if (speed < MOVEMENT_HEADING_MIN_SPEED_MPS) return null;
+  return normalizeHeading(coords.heading);
+}
+
 function resolveLocationHeading(coords: GeolocationCoordinates) {
-  return currentDeviceHeading ?? normalizeHeading(coords.heading);
+  return currentDeviceHeading ?? updateHeadingFromReading(getMovementHeading(coords));
 }
 
 type DeviceOrientationEventWithCompass = DeviceOrientationEvent & {
@@ -52,10 +115,9 @@ function readDeviceHeading(event: DeviceOrientationEventWithCompass) {
 }
 
 function handleDeviceOrientation(event: DeviceOrientationEvent) {
-  const heading = readDeviceHeading(event as DeviceOrientationEventWithCompass);
+  const heading = updateHeadingFromReading(readDeviceHeading(event as DeviceOrientationEventWithCompass));
   if (heading === null) return;
 
-  currentDeviceHeading = heading;
   if (!currentLocation || currentLocation.heading === heading) return;
 
   currentLocation = { ...currentLocation, heading };
